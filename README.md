@@ -40,7 +40,7 @@ Finally, start the NestJS development server:
 # Watch mode for local development
 npm run start:dev
 ```
-The backend API will now be running on `http://localhost:3000` (or whichever port you specified in `.env`).
+The backend API will now be running on `http://localhost:3000`.
 
 ## Deployment (Sliplane)
 This backend includes a `Dockerfile` and is ready to be hosted on Sliplane. 
