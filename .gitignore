@@ -1,5 +1,17 @@
+# Dependencies
 node_modules
-# Keep environment variables out of version control
+
+# Build output (Docker rebuilds this from src)
+dist
+
+# Local secrets — .env.example and .env.test are committed
 .env
 
-/generated/prisma
+# macOS
+.DS_Store
+
+# VSCode settings
+.vscode
+
+# Context docs are tracked; the source PDF is not
+context/*.pdf
