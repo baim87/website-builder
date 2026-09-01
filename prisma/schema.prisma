@@ -1,0 +1,199 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String        @id @default(uuid())
+  email             String        @unique
+  name              String?
+  googleId          String?       @unique
+  gmailRefreshToken String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  payments          Payment[]
+  projects          Project[]
+  subscription      Subscription?
+}
+
+model Project {
+  id               String            @id @default(uuid())
+  userId           String
+  name             String
+  status           String            @default("draft")
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  assets           Asset[]
+  businessContext  BusinessContext?
+  chatMessages     ChatMessage[]
+  domain           Domain?
+  pages            Page[]
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  siteAnalytics    SiteAnalytics?
+  skillInvocations SkillInvocation[]
+  websiteData      WebsiteData?
+}
+
+model BusinessContext {
+  id                   String   @id @default(uuid())
+  projectId            String   @unique
+  businessName         String?
+  contactPerson        String?
+  businessAddress      String?
+  phone                String?
+  email                String?
+  hours                Json?
+  gbpData              Json?
+  trade                String?
+  location             String?
+  targetAudience       String?
+  services             Json?
+  competitors          Json?
+  rawText              String?
+  serviceAreas         Json?
+  brandIdentityInputs  Json?
+  brandVoicePreference String?
+  usps                 Json?
+  interviewMetadata    Json?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  project              Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model WebsiteData {
+  id               String    @id @default(uuid())
+  projectId        String    @unique
+  colorPalette     Json?
+  typography       Json?
+  style            String?
+  sitemap          Json?
+  designTokens     Json?
+  seoMetadata      Json?
+  sitemapXml       String?
+  robotsTxt        String?
+  jsonLdSchemas    Json?
+  ogTags           Json?
+  internalLinkMap  Json?
+  generationStatus String    @default("pending")
+  lastGeneratedAt  DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  project          Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model SiteAnalytics {
+  id                    String   @id @default(uuid())
+  projectId             String   @unique
+  ga4PropertyId         String?
+  ga4MeasurementId      String?
+  gtmContainerId        String?
+  gscUrl                String?
+  gscSiteUrl            String?
+  gscVerificationStatus String?
+  leadNotificationEmail String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  project               Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model Asset {
+  id           String   @id @default(uuid())
+  projectId    String
+  url          String
+  type         String
+  purpose      String?
+  convertedUrl String?
+  mimeType     String?
+  source       String   @default("upload")
+  sortOrder    Int      @default(0)
+  section      String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model ChatMessage {
+  id                 String   @id @default(uuid())
+  projectId          String
+  role               String
+  content            String
+  voiceTranscript    Boolean  @default(false)
+  skillInvocationRef String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  project            Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model SkillInvocation {
+  id         String   @id @default(uuid())
+  projectId  String
+  skillType  String
+  inputHash  String
+  model      String
+  tokens     Int?
+  latencyMs  Int?
+  outputHash String?
+  status     String
+  error      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model Subscription {
+  id                   String   @id @default(uuid())
+  userId               String   @unique
+  stripeCustomerId     String
+  stripeSubscriptionId String
+  status               String
+  planId               String
+  currentPeriodEnd     DateTime
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Payment {
+  id              String   @id @default(uuid())
+  userId          String
+  stripePaymentId String   @unique
+  amount          Int
+  currency        String
+  status          String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Domain {
+  id         String   @id @default(uuid())
+  projectId  String   @unique
+  domainName String   @unique
+  provider   String?
+  status     String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model Page {
+  id        String   @id @default(uuid())
+  projectId String
+  slug      String
+  content   Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, slug])
+}
+
+model StripeEvent {
+  id        String   @id
+  type      String
+  createdAt DateTime @default(now())
+}

@@ -1,0 +1,319 @@
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from '../src/app.module';
+import { InterviewService } from '../src/interview/interview.service';
+import { GenerationService } from '../src/generation/generation.service';
+import { PrismaService } from '../src/prisma/prisma.service';
+import { GooglePlacesService } from '../src/projects/google-places.service';
+import { BUSINESS_FIELDS, BRAND_FIELDS } from '../src/interview/constants/interview-fields.constant';
+import { BusinessContextService } from '../src/projects/business-context.service';
+import * as readline from 'readline';
+
+// ==========================================
+// TERMINAL STYLING
+// ==========================================
+const c = {
+  reset: '\x1b[0m',
+  bold: '\x1b[1m',
+  dim: '\x1b[2m',
+  italic: '\x1b[3m',
+  cyan: '\x1b[36m',
+  green: '\x1b[32m',
+  yellow: '\x1b[33m',
+  red: '\x1b[31m',
+  magenta: '\x1b[35m',
+  blue: '\x1b[34m',
+  gray: '\x1b[90m',
+  white: '\x1b[97m',
+};
+
+const paint = (text: string, ...codes: string[]) => `${codes.join('')}${text}${c.reset}`;
+
+const AI_LABEL = paint('AI', c.bold, c.cyan);
+const YOU_LABEL = paint('You', c.bold, c.magenta);
+const SYSTEM_LABEL = paint('System', c.bold, c.gray);
+
+function hr(char = '─', len = 47, color = c.gray) {
+  console.log(paint(char.repeat(len), color));
+}
+
+function banner(title: string) {
+  const width = Math.max(title.length + 4, 45);
+  console.log(paint('┌' + '─'.repeat(width) + '┐', c.cyan));
+  console.log(
+    paint('│', c.cyan) +
+    paint(title.padStart((width + title.length) / 2).padEnd(width), c.bold, c.white) +
+    paint('│', c.cyan),
+  );
+  console.log(paint('└' + '─'.repeat(width) + '┘', c.cyan));
+}
+
+function section(title: string) {
+  console.log('\n' + paint(`▸ ${title}`, c.bold, c.yellow));
+  hr('─', title.length + 4, c.dim ? c.gray : c.gray);
+}
+
+function say(message: string) {
+  console.log(`${AI_LABEL}  ${message}`);
+}
+
+function ok(message: string) {
+  console.log(paint(`  ✓ ${message}`, c.green));
+}
+
+function warn(message: string) {
+  console.log(paint(`  … ${message}`, c.yellow));
+}
+
+function fail(message: string) {
+  console.log(paint(`  ✗ ${message}`, c.red));
+}
+
+function info(message: string) {
+  console.log(paint(`  ${message}`, c.gray));
+}
+
+// ==========================================
+// SPINNER (simple, dependency-free)
+// ==========================================
+function startSpinner(label: string) {
+  const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+  let i = 0;
+  process.stdout.write('\x1b[?25l'); // hide cursor
+  const timer = setInterval(() => {
+    process.stdout.write(`\r${paint(frames[i], c.cyan)} ${label}`);
+    i = (i + 1) % frames.length;
+  }, 80);
+
+  return (finalMessage?: string, isSuccess = true) => {
+    clearInterval(timer);
+    process.stdout.write('\r\x1b[K'); // clear line
+    process.stdout.write('\x1b[?25h'); // show cursor
+    if (finalMessage) {
+      isSuccess ? ok(finalMessage) : fail(finalMessage);
+    }
+  };
+}
+
+async function bootstrap() {
+  const app = await NestFactory.createApplicationContext(AppModule, { logger: ['error', 'warn'] });
+
+  const interviewService = app.get(InterviewService);
+  const generationService = app.get(GenerationService);
+  const prisma = app.get(PrismaService);
+  const googlePlacesService = app.get(GooglePlacesService);
+  const businessContextService = app.get(BusinessContextService);
+
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  const question = (query: string): Promise<string> => {
+    return new Promise((resolve) => rl.question(paint(`${YOU_LABEL} ${query}`, c.reset) + paint(' ➜ ', c.dim), resolve));
+  };
+
+  console.clear();
+  banner('Contractor Website Builder — AI Chat CLI');
+  console.log();
+
+  // 1. Setup Dummy User and Project
+  const userEmail = 'cli-tester@example.com';
+  let user = await prisma.user.findUnique({ where: { email: userEmail } });
+  if (!user) {
+    user = await prisma.user.create({
+      data: {
+        email: userEmail,
+        name: 'CLI Tester',
+      },
+    });
+  }
+
+  const projectName = await question('Enter a name for your new project:');
+  const project = await prisma.project.create({
+    data: {
+      userId: user.id,
+      name: projectName || 'Test Project',
+      status: 'draft',
+    },
+  });
+
+  await prisma.businessContext.create({
+    data: {
+      projectId: project.id,
+    },
+  });
+
+  ok(`Project created — ${paint(project.name, c.bold)} ${paint(`(${project.id})`, c.dim)}`);
+  info('Tip: type "exit" or "quit" at any prompt to stop.');
+
+  // ==========================================
+  // STATE 1: GMB Check
+  // ==========================================
+  section('Google Business Profile');
+  const gmbInput = await question('Got a Google Business Profile URL, or Business Name + City? (or type "no"):');
+
+  if (gmbInput.toLowerCase() !== 'no' && gmbInput.trim() !== '') {
+    const stopSpinner = startSpinner('Searching Google Business Profiles...');
+    const scrapedResults = await googlePlacesService.scrapeGoogleBusinessProfile(gmbInput);
+
+    if (scrapedResults && scrapedResults.length > 0) {
+      stopSpinner(`Found ${scrapedResults.length} matching business(es)`);
+      console.log();
+
+      scrapedResults.forEach((res: any, idx: number) => {
+        console.log(`  ${paint(`${idx + 1})`, c.cyan, c.bold)} ${res.businessName} ${paint(`— ${res.businessAddress}`, c.gray)}`);
+      });
+      console.log(`  ${paint('0)', c.gray)} ${paint('None of these, let\'s do it manually', c.gray)}`);
+      console.log();
+
+      const selection = await question('Select a number:');
+      const selNum = parseInt(selection, 10);
+
+      if (!isNaN(selNum) && selNum > 0 && selNum <= scrapedResults.length) {
+        const chosenData = scrapedResults[selNum - 1];
+        await businessContextService.upsert(project.id, chosenData);
+        ok('Saved these details to your profile:');
+        for (const [k, v] of Object.entries(chosenData)) {
+          if (v) {
+            const displayValue = typeof v === 'object' ? JSON.stringify(v) : v;
+            console.log(`    ${paint(k, c.blue)}: ${displayValue}`);
+          }
+        }
+      } else {
+        warn("No problem — we'll do it manually!");
+      }
+    } else {
+      stopSpinner("No matches found — we'll do it manually", false);
+    }
+  }
+
+  // ==========================================
+  // STATE 2: Business Interview Loop
+  // ==========================================
+  section('Business Details');
+  say("Let's get your business details squared away.");
+  let firstBusinessQuestion = true;
+
+  while (true) {
+    const status = await interviewService.checkCompleteness(project.id, BUSINESS_FIELDS);
+
+    if (status.complete) {
+      ok('All required business information captured!');
+      break;
+    }
+
+    let userInput = '';
+    if (firstBusinessQuestion) {
+      // Jump-start the conversation without requiring the user to speak first
+      userInput = "Let's start.";
+      firstBusinessQuestion = false;
+    } else {
+      userInput = await question('');
+      if (userInput.toLowerCase() === 'exit' || userInput.toLowerCase() === 'quit') process.exit(0);
+      if (!userInput.trim()) continue;
+    }
+
+    process.stdout.write(`${AI_LABEL}  `);
+    const stream = interviewService.processMessage(project.id, userInput, status.missingFields);
+
+    for await (const event of stream) {
+      if (event.event === 'token') {
+        process.stdout.write(event.data.token || '');
+      } else if (event.event === 'field-update') {
+        process.stdout.write(paint(`\n  ↳ [${SYSTEM_LABEL}] extracted ${event.data.field} = ${JSON.stringify(event.data.value)}`, c.dim) + ' ');
+      } else if (event.event === 'done') {
+        console.log('\n');
+      } else if (event.event === 'error') {
+        fail(`${event.data.message}\n`);
+      }
+    }
+  }
+
+  // ==========================================
+  // STATE 3: Logo Check
+  // ==========================================
+  section('Brand Assets');
+  const logoInput = await question("Got an existing logo you'd like to use? (path/URL, or type \"no\"):");
+  if (logoInput.toLowerCase() !== 'no' && logoInput.trim() !== '') {
+    // In a real app we'd upload it. For now, mock it as an Asset:
+    await prisma.asset.create({
+      data: {
+        projectId: project.id,
+        url: logoInput,
+        type: 'image',
+        purpose: 'logo',
+      },
+    });
+    ok(`Logo saved from: ${paint(logoInput, c.blue)}`);
+  }
+
+  // ==========================================
+  // STATE 4: Brand Interview Loop
+  // ==========================================
+  say("Now let's figure out your brand colors and style.");
+  let firstBrandQuestion = true;
+  while (true) {
+    const status = await interviewService.checkCompleteness(project.id, BRAND_FIELDS);
+
+    if (status.complete) {
+      ok('All required brand information captured!');
+      break;
+    }
+
+    let userInput = '';
+    if (firstBrandQuestion) {
+      userInput = "Let's figure out my brand colors and style.";
+      firstBrandQuestion = false;
+    } else {
+      userInput = await question('');
+      if (userInput.toLowerCase() === 'exit' || userInput.toLowerCase() === 'quit') process.exit(0);
+      if (!userInput.trim()) continue;
+    }
+
+    process.stdout.write(`${AI_LABEL}  `);
+    const stream = interviewService.processMessage(project.id, userInput, status.missingFields);
+
+    for await (const event of stream) {
+      if (event.event === 'token') {
+        process.stdout.write(event.data.token || '');
+      } else if (event.event === 'field-update') {
+        process.stdout.write(paint(`\n  ↳ [${SYSTEM_LABEL}] extracted ${event.data.field} = ${JSON.stringify(event.data.value)}`, c.dim) + ' ');
+      } else if (event.event === 'done') {
+        console.log('\n');
+      } else if (event.event === 'error') {
+        fail(`${event.data.message}\n`);
+      }
+    }
+  }
+
+  // ==========================================
+  // STATE 5: Generation
+  // ==========================================
+  section('Website Generation');
+  console.log(paint('Triggering website generation pipeline... This will take 1-2 minutes.', c.cyan));
+  app.useLogger(['log', 'warn', 'error']); // Enable logs so user can see progress
+
+  try {
+    const liveUrl = await generationService.generateProject(project.id);
+
+    const websiteData = await prisma.websiteData.findUnique({ where: { projectId: project.id } });
+    console.log();
+    ok(`Generation complete — status: ${paint(websiteData?.generationStatus ?? 'unknown', c.bold, c.green)}`);
+    console.log();
+    banner('Done! Your project is ready.');
+    if (liveUrl) {
+      console.log(`\n  Live URL: ${paint(liveUrl, c.bold, c.blue, c.reset)}`);
+      console.log(`  (Note: It might take a minute for the DNS to propagate)`);
+    }
+  } catch (error) {
+    fail('Generation failed');
+    console.error(paint(String(error), c.red));
+  }
+
+  console.log();
+  rl.close();
+  await app.close();
+  process.exit(0);
+}
+
+bootstrap();

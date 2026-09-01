@@ -1,0 +1,383 @@
+{
+  "id": "f72e6c40-5e99-4ca6-aaba-99c90e4d27cf",
+  "userId": "18794b68-1f81-4c6c-8ac6-68f857348ac3",
+  "name": "a",
+  "status": "draft",
+  "createdAt": "2026-08-28T08:58:45.435Z",
+  "updatedAt": "2026-08-28T08:58:45.435Z",
+  "businessContext": {
+    "id": "8106ac3a-9c72-4e9e-bbe4-b3c1775a0e08",
+    "projectId": "f72e6c40-5e99-4ca6-aaba-99c90e4d27cf",
+    "businessName": "Offcut Interiors - Home Remodeling",
+    "contactPerson": "Hunter",
+    "businessAddress": "16601 N 75th Ave, Peoria, AZ 85382, USA",
+    "phone": "(480) 480-5736",
+    "email": "info@offcutinteriors.com",
+    "hours": [
+      "Monday: 7:00 AM – 9:00 PM",
+      "Tuesday: 7:00 AM – 9:00 PM",
+      "Wednesday: 7:00 AM – 9:00 PM",
+      "Thursday: 7:00 AM – 9:00 PM",
+      "Friday: 7:00 AM – 9:00 PM",
+      "Saturday: 7:00 AM – 9:00 PM",
+      "Sunday: 7:00 AM – 9:00 PM"
+    ],
+    "gbpData": {
+      "website": "https://offcutinteriors.com/?local=true"
+    },
+    "trade": "general_contractor, home_goods_store, store, service, point_of_interest, establishment",
+    "location": null,
+    "targetAudience": null,
+    "services": [
+      "Kitchen Remodeling",
+      "Bathroom Remodeling",
+      "Whole Home Remodeling",
+      "Home Additions",
+      "Kitchen Refresh"
+    ],
+    "competitors": null,
+    "rawText": null,
+    "serviceAreas": [
+      "Peoria, Arizona",
+      "50-mile radius"
+    ],
+    "brandIdentityInputs": {
+      "fontStyle": "Modern & Clean",
+      "primaryColor": "#2B8FC7",
+      "secondaryColor": "#4DA6D6"
+    },
+    "brandVoicePreference": "Professional & Authoritative",
+    "usps": null,
+    "interviewMetadata": null,
+    "createdAt": "2026-08-28T08:58:45.448Z",
+    "updatedAt": "2026-08-28T09:00:23.925Z"
+  },
+  "websiteData": {
+    "id": "ce7f0b4a-dcf0-4f4d-a7dc-b4077feb01ef",
+    "projectId": "f72e6c40-5e99-4ca6-aaba-99c90e4d27cf",
+    "colorPalette": null,
+    "typography": null,
+    "style": null,
+    "sitemap": null,
+    "designTokens": {
+      "colors": {
+        "text": "#1F2937",
+        "accent": "#F5A623",
+        "primary": "#2B8FC7",
+        "secondary": "#4DA6D6",
+        "background": "#FAFBFC"
+      },
+      "spacing": {
+        "large": "32px",
+        "small": "8px",
+        "medium": "16px"
+      },
+      "typography": {
+        "bodyFont": "Open Sans",
+        "headingFont": "Montserrat"
+      }
+    },
+    "seoMetadata": {
+      "title": "Offcut Interiors | Kitchen & Bathroom Remodeling in Peoria, AZ",
+      "keywords": [
+        "kitchen remodeling Peoria AZ",
+        "bathroom remodeling Peoria",
+        "home remodeling contractor Peoria Arizona",
+        "whole home remodeling Phoenix West Valley",
+        "home additions Peoria AZ",
+        "kitchen refresh Arizona",
+        "licensed remodeling contractor Peoria",
+        "custom kitchen renovation",
+        "bathroom renovation West Valley",
+        "Offcut Interiors"
+      ],
+      "description": "Expert home remodeling in Peoria, AZ. Offcut Interiors delivers kitchen remodels, bathroom renovations, whole-home transformations & additions. Open 7 days, 7 AM–9 PM. Call (480) 480-5736.",
+      "ogImagePlaceholder": "A bright, modern remodeled kitchen with clean white cabinetry, quartz countertops, and warm wood accents. Overlaid with the Offcut Interiors logo and tagline 'Expert Home Remodeling in Peoria, AZ' using Montserrat font, with a blue (#2B8FC7) accent bar along the bottom edge for brand consistency."
+    },
+    "sitemapXml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n  <url>\n    <loc>https://f72e6c40-5e99-4ca6-aaba-99c90e4d27cf.builder.local</loc>\n    <lastmod>2026-08-28</lastmod>\n  </url>\n  <url>\n    <loc>https://f72e6c40-5e99-4ca6-aaba-99c90e4d27cf.builder.local/about-us</loc>\n    <lastmod>2026-08-28</lastmod>\n  </url>\n  <url>\n    <loc>https://f72e6c40-5e99-4ca6-aaba-99c90e4d27cf.builder.local/services</loc>\n    <lastmod>2026-08-28</lastmod>\n  </url>\n</urlset>",
+    "robotsTxt": "User-agent: *\nAllow: /\n\nSitemap: https://f72e6c40-5e99-4ca6-aaba-99c90e4d27cf.builder.local/sitemap.xml",
+    "jsonLdSchemas": {
+      "url": "https://f72e6c40-5e99-4ca6-aaba-99c90e4d27cf.builder.local",
+      "name": "Offcut Interiors - Home Remodeling",
+      "@type": "LocalBusiness",
+      "address": {
+        "@type": "PostalAddress",
+        "streetAddress": "16601 N 75th Ave, Peoria, AZ 85382, USA"
+      },
+      "@context": "https://schema.org",
+      "telephone": "(480) 480-5736",
+      "openingHours": [
+        "0 Monday: 7:00 AM – 9:00 PM",
+        "1 Tuesday: 7:00 AM – 9:00 PM",
+        "2 Wednesday: 7:00 AM – 9:00 PM",
+        "3 Thursday: 7:00 AM – 9:00 PM",
+        "4 Friday: 7:00 AM – 9:00 PM",
+        "5 Saturday: 7:00 AM – 9:00 PM",
+        "6 Sunday: 7:00 AM – 9:00 PM"
+      ]
+    },
+    "ogTags": null,
+    "internalLinkMap": {
+      "home": [
+        "about-us",
+        "services"
+      ],
+      "about-us": [
+        "home",
+        "services"
+      ],
+      "services": [
+        "home",
+        "about-us"
+      ]
+    },
+    "generationStatus": "failed",
+    "lastGeneratedAt": "2026-08-28T09:01:03.044Z",
+    "createdAt": "2026-08-28T09:00:23.931Z",
+    "updatedAt": "2026-08-28T09:15:02.818Z"
+  },
+  "pages": [
+    {
+      "id": "81afdc29-1e20-4f81-b460-ebe6cbd5c594",
+      "projectId": "f72e6c40-5e99-4ca6-aaba-99c90e4d27cf",
+      "slug": "home",
+      "content": {
+        "slug": "home",
+        "sections": [
+          {
+            "id": "hero",
+            "type": "HeroSection",
+            "content": {
+              "cta": "Start Your Remodel",
+              "headline": "Expert Home Remodeling, Built to Last in Peoria",
+              "subheadline": "Offcut Interiors transforms kitchens, bathrooms, and whole homes across Peoria and the West Valley with precision craftsmanship and a process-driven approach. Your vision, elevated — from first design to final detail."
+            }
+          },
+          {
+            "id": "services",
+            "type": "ServicesSection",
+            "content": {
+              "items": [
+                {
+                  "title": "Kitchen Remodeling",
+                  "description": "Reimagine the heart of your home with a custom kitchen remodel. From layout redesign to premium finishes, we deliver dream kitchens that blend timeless style with everyday function."
+                },
+                {
+                  "title": "Bathroom Remodeling",
+                  "description": "Elevate your bathroom into a space of comfort and quality. Our detail-oriented team handles every phase — plumbing, tile, fixtures, and finishes — with seamless precision."
+                },
+                {
+                  "title": "Whole Home Remodeling",
+                  "description": "Transform your entire living space with a whole-home renovation designed around how you live. One trusted team, one clear plan, one exceptional result."
+                },
+                {
+                  "title": "Home Additions",
+                  "description": "Expand your home the right way. We design and build additions that integrate seamlessly with your existing structure, adding space and lasting value to your investment."
+                },
+                {
+                  "title": "Kitchen Refresh",
+                  "description": "Not ready for a full remodel? A kitchen refresh updates cabinets, countertops, and finishes to give your space a modern, elevated look — efficiently and expertly."
+                }
+              ],
+              "title": "Remodeling Services Tailored to Your Home"
+            }
+          },
+          {
+            "id": "why-choose",
+            "type": "WhyChooseSection",
+            "content": {
+              "items": [
+                {
+                  "title": "Remodeling Specialists",
+                  "description": "We're not generalists. Our team focuses exclusively on remodeling, bringing deep expertise and proven craftsmanship to every kitchen, bathroom, and whole-home project."
+                },
+                {
+                  "title": "A Process Built on Precision",
+                  "description": "Major renovations deserve careful planning. Our clear, process-driven approach keeps your project on schedule, on budget, and true to your vision from start to finish."
+                },
+                {
+                  "title": "Local West Valley Expertise",
+                  "description": "Based in Peoria and serving a 50-mile radius, we understand Arizona homes — and we treat every project like it's in our own neighborhood."
+                },
+                {
+                  "title": "Available 7 Days a Week",
+                  "description": "Your questions shouldn't wait. Reach us seven days a week, 7 AM to 9 PM, for responsive communication throughout your remodel."
+                }
+              ],
+              "title": "Why Peoria Homeowners Trust Offcut Interiors"
+            }
+          },
+          {
+            "id": "cta",
+            "type": "CTASection",
+            "content": {
+              "cta": "Get a Free Consultation",
+              "headline": "Ready to Transform Your Home?",
+              "subheadline": "Let's talk about your vision. Contact Offcut Interiors today to schedule a consultation with a trusted remodeling expert serving Peoria and the greater West Valley."
+            }
+          }
+        ]
+      },
+      "createdAt": "2026-08-28T09:01:03.015Z",
+      "updatedAt": "2026-08-28T09:01:03.015Z"
+    },
+    {
+      "id": "4e0ef4a8-f9e1-49bb-af59-1f5d35a49885",
+      "projectId": "f72e6c40-5e99-4ca6-aaba-99c90e4d27cf",
+      "slug": "about-us",
+      "content": {
+        "slug": "about-us",
+        "sections": [
+          {
+            "id": "hero",
+            "type": "HeroSection",
+            "content": {
+              "cta": "Start Your Remodel",
+              "headline": "Craftsmanship That Transforms Peoria Homes",
+              "subheadline": "Offcut Interiors is a trusted design-build remodeling company serving Peoria, Arizona and homeowners within a 50-mile radius. From dream kitchens to whole-home transformations, we bring precision, planning, and expert craftsmanship to every project — and we're available 7 days a week, 7 AM to 9 PM."
+            }
+          },
+          {
+            "id": "story",
+            "type": "StorySection",
+            "content": {
+              "body": "Offcut Interiors was built on a simple belief: your home deserves more than a contractor — it deserves a remodeling specialist. Based in Peoria, Arizona, we've dedicated ourselves to mastering the craft of home transformation, from custom kitchen remodels to full home additions. Every project begins with your vision. Our process-driven approach turns that vision into a clear plan, a precise timeline, and a finished space built to last. We treat your home as the significant investment it is — protecting it, respecting it, and elevating it with detail-oriented craftsmanship at every stage. Led by Hunter and our team of remodeling experts, we serve homeowners throughout Peoria and the greater Phoenix West Valley. Whether you're reimagining a single room or transforming your entire home, we deliver seamless project management and timeless results — no shortcuts, no surprises.",
+              "title": "Who We Are"
+            }
+          },
+          {
+            "id": "values",
+            "type": "ValuesSection",
+            "content": {
+              "items": [
+                {
+                  "title": "Remodeling Specialists, Not Generalists",
+                  "description": "We focus exclusively on home remodeling — kitchens, bathrooms, whole-home renovations, and additions. That specialization means deeper expertise, tighter execution, and results that hold up for decades."
+                },
+                {
+                  "title": "A Process Built Around You",
+                  "description": "From initial design consultation to final walkthrough, our process is transparent and structured. You'll know what's happening, when, and why — because a major investment deserves clear communication."
+                },
+                {
+                  "title": "Precision in Every Detail",
+                  "description": "Quality lives in the details. Our craftsmen approach every cut, joint, and finish with the precision your home deserves, delivering work that's both functional and beautiful."
+                },
+                {
+                  "title": "Available When You Need Us",
+                  "description": "Remodeling questions don't keep business hours. We're accessible 7 days a week, from 7 AM to 9 PM, so you always have a direct line to your project team."
+                }
+              ],
+              "title": "What Sets Us Apart"
+            }
+          },
+          {
+            "id": "services",
+            "type": "ServicesSection",
+            "content": {
+              "items": [
+                {
+                  "title": "Kitchen Remodeling",
+                  "description": "Your kitchen is the heart of your home. We design and build custom kitchens tailored to how you live — combining timeless style with functional layouts, quality materials, and expert installation."
+                },
+                {
+                  "title": "Bathroom Remodeling",
+                  "description": "From spa-inspired primary baths to efficient guest bathrooms, we transform outdated spaces into elevated retreats with precision tile work, modern fixtures, and thoughtful design."
+                },
+                {
+                  "title": "Whole Home Remodeling",
+                  "description": "Reimagine your entire living space. Our whole-home remodels unify design, improve flow, and modernize every room — managed seamlessly from concept through completion."
+                },
+                {
+                  "title": "Home Additions",
+                  "description": "Need more space? We design and build home additions that integrate seamlessly with your existing structure, expanding your square footage without compromising your home's character."
+                },
+                {
+                  "title": "Kitchen Refresh",
+                  "description": "Not every kitchen needs a full remodel. Our kitchen refresh service delivers a striking transformation — updated cabinetry, countertops, and finishes — with a streamlined scope and timeline."
+                }
+              ],
+              "title": "How We Transform Homes"
+            }
+          },
+          {
+            "id": "cta",
+            "type": "CtaSection",
+            "content": {
+              "cta": "Schedule a Consultation",
+              "headline": "Ready to Reimagine Your Home?",
+              "subheadline": "Let's talk about your vision. Serving Peoria, Arizona and homeowners within a 50-mile radius, Offcut Interiors is ready to bring expert craftsmanship to your next remodel. Call (480) 480-5736 or reach us at info@offcutinteriors.com — available 7 days a week, 7 AM to 9 PM."
+            }
+          }
+        ]
+      },
+      "createdAt": "2026-08-28T09:01:03.031Z",
+      "updatedAt": "2026-08-28T09:01:03.031Z"
+    },
+    {
+      "id": "685e8824-7ac6-4f02-891c-8fdce9b82244",
+      "projectId": "f72e6c40-5e99-4ca6-aaba-99c90e4d27cf",
+      "slug": "services",
+      "content": {
+        "slug": "services",
+        "sections": [
+          {
+            "id": "hero",
+            "type": "HeroSection",
+            "content": {
+              "cta": "Request Your Consultation",
+              "headline": "Expert Remodeling Services Built Around Your Vision",
+              "subheadline": "From dream kitchens to whole-home transformations, Offcut Interiors delivers precision craftsmanship to homeowners in Peoria and across the West Valley. Every project is process-driven, detail-oriented, and built to last. Available 7 days a week, 7 AM – 9 PM."
+            }
+          },
+          {
+            "id": "services",
+            "type": "ServicesSection",
+            "content": {
+              "items": [
+                {
+                  "title": "Kitchen Remodeling",
+                  "description": "Your kitchen is the heart of your home — and it deserves expert attention. We design and build custom kitchens that balance timeless style with everyday function, from cabinetry and countertops to layout reconfigurations. Our design-build process keeps your project seamless from first sketch to final walkthrough, delivering the dream kitchen you've envisioned."
+                },
+                {
+                  "title": "Bathroom Remodeling",
+                  "description": "Transform your bathroom into a space that feels elevated and functional. Whether you're reimagining a primary suite with a spa-inspired shower or updating a guest bath, our team brings precision craftsmanship to every tile, fixture, and finish. We handle the details so your renovation protects and enhances your home's value."
+                },
+                {
+                  "title": "Whole Home Remodeling",
+                  "description": "When your entire home needs a new vision, trust a licensed team with proven whole-home expertise. We manage every phase of the transformation — planning, design, construction, and finishing — with a process-driven approach that keeps your project on schedule and your investment protected. One team, one seamless renovation."
+                },
+                {
+                  "title": "Home Additions",
+                  "description": "Need more space without leaving the neighborhood you love? Our home additions expand your living area with construction that integrates seamlessly into your existing structure. From extra bedrooms to expanded living spaces, we build additions that look original to your home and are built to last for decades."
+                },
+                {
+                  "title": "Kitchen Refresh",
+                  "description": "Not every kitchen needs a full remodel. Our kitchen refresh service delivers a striking transformation through targeted updates — cabinet refinishing, new countertops, modern hardware, and updated finishes. It's a smart, tailored way to elevate your kitchen's look and function while maximizing the return on your investment."
+                }
+              ],
+              "title": "Remodeling Services Tailored to Your Home"
+            }
+          }
+        ]
+      },
+      "createdAt": "2026-08-28T09:01:03.038Z",
+      "updatedAt": "2026-08-28T09:01:03.038Z"
+    }
+  ],
+  "assets": [
+    {
+      "id": "314461c1-3ff5-4862-a1ef-8f5829da61a3",
+      "projectId": "f72e6c40-5e99-4ca6-aaba-99c90e4d27cf",
+      "url": "https://offcutinteriors.com/wp-content/uploads/2022/01/offcut-interiors-logo-color-trimmed.png",
+      "type": "image",
+      "purpose": "logo",
+      "convertedUrl": null,
+      "mimeType": null,
+      "source": "upload",
+      "sortOrder": 0,
+      "section": null,
+      "createdAt": "2026-08-28T08:59:50.064Z",
+      "updatedAt": "2026-08-28T08:59:50.064Z"
+    }
+  ]
+}

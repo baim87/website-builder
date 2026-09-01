@@ -1,0 +1,57 @@
+import { PrismaService } from '../prisma/prisma.service';
+import { UpdateBusinessContextDto } from './dto/update-business-context.dto';
+export declare class BusinessContextService {
+    private readonly prisma;
+    constructor(prisma: PrismaService);
+    findByProjectId(projectId: string, userId?: string): Promise<{
+        primaryColor: any;
+        secondaryColor: any;
+        fontStyle: any;
+        id: string;
+        projectId: string;
+        createdAt: Date;
+        updatedAt: Date;
+        email: string | null;
+        hours: import("@prisma/client/runtime/library").JsonValue | null;
+        services: import("@prisma/client/runtime/library").JsonValue | null;
+        businessName: string | null;
+        contactPerson: string | null;
+        businessAddress: string | null;
+        phone: string | null;
+        gbpData: import("@prisma/client/runtime/library").JsonValue | null;
+        trade: string | null;
+        serviceAreas: import("@prisma/client/runtime/library").JsonValue | null;
+        brandIdentityInputs: import("@prisma/client/runtime/library").JsonValue | null;
+        brandVoicePreference: string | null;
+        usps: import("@prisma/client/runtime/library").JsonValue | null;
+        interviewMetadata: import("@prisma/client/runtime/library").JsonValue | null;
+        location: string | null;
+        targetAudience: string | null;
+        competitors: import("@prisma/client/runtime/library").JsonValue | null;
+        rawText: string | null;
+    }>;
+    upsert(projectId: string, data: UpdateBusinessContextDto, userId?: string): Promise<{
+        id: string;
+        projectId: string;
+        createdAt: Date;
+        updatedAt: Date;
+        email: string | null;
+        hours: import("@prisma/client/runtime/library").JsonValue | null;
+        services: import("@prisma/client/runtime/library").JsonValue | null;
+        businessName: string | null;
+        contactPerson: string | null;
+        businessAddress: string | null;
+        phone: string | null;
+        gbpData: import("@prisma/client/runtime/library").JsonValue | null;
+        trade: string | null;
+        serviceAreas: import("@prisma/client/runtime/library").JsonValue | null;
+        brandIdentityInputs: import("@prisma/client/runtime/library").JsonValue | null;
+        brandVoicePreference: string | null;
+        usps: import("@prisma/client/runtime/library").JsonValue | null;
+        interviewMetadata: import("@prisma/client/runtime/library").JsonValue | null;
+        location: string | null;
+        targetAudience: string | null;
+        competitors: import("@prisma/client/runtime/library").JsonValue | null;
+        rawText: string | null;
+    }>;
+}

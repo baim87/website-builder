@@ -1,0 +1,62 @@
+import { PrismaService } from '../prisma/prisma.service';
+export declare class WebsiteDataService {
+    private readonly prisma;
+    constructor(prisma: PrismaService);
+    findByProjectId(projectId: string, userId?: string): Promise<{
+        id: string;
+        projectId: string;
+        createdAt: Date;
+        updatedAt: Date;
+        typography: import("@prisma/client/runtime/library").JsonValue | null;
+        colorPalette: import("@prisma/client/runtime/library").JsonValue | null;
+        style: string | null;
+        sitemap: import("@prisma/client/runtime/library").JsonValue | null;
+        designTokens: import("@prisma/client/runtime/library").JsonValue | null;
+        seoMetadata: import("@prisma/client/runtime/library").JsonValue | null;
+        sitemapXml: string | null;
+        robotsTxt: string | null;
+        jsonLdSchemas: import("@prisma/client/runtime/library").JsonValue | null;
+        ogTags: import("@prisma/client/runtime/library").JsonValue | null;
+        internalLinkMap: import("@prisma/client/runtime/library").JsonValue | null;
+        generationStatus: string;
+        lastGeneratedAt: Date | null;
+    }>;
+    upsert(projectId: string, data: any, userId?: string): Promise<{
+        id: string;
+        projectId: string;
+        createdAt: Date;
+        updatedAt: Date;
+        typography: import("@prisma/client/runtime/library").JsonValue | null;
+        colorPalette: import("@prisma/client/runtime/library").JsonValue | null;
+        style: string | null;
+        sitemap: import("@prisma/client/runtime/library").JsonValue | null;
+        designTokens: import("@prisma/client/runtime/library").JsonValue | null;
+        seoMetadata: import("@prisma/client/runtime/library").JsonValue | null;
+        sitemapXml: string | null;
+        robotsTxt: string | null;
+        jsonLdSchemas: import("@prisma/client/runtime/library").JsonValue | null;
+        ogTags: import("@prisma/client/runtime/library").JsonValue | null;
+        internalLinkMap: import("@prisma/client/runtime/library").JsonValue | null;
+        generationStatus: string;
+        lastGeneratedAt: Date | null;
+    }>;
+    updateGenerationStatus(projectId: string, status: string, userId?: string): Promise<{
+        id: string;
+        projectId: string;
+        createdAt: Date;
+        updatedAt: Date;
+        typography: import("@prisma/client/runtime/library").JsonValue | null;
+        colorPalette: import("@prisma/client/runtime/library").JsonValue | null;
+        style: string | null;
+        sitemap: import("@prisma/client/runtime/library").JsonValue | null;
+        designTokens: import("@prisma/client/runtime/library").JsonValue | null;
+        seoMetadata: import("@prisma/client/runtime/library").JsonValue | null;
+        sitemapXml: string | null;
+        robotsTxt: string | null;
+        jsonLdSchemas: import("@prisma/client/runtime/library").JsonValue | null;
+        ogTags: import("@prisma/client/runtime/library").JsonValue | null;
+        internalLinkMap: import("@prisma/client/runtime/library").JsonValue | null;
+        generationStatus: string;
+        lastGeneratedAt: Date | null;
+    }>;
+}
