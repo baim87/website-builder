@@ -58,6 +58,10 @@ export class CopyWriterSkill implements Skill {
       sectionSpecificRules = `5. IMPORTANT: Generate copy for EVERY service area listed in the business context 'serviceAreas' array.`;
     } else if (sectionType === 'FaqSection') {
       sectionSpecificRules = `5. IMPORTANT: You MUST generate between 3 and 6 relevant Frequently Asked Questions.`;
+    } else if (sectionType === 'HeaderSection') {
+      sectionSpecificRules = `5. IMPORTANT: This is the primary top navigation bar. Do NOT generate a large headline, subheadline, or hero copy. Only generate a JSON object representing navigation links (e.g., Home, About, Services, Portfolio, Contact) and a single primary contact CTA button.`;
+    } else if (sectionType === 'FooterSection') {
+      sectionSpecificRules = `5. IMPORTANT: This is the website footer. Only generate a JSON object representing footer columns (e.g., Quick Links, Contact Info, Services) and copyright text. Do NOT generate massive headlines or hero copy.`;
     } else if (sectionType === 'FindUsSection') {
       sectionSpecificRules = `5. IMPORTANT: Ensure the exact address, phone, email, and hours from the business context are included perfectly.`;
     } else if (sectionType === 'TestimonialsSection') {
