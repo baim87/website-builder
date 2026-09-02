@@ -115,6 +115,7 @@ RULES:
 4. Output a single JSON object (key-value map) containing all headlines, subheadlines, paragraphs, lists, and image queries.
 5. Provide a flexible structure that a UI Designer can easily map into a layout.
 6. IMPORTANT: If a section includes buttons, cards, or actionable items, you MUST include a relative URL path (e.g., '/services', '/contact', '/portfolio') in a 'link' or 'href' field.
+7. CRITICAL CTA RULE: NEVER use SaaS terminology like "Watch Demo", "Start for Free", or "Free Trial". This is a local service contractor website. All CTAs MUST be lead generation focused (e.g., "Get a Quote", "Request an Estimate", "Call Now", "Book a Consultation").
 ${sectionSpecificRules}
 
 OUTPUT FORMAT:
