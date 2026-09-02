@@ -1,10 +1,16 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateBusinessContextDto } from './dto/update-business-context.dto';
+import { LocationMetricsService } from '../seo/location-metrics.service';
 
 @Injectable()
 export class BusinessContextService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(BusinessContextService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly locationMetrics: LocationMetricsService,
+  ) {}
 
   async findByProjectId(projectId: string, userId?: string) {
     if (userId) {
@@ -58,7 +64,15 @@ export class BusinessContextService {
       };
     }
 
-    return this.prisma.businessContext.upsert({
+    if (rest.radius !== undefined) {
+      if (typeof rest.radius === 'string') {
+        const parsed = parseInt(String(rest.radius).replace(/[^0-9]/g, ''), 10);
+        rest.radius = isNaN(parsed) ? 50 : parsed;
+      }
+    }
+
+    // Run background location metrics process if location and services exist
+    const finalContext = await this.prisma.businessContext.upsert({
       where: { projectId },
       update: {
         ...rest,
@@ -70,5 +84,22 @@ export class BusinessContextService {
         ...(hasNewBrand && { brandIdentityInputs: newBrandIdentityInputs }),
       },
     });
+
+    if (finalContext.location && finalContext.services) {
+      const servicesArray = Array.isArray(finalContext.services) ? finalContext.services : [];
+      if (servicesArray.length > 0) {
+        // Fire and forget
+        this.locationMetrics.processProjectMetrics(
+          projectId, 
+          finalContext.location, 
+          finalContext.radius || 50, 
+          servicesArray as string[]
+        ).catch(e => {
+          this.logger.error(`Failed to process background location metrics for project ${projectId}`, e.stack);
+        });
+      }
+    }
+
+    return finalContext;
   }
 }

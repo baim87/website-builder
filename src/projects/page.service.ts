@@ -1,11 +1,12 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { UpsertPageDto } from './dto/upsert-page.dto';
 
 @Injectable()
 export class PageService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async upsertPage(projectId: string, slug: string, content: any, userId?: string) {
+  async upsertPage(projectId: string, slug: string, pageData: UpsertPageDto, userId?: string) {
     if (userId) {
       const project = await this.prisma.project.findUnique({
         where: { id: projectId, userId },
@@ -21,12 +22,18 @@ export class PageService {
         },
       },
       update: {
-        content,
+        content: pageData.content,
+        componentCode: pageData.componentCode,
+        seoMeta: pageData.seoMeta,
+        keywordTarget: pageData.keywordTarget,
       },
       create: {
         projectId,
         slug,
-        content,
+        content: pageData.content,
+        componentCode: pageData.componentCode,
+        seoMeta: pageData.seoMeta,
+        keywordTarget: pageData.keywordTarget,
       },
     });
   }

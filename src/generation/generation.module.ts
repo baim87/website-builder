@@ -6,9 +6,10 @@ import { PublicSiteController } from './public-site.controller';
 import { SkillsModule } from '../skills/skills.module';
 import { ProjectsModule } from '../projects/projects.module';
 import { SeoModule } from '../seo/seo.module';
+import { DeploymentModule } from '../deployment/deployment.module';
 
 @Module({
-  imports: [SkillsModule, forwardRef(() => ProjectsModule), SeoModule],
+  imports: [SkillsModule, forwardRef(() => ProjectsModule), SeoModule, DeploymentModule],
   controllers: [PublicSiteController],
   providers: [GenerationService, NextjsBuilderService, SiteContentService],
   exports: [GenerationService, NextjsBuilderService, SiteContentService],

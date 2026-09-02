@@ -10,6 +10,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.OutputValidatorService = void 0;
 const common_1 = require("@nestjs/common");
 const zod_1 = require("zod");
+const component_contract_1 = require("./component-contract");
+const css_contract_1 = require("./css-contract");
 let OutputValidatorService = OutputValidatorService_1 = class OutputValidatorService {
     logger = new common_1.Logger(OutputValidatorService_1.name);
     validate(output, schema) {
@@ -67,6 +69,79 @@ let OutputValidatorService = OutputValidatorService_1 = class OutputValidatorSer
         }
         else if (obj && typeof obj === 'object') {
             Object.values(obj).forEach(value => this.deepValidateScope(value));
+        }
+    }
+    validateKeywordPresence(title, h1, primaryKeyword) {
+        const titleLower = title.toLowerCase();
+        const h1Lower = h1.toLowerCase();
+        const keywordWords = primaryKeyword.toLowerCase().split(/\s+/).filter(w => w.length > 0);
+        const titleHasAllWords = keywordWords.every(word => titleLower.includes(word));
+        const h1HasAllWords = keywordWords.every(word => h1Lower.includes(word));
+        if (!titleHasAllWords) {
+            throw new Error(`SEO Validation Failed: Title must contain primary keyword "${primaryKeyword}". Got: "${title}"`);
+        }
+        if (!h1HasAllWords) {
+            throw new Error(`SEO Validation Failed: H1 must contain primary keyword "${primaryKeyword}". Got: "${h1}"`);
+        }
+    }
+    validateComponentCode(code) {
+        for (const pattern of component_contract_1.ComponentContract.forbiddenPatterns) {
+            if (pattern.test(code)) {
+                throw new Error(`Component Validation Failed: Found forbidden pattern: ${pattern.toString()}`);
+            }
+        }
+        for (const pattern of component_contract_1.ComponentContract.requiredPatterns) {
+            if (!pattern.test(code)) {
+                throw new Error(`Component Validation Failed: Missing required pattern: ${pattern.toString()}`);
+            }
+        }
+        const importRegex = /import\s+.*?\s+from\s+['"](.*?)['"]/g;
+        let match;
+        while ((match = importRegex.exec(code)) !== null) {
+            const importPath = match[1];
+            if (!component_contract_1.ComponentContract.allowedImports.includes(importPath)) {
+                throw new Error(`Component Validation Failed: Unauthorized import found: "${importPath}"`);
+            }
+        }
+    }
+    validateCSS(css) {
+        for (const pattern of css_contract_1.CSSContract.forbiddenClasses) {
+            if (pattern.test(css)) {
+                throw new Error(`CSS Validation Failed: Found forbidden class/pattern: ${pattern.toString()}`);
+            }
+        }
+        for (const bp of css_contract_1.CSSContract.requiredBreakpoints) {
+            const bpPattern = new RegExp(`${bp}:`);
+            if (!bpPattern.test(css)) {
+                this.logger.warn(`CSS Validation Warning: Did not find responsive breakpoint: ${bp}:`);
+            }
+        }
+    }
+    groundCheckContent(content, businessContext) {
+        if (!businessContext)
+            return;
+        const contentStr = JSON.stringify(content).toLowerCase();
+        if (businessContext.businessName) {
+            const placeholders = ['acme corp', 'your company', 'company name'];
+            for (const ph of placeholders) {
+                if (contentStr.includes(ph)) {
+                    throw new Error(`Grounding Validation Failed: Found placeholder business name "${ph}"`);
+                }
+            }
+        }
+        if (businessContext.location) {
+            const locationPlaceholders = ['your city', 'city, state', 'your location'];
+            for (const ph of locationPlaceholders) {
+                if (contentStr.includes(ph)) {
+                    throw new Error(`Grounding Validation Failed: Found placeholder location "${ph}"`);
+                }
+            }
+        }
+        const contactPlaceholders = ['123-456-7890', '555-555', 'email@example.com', 'your@email.com'];
+        for (const ph of contactPlaceholders) {
+            if (contentStr.includes(ph)) {
+                throw new Error(`Grounding Validation Failed: Found placeholder contact info "${ph}"`);
+            }
         }
     }
 };

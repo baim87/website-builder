@@ -63,6 +63,59 @@ let GooglePlacesService = GooglePlacesService_1 = class GooglePlacesService {
             return null;
         }
     }
+    async getCitiesInRadius(location, radiusMiles) {
+        if (!this.apiKey) {
+            this.logger.warn('GOOGLE_PLACES_API_KEY is not set. Skipping cities fetch.');
+            return [];
+        }
+        try {
+            const radiusMeters = Math.min(radiusMiles * 1609.34, 50000);
+            const searchRes = await fetch('https://places.googleapis.com/v1/places:searchText', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Goog-Api-Key': this.apiKey,
+                    'X-Goog-FieldMask': 'places.location',
+                },
+                body: JSON.stringify({ textQuery: location }),
+            });
+            const searchData = await searchRes.json();
+            if (!searchData.places || searchData.places.length === 0) {
+                this.logger.warn(`Location not found for cities fetch: ${location}`);
+                return [];
+            }
+            const center = searchData.places[0].location;
+            const nearbyRes = await fetch('https://places.googleapis.com/v1/places:searchNearby', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Goog-Api-Key': this.apiKey,
+                    'X-Goog-FieldMask': 'places.displayName,places.formattedAddress',
+                },
+                body: JSON.stringify({
+                    includedTypes: ['locality'],
+                    locationRestriction: {
+                        circle: {
+                            center,
+                            radius: radiusMeters
+                        }
+                    },
+                    maxResultCount: 15
+                }),
+            });
+            const nearbyData = await nearbyRes.json();
+            if (!nearbyData.places)
+                return [];
+            const cities = nearbyData.places
+                .map((p) => p.displayName?.text)
+                .filter((c) => !!c);
+            return Array.from(new Set(cities));
+        }
+        catch (e) {
+            this.logger.error(`Failed to fetch cities in radius for ${location}`, e.stack);
+            return [];
+        }
+    }
 };
 exports.GooglePlacesService = GooglePlacesService;
 exports.GooglePlacesService = GooglePlacesService = GooglePlacesService_1 = __decorate([

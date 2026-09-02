@@ -9,7 +9,8 @@ exports.BUSINESS_FIELDS = [
     'email',
     'trade',
     'services',
-    'serviceAreas',
+    'location',
+    'radius',
     'hours',
 ];
 exports.BRAND_FIELDS = [

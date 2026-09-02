@@ -49,8 +49,8 @@ Do not invent new section types. Use the supported ones to compose the page.`;
     const response = await this.aiGateway.generateText('claude-fable-5', {
       systemPrompt: 'You output ONLY valid JSON. No markdown fences, no explanation, no commentary. Just the raw JSON object.',
       messages: [{ role: 'user', content: prompt }],
-      temperature: 0.4,
-      maxTokens: 3000,
+      temperature: 0.2,
+      maxTokens: 8192,
       responseFormat: 'json',
     });
 

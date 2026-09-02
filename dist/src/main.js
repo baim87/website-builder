@@ -8,9 +8,18 @@ const app_module_1 = require("./app.module");
 const cookie_parser_1 = __importDefault(require("cookie-parser"));
 async function bootstrap() {
     const app = await core_1.NestFactory.create(app_module_1.AppModule, { rawBody: true });
+    app.setGlobalPrefix('api');
     app.use((0, cookie_parser_1.default)());
     app.enableCors({
-        origin: process.env.FRONTEND_URL || 'http://localhost:3001',
+        origin: (origin, callback) => {
+            const allowedOrigin = process.env.FRONTEND_URL || 'http://localhost:3001';
+            if (!origin || origin === allowedOrigin || /\.vercel\.app$/.test(origin)) {
+                callback(null, true);
+            }
+            else {
+                callback(new Error('Not allowed by CORS'));
+            }
+        },
         credentials: true,
     });
     if (process.env.APP_MODE === 'worker') {

@@ -1,4 +1,4 @@
-import { Controller, Get, Param, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Param, NotFoundException, Headers, UnauthorizedException } from '@nestjs/common';
 import { SiteContentService } from './site-content.service';
 
 @Controller('public/site-content')
@@ -6,7 +6,14 @@ export class PublicSiteController {
   constructor(private readonly siteContentService: SiteContentService) {}
 
   @Get(':projectId')
-  async getSiteContent(@Param('projectId') projectId: string) {
+  async getSiteContent(
+    @Param('projectId') projectId: string,
+    @Headers('x-builder-api-key') apiKey: string,
+  ) {
+    if (process.env.BUILDER_API_SECRET && apiKey !== process.env.BUILDER_API_SECRET) {
+      throw new UnauthorizedException('Invalid API Key');
+    }
+
     try {
       const content = await this.siteContentService.getSiteContent(projectId);
       if (!content) {

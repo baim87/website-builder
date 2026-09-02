@@ -50,6 +50,8 @@ let ClaudeFableAdapter = class ClaudeFableAdapter {
             messages: this.mapMessages(params.messages),
             max_tokens: params.maxTokens || 4096,
             stream: true,
+        }, {
+            headers: params.maxTokens && params.maxTokens > 4096 ? { 'anthropic-beta': 'max-tokens-3-5-sonnet-2024-07-15' } : undefined
         }));
         for await (const chunk of stream) {
             if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
@@ -63,11 +65,17 @@ let ClaudeFableAdapter = class ClaudeFableAdapter {
             system: params.systemPrompt,
             messages: this.mapMessages(params.messages),
             max_tokens: params.maxTokens || 4096,
+        }, {
+            headers: params.maxTokens && params.maxTokens > 4096 ? { 'anthropic-beta': 'max-tokens-3-5-sonnet-2024-07-15' } : undefined
         }));
-        const content = response.content[0];
         let text = '';
-        if (content.type === 'text') {
-            text = content.text;
+        for (const block of response.content) {
+            if (block.type === 'text') {
+                text += block.text;
+            }
+            else {
+                console.warn('[Claude Adapter] Ignoring non-text block:', block.type);
+            }
         }
         return {
             text,

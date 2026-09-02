@@ -9,13 +9,18 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.SeoModule = void 0;
 const common_1 = require("@nestjs/common");
 const seo_artifacts_service_1 = require("./seo-artifacts.service");
+const location_metrics_service_1 = require("./location-metrics.service");
+const keywords_module_1 = require("../keywords/keywords.module");
+const prisma_module_1 = require("../prisma/prisma.module");
+const config_1 = require("@nestjs/config");
 let SeoModule = class SeoModule {
 };
 exports.SeoModule = SeoModule;
 exports.SeoModule = SeoModule = __decorate([
     (0, common_1.Module)({
-        providers: [seo_artifacts_service_1.SeoArtifactsService],
-        exports: [seo_artifacts_service_1.SeoArtifactsService],
+        imports: [keywords_module_1.KeywordsModule, prisma_module_1.PrismaModule, config_1.ConfigModule],
+        providers: [seo_artifacts_service_1.SeoArtifactsService, location_metrics_service_1.LocationMetricsService],
+        exports: [seo_artifacts_service_1.SeoArtifactsService, location_metrics_service_1.LocationMetricsService],
     })
 ], SeoModule);
 //# sourceMappingURL=seo.module.js.map

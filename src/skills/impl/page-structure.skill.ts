@@ -17,6 +17,45 @@ export class PageStructureSkill implements Skill {
 
   async execute(input: SkillInput): Promise<SkillOutput> {
     const pageSlug = input.context.pageSlug || 'home';
+
+    // HARDCODED PAGE STRUCTURES (User Dictated)
+    const userDictatedStructures: Record<string, string[]> = {
+      'home': [
+        'HeroSection', 'AboutSection', 'ServicesSection', 'WhyUsSection', 
+        'GallerySection', 'TimelineSection', 'TestimonialsSection', 'CallToActionSection'
+      ],
+      'about-us': [
+        'HeroSection', 'AboutSection', 'WhyUsSection', 'LocationsSection', 
+        'TestimonialsSection', 'CallToActionSection'
+      ],
+      'portfolio': [
+        'HeroSection', 'GallerySection'
+      ],
+      'services': [
+        'HeroSection', 'ServicesSection'
+      ],
+      'service-areas': [
+        'HeroSection', 'LocationsSection', 'TestimonialsSection', 'CallToActionSection'
+      ],
+      'contact': [
+        'HeroSection', 'LeadFormSection', 'FindUsSection'
+      ]
+    };
+
+    if (userDictatedStructures[pageSlug]) {
+      this.logger.log(`[${pageSlug}] Using hardcoded user-dictated page structure.`);
+      const validatedData = this.validator.validate({ sections: userDictatedStructures[pageSlug] }, PageStructureSchema);
+      const hash = crypto.createHash('sha256').update(JSON.stringify(validatedData)).digest('hex');
+      return { data: validatedData, hash, model: 'hardcoded' };
+    }
+
+    if (input.context.isLocationServicePage || pageSlug.startsWith('services/') || pageSlug.startsWith('service-areas/')) {
+      this.logger.log(`[${pageSlug}] Using hardcoded dynamic detail page structure.`);
+      const detailStructure = ['PageHeaderSection', 'ServiceDetailsSection', 'GallerySection', 'BeforeAfterSection', 'TestimonialsSection', 'FaqSection', 'CallToActionSection'];
+      const validatedData = this.validator.validate({ sections: detailStructure }, PageStructureSchema);
+      const hash = crypto.createHash('sha256').update(JSON.stringify(validatedData)).digest('hex');
+      return { data: validatedData, hash, model: 'hardcoded' };
+    }
     
     const prompt = `Determine the layout for the "${pageSlug}" page of this contractor business.
 Business Context: ${JSON.stringify(input.context.businessContext)}
@@ -46,8 +85,8 @@ Do not invent new section types. Just output the array of strings wrapped in the
     const response = await this.aiGateway.generateText('claude-fable-5', {
       systemPrompt: 'You output ONLY valid JSON. No markdown fences, no explanation, no commentary. Just the raw JSON object.',
       messages: [{ role: 'user', content: prompt }],
-      temperature: 0.2,
-      maxTokens: 500,
+      temperature: 0.1,
+      maxTokens: 8192,
       responseFormat: 'json',
     });
 

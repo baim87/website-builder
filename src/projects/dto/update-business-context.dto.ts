@@ -9,6 +9,8 @@ export const UpdateBusinessContextSchema = z.object({
   hours: z.record(z.string(), z.string()).optional(),
   gbpData: z.any().optional(),
   trade: z.string().optional(),
+  location: z.string().optional(),
+  radius: z.any().optional(),
   services: z.array(z.string()).optional(),
   serviceAreas: z.array(z.string()).optional(),
   brandIdentityInputs: z.record(z.string(), z.any()).optional(),

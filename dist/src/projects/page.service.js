@@ -17,7 +17,7 @@ let PageService = class PageService {
     constructor(prisma) {
         this.prisma = prisma;
     }
-    async upsertPage(projectId, slug, content, userId) {
+    async upsertPage(projectId, slug, pageData, userId) {
         if (userId) {
             const project = await this.prisma.project.findUnique({
                 where: { id: projectId, userId },
@@ -33,12 +33,18 @@ let PageService = class PageService {
                 },
             },
             update: {
-                content,
+                content: pageData.content,
+                componentCode: pageData.componentCode,
+                seoMeta: pageData.seoMeta,
+                keywordTarget: pageData.keywordTarget,
             },
             create: {
                 projectId,
                 slug,
-                content,
+                content: pageData.content,
+                componentCode: pageData.componentCode,
+                seoMeta: pageData.seoMeta,
+                keywordTarget: pageData.keywordTarget,
             },
         });
     }

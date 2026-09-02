@@ -1,0 +1,171 @@
+import { Injectable, Logger } from '@nestjs/common';
+import { Skill, SkillInput, SkillOutput } from '../interfaces/skill.interface';
+import { AIGatewayService } from '../../ai-gateway/ai-gateway.service';
+import { OutputValidatorService } from '../../guardrails/output-validator.service';
+import { CopyDataSchema } from '../schemas/skill-outputs.schema';
+import { PrismaService } from '../../prisma/prisma.service';
+import * as crypto from 'crypto';
+
+@Injectable()
+export class CopyWriterSkill implements Skill {
+  readonly name = 'CopyWriter';
+  private readonly logger = new Logger(CopyWriterSkill.name);
+
+  constructor(
+    private readonly aiGateway: AIGatewayService,
+    private readonly validator: OutputValidatorService,
+    private readonly prisma: PrismaService,
+  ) {}
+
+  async execute(input: SkillInput): Promise<SkillOutput> {
+    const { sectionType, businessContext, brandVoice, seoMeta, pageSlug } = input.context;
+
+    if (!sectionType || !businessContext) {
+      throw new Error('CopyWriterSkill requires sectionType and businessContext in context');
+    }
+
+    const keywordsContext = seoMeta?.keywords ? `TARGET SEO KEYWORDS TO INCLUDE: ${seoMeta.keywords.join(', ')}` : '';
+    
+    let sectionSpecificRules = '';
+    
+    if (sectionType === 'AboutSection') {
+      sectionSpecificRules = `5. IMPORTANT: You must include the business owner's name: ${businessContext.contactPerson || 'The Owner'} in the copy. Make it a personal, professional about us section.`;
+    } else if (sectionType === 'WhyUsSection') {
+      sectionSpecificRules = `5. IMPORTANT: Highlight Unique Selling Propositions (USPs).`;
+    } else if (sectionType === 'GallerySection') {
+      let galleryRules = `5. IMPORTANT: Provide a highly descriptive 'alt' tag, and use a relevant Unsplash placeholder URL (e.g., "UNSPLASH:luxury modern bathroom") for EVERY service listed in the business context 'services' array.`;
+      if (pageSlug === 'portfolio') {
+        galleryRules += `\n6. IMPORTANT PORTFOLIO RULE: Generate specific portfolio case studies.`;
+      }
+      sectionSpecificRules = galleryRules;
+    } else if (sectionType === 'TimelineSection') {
+      sectionSpecificRules = `5. IMPORTANT: Generate a MAXIMUM of 4 process steps.`;
+    } else if (sectionType === 'HeroSection') {
+      let heroRules = `5. IMPORTANT: Generate a strong, conversion-optimized hero headline. Include a primary Call to Action (CTA).`;
+      if (pageSlug === 'portfolio') {
+        heroRules += `\n6. IMPORTANT PORTFOLIO RULE: Mention specific services like ${businessContext.services?.join(', ')}.`;
+      } else if (pageSlug === 'service-areas') {
+        heroRules += `\n6. IMPORTANT SERVICE AREAS RULE: You MUST explicitly mention the target service areas (from the business context) that have high search volume within the Hero copy.`;
+      }
+      sectionSpecificRules = heroRules;
+    } else if (sectionType === 'ServicesSection') {
+      sectionSpecificRules = `5. IMPORTANT: Generate copy for EVERY service listed in the business context 'services' array.`;
+    } else if (sectionType === 'LocationsSection') {
+      sectionSpecificRules = `5. IMPORTANT: Generate copy for EVERY service area listed in the business context 'serviceAreas' array.`;
+    } else if (sectionType === 'FaqSection') {
+      sectionSpecificRules = `5. IMPORTANT: You MUST generate between 3 and 6 relevant Frequently Asked Questions.`;
+    } else if (sectionType === 'FindUsSection') {
+      sectionSpecificRules = `5. IMPORTANT: Ensure the exact address, phone, email, and hours from the business context are included perfectly.`;
+    } else if (sectionType === 'TestimonialsSection') {
+      sectionSpecificRules = `5. IMPORTANT: Generate 3 realistic testimonials relevant to the target services. Include a fictional customer name and a 5-star rating.`;
+    }
+
+    let locationMetricsStr = '';
+    if (pageSlug === 'service-areas' && input.projectId) {
+      const locationMetrics = await this.prisma.locationKeywordMetrics.findMany({
+        where: { projectId: input.projectId }
+      });
+      if (locationMetrics.length > 0) {
+        locationMetricsStr = `\nLOCATION KEYWORD METRICS:\n${JSON.stringify(locationMetrics, null, 2)}\nIMPORTANT: Use these highest volume keywords specifically for the location cards and hero copy!`;
+      }
+    }
+
+    let locationServiceRules = '';
+    
+    let targetService = '';
+    if (pageSlug.startsWith('services/') || input.context.isLocationServicePage) {
+      const parts = pageSlug.split('/');
+      const rawServiceSlug = parts.length === 2 ? parts[1] : parts[parts.length - 1];
+      targetService = rawServiceSlug.replace(/-/g, ' ');
+      
+      locationServiceRules += `\nCRITICAL CONTEXT:\nThis page is STRICTLY dedicated to "${targetService}". ALL content generated for this section MUST exclusively talk about "${targetService}".`;
+    }
+
+    if (input.context.isLocationServicePage) {
+      const citySlug = pageSlug.split('/')[0];
+      const targetCity = citySlug.replace(/-/g, ' ');
+      locationServiceRules += `\n\nFurthermore, this is a highly localized Service Area Detail page. You must explicitly mention BOTH the specific Service ("${targetService}") and the specific City ("${targetCity}") throughout the copy to maximize local SEO relevance.`;
+    }
+
+    const prompt = `You are an expert full-stack developer, copywriter, and UI designer for a contractor website.
+Write the UI AST and copy for a "${sectionType}".
+
+BUSINESS CONTEXT:
+${JSON.stringify(businessContext, null, 2)}
+
+BRAND VOICE:
+${JSON.stringify(brandVoice || {}, null, 2)}
+
+${keywordsContext}
+${locationMetricsStr}
+${locationServiceRules}
+
+RULES:
+1. You MUST generate the exact text required for the section.
+2. For images, generate an Unsplash query string formatted as "UNSPLASH:query".
+3. Write compelling, high-converting copy that matches the brand voice.
+4. Output a single JSON object (key-value map) containing all headlines, subheadlines, paragraphs, lists, and image queries.
+5. Provide a flexible structure that a UI Designer can easily map into a layout.
+${sectionSpecificRules}
+
+OUTPUT FORMAT:
+Return a JSON object matching this general structure, adapted for the specific section Type:
+{
+  "badge": "Top Rated in Sydney",
+  "headline": "Your Main Headline Here",
+  "subheadline": "Your secondary text here.",
+  "items": [
+    {
+      "title": "Item 1",
+      "description": "Description 1",
+      "imageQuery": "UNSPLASH:modern kitchen",
+      "icon": "Award"
+    }
+  ],
+  "callToAction": {
+    "text": "Get a Quote",
+    "href": "/contact"
+  }
+}
+      `;
+
+    this.logger.log(`Generating copy for ${sectionType}...`);
+
+    const response = await this.aiGateway.generateText('claude-fable-5', {
+      systemPrompt: 'You output ONLY valid JSON. No markdown fences, no explanation, no commentary. Just the raw JSON object.',
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.7,
+      maxTokens: 8192,
+      responseFormat: 'json',
+    });
+
+    let parsed: any;
+    try {
+      let raw = response.text.trim();
+      const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+      if (fenceMatch) raw = fenceMatch[1].trim();
+      if (!raw.startsWith('{')) {
+        const start = raw.indexOf('{');
+        const end = raw.lastIndexOf('}');
+        if (start !== -1 && end > start) raw = raw.substring(start, end + 1);
+      }
+      parsed = JSON.parse(raw);
+    } catch {
+      this.logger.error(`Failed to parse LLM output as JSON: ${response.text}`);
+      throw new Error(`CopyWriter LLM returned unparseable output: ${response.text.substring(0, 200)}`);
+    }
+
+    const validatedData = this.validator.validate(parsed, CopyDataSchema);
+    
+    // Business data grounding validation (e.g., prevent fake placeholders)
+    this.validator.groundCheckContent(validatedData, businessContext);
+
+    const hash = crypto.createHash('sha256').update(JSON.stringify(validatedData)).digest('hex');
+
+    return {
+      data: validatedData,
+      hash,
+      model: 'claude-fable-5',
+    };
+  }
+}

@@ -75,7 +75,11 @@ let SiteContentService = SiteContentService_1 = class SiteContentService {
                 accent: tokens.colors?.accent || "#f59e0b",
                 fontFamily: tokens.typography?.headingFont || "Inter"
             },
-            pages: pages.map(p => p.content),
+            pages: pages.map(p => ({
+                slug: p.slug,
+                sections: p.content,
+                ...(p.componentCode ? { componentCode: p.componentCode } : {})
+            })),
             services: businessContext.services?.map((s) => ({
                 slug: s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, ''),
                 name: s,

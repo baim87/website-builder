@@ -35,255 +35,56 @@ export declare const SeoMetadataSchema: z.ZodObject<{
     keywords: z.ZodArray<z.ZodString>;
     ogImagePlaceholder: z.ZodString;
 }, z.core.$strip>;
-export declare const SectionSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
-    id: z.ZodString;
-    type: z.ZodLiteral<"HeroSection">;
-    content: z.ZodObject<{
-        headline: z.ZodString;
-        subheadline: z.ZodString;
-        ctaText: z.ZodString;
-        backgroundImage: z.ZodString;
-    }, z.core.$strip>;
-}, z.core.$strip>, z.ZodObject<{
-    id: z.ZodString;
-    type: z.ZodLiteral<"BrandsSection">;
-    content: z.ZodArray<z.ZodObject<{
-        name: z.ZodString;
-        icon: z.ZodString;
-    }, z.core.$strip>>;
-}, z.core.$strip>, z.ZodObject<{
-    id: z.ZodString;
-    type: z.ZodLiteral<"ServicesSection">;
-    content: z.ZodObject<{
-        items: z.ZodOptional<z.ZodArray<z.ZodObject<{
-            slug: z.ZodString;
-            name: z.ZodString;
-            description: z.ZodString;
-            icon: z.ZodString;
-            image: z.ZodString;
-        }, z.core.$strip>>>;
-    }, z.core.$strip>;
-}, z.core.$strip>, z.ZodObject<{
-    id: z.ZodString;
-    type: z.ZodLiteral<"AboutSection">;
-    content: z.ZodObject<{
-        story: z.ZodString;
-        mission: z.ZodString;
-        values: z.ZodArray<z.ZodObject<{
-            title: z.ZodString;
-            description: z.ZodString;
-        }, z.core.$strip>>;
-        team: z.ZodArray<z.ZodObject<{
-            name: z.ZodString;
-            role: z.ZodString;
-            photo: z.ZodString;
-        }, z.core.$strip>>;
-    }, z.core.$strip>;
-}, z.core.$strip>, z.ZodObject<{
-    id: z.ZodString;
-    type: z.ZodLiteral<"WhyUsSection">;
-    content: z.ZodArray<z.ZodObject<{
-        title: z.ZodString;
-        description: z.ZodString;
-        icon: z.ZodString;
-    }, z.core.$strip>>;
-}, z.core.$strip>, z.ZodObject<{
-    id: z.ZodString;
-    type: z.ZodLiteral<"BeforeAfterSection">;
-    content: z.ZodArray<z.ZodObject<{
-        title: z.ZodString;
-        beforeImage: z.ZodString;
-        afterImage: z.ZodString;
-        description: z.ZodString;
-    }, z.core.$strip>>;
-}, z.core.$strip>, z.ZodObject<{
-    id: z.ZodString;
-    type: z.ZodLiteral<"TimelineSection">;
-    content: z.ZodArray<z.ZodObject<{
-        step: z.ZodNumber;
-        title: z.ZodString;
-        description: z.ZodString;
-    }, z.core.$strip>>;
-}, z.core.$strip>, z.ZodObject<{
-    id: z.ZodString;
-    type: z.ZodLiteral<"TestimonialsSection">;
-    content: z.ZodArray<z.ZodObject<{
-        name: z.ZodString;
-        text: z.ZodString;
-        rating: z.ZodNumber;
-        avatar: z.ZodOptional<z.ZodString>;
-        role: z.ZodOptional<z.ZodString>;
-        projectImage: z.ZodOptional<z.ZodString>;
-    }, z.core.$strip>>;
-}, z.core.$strip>, z.ZodObject<{
-    id: z.ZodString;
-    type: z.ZodLiteral<"LocationsSection">;
-    content: z.ZodObject<{
-        items: z.ZodOptional<z.ZodArray<z.ZodObject<{
-            slug: z.ZodString;
-            name: z.ZodString;
-            description: z.ZodString;
-            image: z.ZodString;
-        }, z.core.$strip>>>;
-    }, z.core.$strip>;
-}, z.core.$strip>, z.ZodObject<{
-    id: z.ZodString;
-    type: z.ZodLiteral<"PageHeaderSection">;
-    content: z.ZodObject<{
-        title: z.ZodString;
-        description: z.ZodOptional<z.ZodString>;
-        badge: z.ZodOptional<z.ZodString>;
-        backgroundImage: z.ZodString;
-    }, z.core.$strip>;
-}, z.core.$strip>, z.ZodObject<{
-    id: z.ZodString;
-    type: z.ZodLiteral<"ServiceDetailsSection">;
-    content: z.ZodObject<{
-        overview: z.ZodString;
-        whyChooseUs: z.ZodArray<z.ZodString>;
-        process: z.ZodArray<z.ZodString>;
-        cta: z.ZodObject<{
-            heading: z.ZodString;
-            subheading: z.ZodString;
-            buttonText: z.ZodString;
+export declare const KeywordStrategySchema: z.ZodObject<{
+    pages: z.ZodArray<z.ZodObject<{
+        slug: z.ZodString;
+        primaryKeyword: z.ZodObject<{
+            keyword: z.ZodString;
+            volume: z.ZodNumber;
         }, z.core.$strip>;
-    }, z.core.$strip>;
-}, z.core.$strip>, z.ZodObject<{
+        secondaryKeywords: z.ZodArray<z.ZodObject<{
+            keyword: z.ZodString;
+            volume: z.ZodNumber;
+        }, z.core.$strip>>;
+        searchIntent: z.ZodEnum<{
+            commercial: "commercial";
+            informational: "informational";
+            local: "local";
+        }>;
+    }, z.core.$strip>>;
+}, z.core.$strip>;
+export declare const PageSeoSchema: z.ZodObject<{
+    slug: z.ZodString;
+    title: z.ZodString;
+    description: z.ZodString;
+    h1: z.ZodString;
+    keywords: z.ZodArray<z.ZodString>;
+    ogTitle: z.ZodString;
+    ogDescription: z.ZodString;
+    canonicalPath: z.ZodString;
+}, z.core.$strip>;
+export declare const CopyDataSchema: z.ZodRecord<z.ZodString, z.ZodAny>;
+export declare const ASTNodeSchema: z.ZodType<any>;
+export declare const SectionSchema: z.ZodObject<{
     id: z.ZodString;
-    type: z.ZodLiteral<"CallToActionSection">;
-    content: z.ZodObject<{
-        heading: z.ZodString;
-        subheading: z.ZodString;
-        buttonText: z.ZodString;
-        backgroundImage: z.ZodOptional<z.ZodString>;
-    }, z.core.$strip>;
-}, z.core.$strip>], "type">;
+    type: z.ZodString;
+    ast: z.ZodType<any, unknown, z.core.$ZodTypeInternals<any, unknown>>;
+}, z.core.$strip>;
 export declare const PageStructureSchema: z.ZodObject<{
     sections: z.ZodArray<z.ZodString>;
 }, z.core.$strip>;
 export declare const PageContentSchema: z.ZodObject<{
     slug: z.ZodString;
-    sections: z.ZodArray<z.ZodDiscriminatedUnion<[z.ZodObject<{
+    sections: z.ZodArray<z.ZodObject<{
         id: z.ZodString;
-        type: z.ZodLiteral<"HeroSection">;
-        content: z.ZodObject<{
-            headline: z.ZodString;
-            subheadline: z.ZodString;
-            ctaText: z.ZodString;
-            backgroundImage: z.ZodString;
-        }, z.core.$strip>;
-    }, z.core.$strip>, z.ZodObject<{
-        id: z.ZodString;
-        type: z.ZodLiteral<"BrandsSection">;
-        content: z.ZodArray<z.ZodObject<{
-            name: z.ZodString;
-            icon: z.ZodString;
-        }, z.core.$strip>>;
-    }, z.core.$strip>, z.ZodObject<{
-        id: z.ZodString;
-        type: z.ZodLiteral<"ServicesSection">;
-        content: z.ZodObject<{
-            items: z.ZodOptional<z.ZodArray<z.ZodObject<{
-                slug: z.ZodString;
-                name: z.ZodString;
-                description: z.ZodString;
-                icon: z.ZodString;
-                image: z.ZodString;
-            }, z.core.$strip>>>;
-        }, z.core.$strip>;
-    }, z.core.$strip>, z.ZodObject<{
-        id: z.ZodString;
-        type: z.ZodLiteral<"AboutSection">;
-        content: z.ZodObject<{
-            story: z.ZodString;
-            mission: z.ZodString;
-            values: z.ZodArray<z.ZodObject<{
-                title: z.ZodString;
-                description: z.ZodString;
-            }, z.core.$strip>>;
-            team: z.ZodArray<z.ZodObject<{
-                name: z.ZodString;
-                role: z.ZodString;
-                photo: z.ZodString;
-            }, z.core.$strip>>;
-        }, z.core.$strip>;
-    }, z.core.$strip>, z.ZodObject<{
-        id: z.ZodString;
-        type: z.ZodLiteral<"WhyUsSection">;
-        content: z.ZodArray<z.ZodObject<{
-            title: z.ZodString;
-            description: z.ZodString;
-            icon: z.ZodString;
-        }, z.core.$strip>>;
-    }, z.core.$strip>, z.ZodObject<{
-        id: z.ZodString;
-        type: z.ZodLiteral<"BeforeAfterSection">;
-        content: z.ZodArray<z.ZodObject<{
-            title: z.ZodString;
-            beforeImage: z.ZodString;
-            afterImage: z.ZodString;
-            description: z.ZodString;
-        }, z.core.$strip>>;
-    }, z.core.$strip>, z.ZodObject<{
-        id: z.ZodString;
-        type: z.ZodLiteral<"TimelineSection">;
-        content: z.ZodArray<z.ZodObject<{
-            step: z.ZodNumber;
-            title: z.ZodString;
-            description: z.ZodString;
-        }, z.core.$strip>>;
-    }, z.core.$strip>, z.ZodObject<{
-        id: z.ZodString;
-        type: z.ZodLiteral<"TestimonialsSection">;
-        content: z.ZodArray<z.ZodObject<{
-            name: z.ZodString;
-            text: z.ZodString;
-            rating: z.ZodNumber;
-            avatar: z.ZodOptional<z.ZodString>;
-            role: z.ZodOptional<z.ZodString>;
-            projectImage: z.ZodOptional<z.ZodString>;
-        }, z.core.$strip>>;
-    }, z.core.$strip>, z.ZodObject<{
-        id: z.ZodString;
-        type: z.ZodLiteral<"LocationsSection">;
-        content: z.ZodObject<{
-            items: z.ZodOptional<z.ZodArray<z.ZodObject<{
-                slug: z.ZodString;
-                name: z.ZodString;
-                description: z.ZodString;
-                image: z.ZodString;
-            }, z.core.$strip>>>;
-        }, z.core.$strip>;
-    }, z.core.$strip>, z.ZodObject<{
-        id: z.ZodString;
-        type: z.ZodLiteral<"PageHeaderSection">;
-        content: z.ZodObject<{
-            title: z.ZodString;
-            description: z.ZodOptional<z.ZodString>;
-            badge: z.ZodOptional<z.ZodString>;
-            backgroundImage: z.ZodString;
-        }, z.core.$strip>;
-    }, z.core.$strip>, z.ZodObject<{
-        id: z.ZodString;
-        type: z.ZodLiteral<"ServiceDetailsSection">;
-        content: z.ZodObject<{
-            overview: z.ZodString;
-            whyChooseUs: z.ZodArray<z.ZodString>;
-            process: z.ZodArray<z.ZodString>;
-            cta: z.ZodObject<{
-                heading: z.ZodString;
-                subheading: z.ZodString;
-                buttonText: z.ZodString;
-            }, z.core.$strip>;
-        }, z.core.$strip>;
-    }, z.core.$strip>, z.ZodObject<{
-        id: z.ZodString;
-        type: z.ZodLiteral<"CallToActionSection">;
-        content: z.ZodObject<{
-            heading: z.ZodString;
-            subheading: z.ZodString;
-            buttonText: z.ZodString;
-            backgroundImage: z.ZodOptional<z.ZodString>;
-        }, z.core.$strip>;
-    }, z.core.$strip>], "type">>;
+        type: z.ZodString;
+        ast: z.ZodType<any, unknown, z.core.$ZodTypeInternals<any, unknown>>;
+    }, z.core.$strip>>;
 }, z.core.$strip>;
+export type DesignSystem = z.infer<typeof DesignSystemSchema> & {
+    globalCss?: string;
+};
+export type ASTNode = z.infer<typeof ASTNodeSchema>;
+export type Section = z.infer<typeof SectionSchema>;
+export type PageContent = z.infer<typeof PageContentSchema>;
+export type CopyData = z.infer<typeof CopyDataSchema>;

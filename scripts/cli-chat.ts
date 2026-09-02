@@ -6,6 +6,8 @@ import { PrismaService } from '../src/prisma/prisma.service';
 import { GooglePlacesService } from '../src/projects/google-places.service';
 import { BUSINESS_FIELDS, BRAND_FIELDS } from '../src/interview/constants/interview-fields.constant';
 import { BusinessContextService } from '../src/projects/business-context.service';
+import { StorageService } from '../src/storage/storage.service';
+import * as fs from 'fs';
 import * as readline from 'readline';
 
 // ==========================================
@@ -197,16 +199,22 @@ async function bootstrap() {
   while (true) {
     const status = await interviewService.checkCompleteness(project.id, BUSINESS_FIELDS);
 
-    if (status.complete) {
-      ok('All required business information captured!');
-      break;
-    }
-
     let userInput = '';
     if (firstBusinessQuestion) {
       // Jump-start the conversation without requiring the user to speak first
       userInput = "Let's start.";
       firstBusinessQuestion = false;
+    } else if (status.complete) {
+      if (userInput === '') {
+        const context = await businessContextService.findByProjectId(project.id);
+        console.log(paint('\nBusiness Details captured so far:', c.cyan, c.bold));
+        for (const field of BUSINESS_FIELDS) {
+           console.log(`  ${paint(field, c.blue)}: ${JSON.stringify((context as any)[field] || '')}`);
+        }
+      }
+      userInput = await question('\nIs this solid? Press Enter to continue to Brand Details, or type adjustments you want to make: ');
+      if (userInput.trim() === '') break;
+      if (userInput.toLowerCase() === 'exit' || userInput.toLowerCase() === 'quit') process.exit(0);
     } else {
       userInput = await question('');
       if (userInput.toLowerCase() === 'exit' || userInput.toLowerCase() === 'quit') process.exit(0);
@@ -235,16 +243,41 @@ async function bootstrap() {
   section('Brand Assets');
   const logoInput = await question("Got an existing logo you'd like to use? (path/URL, or type \"no\"):");
   if (logoInput.toLowerCase() !== 'no' && logoInput.trim() !== '') {
-    // In a real app we'd upload it. For now, mock it as an Asset:
-    await prisma.asset.create({
-      data: {
-        projectId: project.id,
-        url: logoInput,
-        type: 'image',
-        purpose: 'logo',
-      },
-    });
-    ok(`Logo saved from: ${paint(logoInput, c.blue)}`);
+    try {
+      say(`Fetching and uploading logo to R2...`);
+      const storageService = app.get(StorageService);
+      let buffer: Buffer;
+      let mimeType = 'image/png';
+      
+      if (logoInput.startsWith('http://') || logoInput.startsWith('https://')) {
+        const res = await fetch(logoInput);
+        buffer = Buffer.from(await res.arrayBuffer());
+        mimeType = res.headers.get('content-type') || mimeType;
+      } else {
+        buffer = fs.readFileSync(logoInput);
+        if (logoInput.endsWith('.jpg') || logoInput.endsWith('.jpeg')) mimeType = 'image/jpeg';
+        else if (logoInput.endsWith('.webp')) mimeType = 'image/webp';
+        else if (logoInput.endsWith('.svg')) mimeType = 'image/svg+xml';
+      }
+
+      const crypto = require('crypto');
+      const hash = crypto.createHash('md5').update(buffer).digest('hex');
+      const key = `projects/${project.id}/assets/${hash}-logo`;
+      const uploadedUrl = await storageService.upload(key, buffer, mimeType);
+
+      await prisma.asset.create({
+        data: {
+          projectId: project.id,
+          url: uploadedUrl,
+          type: 'image',
+          purpose: 'logo',
+          section: 'header,footer',
+        },
+      });
+      ok(`Logo uploaded and saved to R2 successfully!`);
+    } catch (e: any) {
+      fail(`Failed to upload logo: ${e.message}`);
+    }
   }
 
   // ==========================================
@@ -255,15 +288,21 @@ async function bootstrap() {
   while (true) {
     const status = await interviewService.checkCompleteness(project.id, BRAND_FIELDS);
 
-    if (status.complete) {
-      ok('All required brand information captured!');
-      break;
-    }
-
     let userInput = '';
     if (firstBrandQuestion) {
       userInput = "Let's figure out my brand colors and style.";
       firstBrandQuestion = false;
+    } else if (status.complete) {
+      if (userInput === '') {
+        const context = await businessContextService.findByProjectId(project.id);
+        console.log(paint('\nBrand Details captured so far:', c.cyan, c.bold));
+        for (const field of BRAND_FIELDS) {
+           console.log(`  ${paint(field, c.blue)}: ${JSON.stringify((context as any)[field] || '')}`);
+        }
+      }
+      userInput = await question('\nIs this solid? Press Enter to generate your website, or type adjustments you want to make: ');
+      if (userInput.trim() === '') break;
+      if (userInput.toLowerCase() === 'exit' || userInput.toLowerCase() === 'quit') process.exit(0);
     } else {
       userInput = await question('');
       if (userInput.toLowerCase() === 'exit' || userInput.toLowerCase() === 'quit') process.exit(0);

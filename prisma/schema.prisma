@@ -34,8 +34,9 @@ model Project {
   pages            Page[]
   user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   siteAnalytics    SiteAnalytics?
-  skillInvocations SkillInvocation[]
-  websiteData      WebsiteData?
+  skillInvocations         SkillInvocation[]
+  websiteData              WebsiteData?
+  locationKeywordMetrics   LocationKeywordMetrics[]
 }
 
 model BusinessContext {
@@ -55,6 +56,7 @@ model BusinessContext {
   competitors          Json?
   rawText              String?
   serviceAreas         Json?
+  radius               Int?
   brandIdentityInputs  Json?
   brandVoicePreference String?
   usps                 Json?
@@ -181,13 +183,17 @@ model Domain {
 }
 
 model Page {
-  id        String   @id @default(uuid())
-  projectId String
-  slug      String
-  content   Json
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  id            String   @id @default(uuid())
+  projectId     String
+  slug          String
+  content       Json
+  componentCode Json?
+  customCSS     String?
+  seoMeta       Json?
+  keywordTarget Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, slug])
 }
@@ -196,4 +202,21 @@ model StripeEvent {
   id        String   @id
   type      String
   createdAt DateTime @default(now())
+}
+
+model LocationKeywordMetrics {
+  id           String   @id @default(uuid())
+  projectId    String
+  city         String
+  state        String?
+  service      String
+  keyword      String
+  searchVolume Int
+  difficulty   Float?
+  cpc          Float?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, city, service])
 }

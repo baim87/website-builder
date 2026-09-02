@@ -9,6 +9,6 @@ import { GoogleAdsClient } from './clients/google-ads.client';
     KeywordsCache,
     GoogleAdsClient,
   ],
-  exports: [KeywordsService],
+  exports: [KeywordsService, GoogleAdsClient],
 })
 export class KeywordsModule {}

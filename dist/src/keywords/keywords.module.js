@@ -21,7 +21,7 @@ exports.KeywordsModule = KeywordsModule = __decorate([
             keywords_cache_1.KeywordsCache,
             google_ads_client_1.GoogleAdsClient,
         ],
-        exports: [keywords_service_1.KeywordsService],
+        exports: [keywords_service_1.KeywordsService, google_ads_client_1.GoogleAdsClient],
     })
 ], KeywordsModule);
 //# sourceMappingURL=keywords.module.js.map

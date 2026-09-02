@@ -8,6 +8,8 @@ export declare const UpdateBusinessContextSchema: z.ZodObject<{
     hours: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodString>>;
     gbpData: z.ZodOptional<z.ZodAny>;
     trade: z.ZodOptional<z.ZodString>;
+    location: z.ZodOptional<z.ZodString>;
+    radius: z.ZodOptional<z.ZodAny>;
     services: z.ZodOptional<z.ZodArray<z.ZodString>>;
     serviceAreas: z.ZodOptional<z.ZodArray<z.ZodString>>;
     brandIdentityInputs: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodAny>>;

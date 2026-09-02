@@ -15,12 +15,13 @@ const public_site_controller_1 = require("./public-site.controller");
 const skills_module_1 = require("../skills/skills.module");
 const projects_module_1 = require("../projects/projects.module");
 const seo_module_1 = require("../seo/seo.module");
+const deployment_module_1 = require("../deployment/deployment.module");
 let GenerationModule = class GenerationModule {
 };
 exports.GenerationModule = GenerationModule;
 exports.GenerationModule = GenerationModule = __decorate([
     (0, common_1.Module)({
-        imports: [skills_module_1.SkillsModule, (0, common_1.forwardRef)(() => projects_module_1.ProjectsModule), seo_module_1.SeoModule],
+        imports: [skills_module_1.SkillsModule, (0, common_1.forwardRef)(() => projects_module_1.ProjectsModule), seo_module_1.SeoModule, deployment_module_1.DeploymentModule],
         controllers: [public_site_controller_1.PublicSiteController],
         providers: [generation_service_1.GenerationService, nextjs_builder_service_1.NextjsBuilderService, site_content_service_1.SiteContentService],
         exports: [generation_service_1.GenerationService, nextjs_builder_service_1.NextjsBuilderService, site_content_service_1.SiteContentService],

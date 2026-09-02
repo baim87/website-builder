@@ -41,7 +41,7 @@ You MUST respond with ONLY a JSON object in this EXACT structure (no other text)
       messages: [
         { role: 'user' as const, content: prompt }
       ],
-      maxTokens: 1500,
+      maxTokens: 8192,
       temperature: 0.3,
       responseFormat: 'json',
     });

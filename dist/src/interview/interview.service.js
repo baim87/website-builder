@@ -47,6 +47,7 @@ const common_1 = require("@nestjs/common");
 const interview_extractor_service_1 = require("./interview-extractor.service");
 const interview_prompt_builder_1 = require("./interview-prompt.builder");
 const business_context_service_1 = require("../projects/business-context.service");
+const google_places_service_1 = require("../projects/google-places.service");
 const interview_fields_constant_1 = require("./constants/interview-fields.constant");
 const chat_service_1 = require("../chat/chat.service");
 const prisma_service_1 = require("../prisma/prisma.service");
@@ -55,12 +56,14 @@ let InterviewService = class InterviewService {
     extractor;
     promptBuilder;
     businessContextService;
+    googlePlacesService;
     chatService;
     prisma;
-    constructor(extractor, promptBuilder, businessContextService, chatService, prisma) {
+    constructor(extractor, promptBuilder, businessContextService, googlePlacesService, chatService, prisma) {
         this.extractor = extractor;
         this.promptBuilder = promptBuilder;
         this.businessContextService = businessContextService;
+        this.googlePlacesService = googlePlacesService;
         this.chatService = chatService;
         this.prisma = prisma;
     }
@@ -116,10 +119,35 @@ let InterviewService = class InterviewService {
                 const fullResponse = event.data.fullResponse;
                 const { extractedFields } = this.extractor.extract(fullResponse);
                 if (Object.keys(extractedFields).length > 0) {
-                    await this.businessContextService.upsert(projectId, extractedFields);
+                    const finalContext = await this.businessContextService.upsert(projectId, extractedFields);
                     for (const [field, value] of Object.entries(extractedFields)) {
                         yield { event: 'field-update', data: { field, value } };
                     }
+                    if (finalContext.location && finalContext.radius) {
+                        const hasServiceAreas = finalContext.serviceAreas && Array.isArray(finalContext.serviceAreas) && finalContext.serviceAreas.length > 0;
+                        if (!hasServiceAreas) {
+                            const cities = await this.googlePlacesService.getCitiesInRadius(finalContext.location, finalContext.radius);
+                            if (cities.length > 0) {
+                                await this.prisma.businessContext.update({
+                                    where: { projectId },
+                                    data: { serviceAreas: cities }
+                                });
+                                yield { event: 'field-update', data: { field: 'serviceAreas', value: cities } };
+                            }
+                        }
+                    }
+                }
+                const cleanResponse = fullResponse.replace(/<!-- EXTRACT:.*?-->/gs, '').trim();
+                if (cleanResponse === '' && missingFields.length > 0) {
+                    const fallbackMsg = `Could you please tell me about your ${missingFields[0]}?`;
+                    yield { event: 'token', data: { token: fallbackMsg } };
+                    await this.prisma.chatMessage.create({
+                        data: {
+                            projectId,
+                            role: 'assistant',
+                            content: fallbackMsg,
+                        }
+                    });
                 }
                 yield { event: 'done', data: {} };
             }
@@ -135,6 +163,7 @@ exports.InterviewService = InterviewService = __decorate([
     __metadata("design:paramtypes", [interview_extractor_service_1.InterviewExtractorService,
         interview_prompt_builder_1.InterviewPromptBuilder,
         business_context_service_1.BusinessContextService,
+        google_places_service_1.GooglePlacesService,
         chat_service_1.ChatService,
         prisma_service_1.PrismaService])
 ], InterviewService);

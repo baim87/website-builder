@@ -12,18 +12,21 @@ const common_1 = require("@nestjs/common");
 let InterviewExtractorService = InterviewExtractorService_1 = class InterviewExtractorService {
     logger = new common_1.Logger(InterviewExtractorService_1.name);
     extract(agentResponse) {
-        const regex = /<!--\s*EXTRACT:\s*({.*?})\s*-->/s;
-        const match = agentResponse.match(regex);
+        const regex = /<!--\s*EXTRACT:\s*({.*?})\s*-->/gs;
+        const matches = [...agentResponse.matchAll(regex)];
         let extractedFields = {};
         let cleanResponse = agentResponse;
-        if (match && match[1]) {
-            try {
-                extractedFields = JSON.parse(match[1]);
-                cleanResponse = agentResponse.replace(regex, '').trim();
+        if (matches.length > 0) {
+            for (const match of matches) {
+                try {
+                    const parsed = JSON.parse(match[1]);
+                    extractedFields = { ...extractedFields, ...parsed };
+                }
+                catch (e) {
+                    this.logger.error('Failed to parse JSON from extract block', e);
+                }
             }
-            catch (e) {
-                this.logger.error('Failed to parse JSON from extract block', e);
-            }
+            cleanResponse = agentResponse.replace(regex, '').trim();
         }
         return { cleanResponse, extractedFields };
     }

@@ -59,21 +59,45 @@ let SeoMetadataSkill = SeoMetadataSkill_1 = class SeoMetadataSkill {
         this.validator = validator;
     }
     async execute(input) {
-        const prompt = `Generate SEO metadata for this contractor business homepage.
-Business Context: ${JSON.stringify(input.context)}
+        const { businessContext, pageSlug, keywordTarget } = input.context;
+        if (!pageSlug || !keywordTarget || !keywordTarget.primaryKeyword) {
+            throw new Error('SeoMetadataSkill requires pageSlug and keywordTarget with a primaryKeyword');
+        }
+        const primaryKeyword = keywordTarget.primaryKeyword.keyword;
+        const secondaryKeywords = keywordTarget.secondaryKeywords?.map((k) => k.keyword) || [];
+        const prompt = `Generate SEO metadata for a specific page of this contractor website.
+
+BUSINESS CONTEXT:
+${JSON.stringify(businessContext)}
+
+PAGE SLUG: /${pageSlug}
+
+TARGET KEYWORDS:
+Primary Keyword: "${primaryKeyword}" (MUST be used in Title and H1)
+Secondary Keywords: ${secondaryKeywords.join(', ')}
+
+RULES:
+1. The title MUST be 30-60 characters and MUST contain the Primary Keyword.
+2. The description MUST be 120-160 characters.
+3. The H1 MUST contain the Primary Keyword.
+4. Make it compelling for a user searching for these services.
 
 You MUST respond with ONLY a JSON object in this EXACT structure (no other text):
 {
-  "title": "string",
-  "description": "string",
-  "keywords": ["string"],
-  "ogImagePlaceholder": "string (description of ideal social share image)"
+  "slug": "${pageSlug}",
+  "title": "string (30-60 chars, includes primary keyword)",
+  "description": "string (120-160 chars)",
+  "h1": "string (includes primary keyword)",
+  "keywords": ["string (primary + secondaries)"],
+  "ogTitle": "string",
+  "ogDescription": "string",
+  "canonicalPath": "/${pageSlug}"
 }`;
         const response = await this.aiGateway.generateText('claude-fable-5', {
             systemPrompt: 'You output ONLY valid JSON. No markdown fences, no explanation, no commentary. Just the raw JSON object.',
             messages: [{ role: 'user', content: prompt }],
-            temperature: 0.2,
-            maxTokens: 1000,
+            temperature: 0.3,
+            maxTokens: 8192,
             responseFormat: 'json',
         });
         this.logger.debug(`Raw LLM output: ${response.text}`);
@@ -95,13 +119,8 @@ You MUST respond with ONLY a JSON object in this EXACT structure (no other text)
             this.logger.error(`Failed to parse LLM output as JSON: ${response.text}`);
             throw new Error(`SeoMetadata LLM returned unparseable output: ${response.text.substring(0, 200)}`);
         }
-        if (!parsed.title && parsed.seoMetadata) {
-            parsed = parsed.seoMetadata;
-        }
-        if (!parsed.title && parsed.seo_metadata) {
-            parsed = parsed.seo_metadata;
-        }
-        const validatedData = this.validator.validate(parsed, skill_outputs_schema_1.SeoMetadataSchema);
+        const validatedData = this.validator.validate(parsed, skill_outputs_schema_1.PageSeoSchema);
+        this.validator.validateKeywordPresence(validatedData.title, validatedData.h1, primaryKeyword);
         const hash = crypto.createHash('sha256').update(JSON.stringify(validatedData)).digest('hex');
         return {
             data: validatedData,

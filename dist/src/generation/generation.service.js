@@ -17,22 +17,25 @@ const website_data_service_1 = require("../projects/website-data.service");
 const business_context_service_1 = require("../projects/business-context.service");
 const page_service_1 = require("../projects/page.service");
 const seo_artifacts_service_1 = require("../seo/seo-artifacts.service");
-const nextjs_builder_service_1 = require("./nextjs-builder.service");
+const deployment_service_1 = require("../deployment/deployment.service");
+const prisma_service_1 = require("../prisma/prisma.service");
 let GenerationService = GenerationService_1 = class GenerationService {
     orchestrator;
     websiteDataService;
     businessContextService;
     pageService;
     seoArtifacts;
-    nextjsBuilder;
+    deploymentService;
+    prisma;
     logger = new common_1.Logger(GenerationService_1.name);
-    constructor(orchestrator, websiteDataService, businessContextService, pageService, seoArtifacts, nextjsBuilder) {
+    constructor(orchestrator, websiteDataService, businessContextService, pageService, seoArtifacts, deploymentService, prisma) {
         this.orchestrator = orchestrator;
         this.websiteDataService = websiteDataService;
         this.businessContextService = businessContextService;
         this.pageService = pageService;
         this.seoArtifacts = seoArtifacts;
-        this.nextjsBuilder = nextjsBuilder;
+        this.deploymentService = deploymentService;
+        this.prisma = prisma;
     }
     async generateProject(projectId) {
         this.logger.log(`Starting full generation for project ${projectId}`);
@@ -41,7 +44,12 @@ let GenerationService = GenerationService_1 = class GenerationService {
             const businessContext = await this.businessContextService.findByProjectId(projectId);
             const results = await this.orchestrator.generateWebsite(projectId, businessContext, async (pageContent) => {
                 if (pageContent && pageContent.slug) {
-                    await this.pageService.upsertPage(projectId, pageContent.slug, pageContent.sections);
+                    await this.pageService.upsertPage(projectId, pageContent.slug, {
+                        content: pageContent.sections,
+                        componentCode: pageContent.componentCode,
+                        seoMeta: pageContent.seoMeta,
+                        keywordTarget: pageContent.keywordTarget
+                    });
                 }
             });
             const pagesArray = results.pages;
@@ -52,7 +60,6 @@ let GenerationService = GenerationService_1 = class GenerationService {
             const internalLinkMap = this.seoArtifacts.generateInternalLinks(pagesArray);
             await this.websiteDataService.upsert(projectId, {
                 designTokens: results.designTokens,
-                seoMetadata: results.seoMetadata,
                 sitemapXml,
                 robotsTxt,
                 jsonLdSchemas,
@@ -60,8 +67,12 @@ let GenerationService = GenerationService_1 = class GenerationService {
                 generationStatus: 'deploying',
                 lastGeneratedAt: new Date(),
             });
-            this.logger.log(`Initiating Next.js build and deploy for project ${projectId}`);
-            const liveUrl = await this.nextjsBuilder.buildAndDeploy(projectId);
+            this.logger.log(`Initiating deployment for project ${projectId}`);
+            const project = await this.prisma.project.findUnique({ where: { id: projectId } });
+            if (!project)
+                throw new Error(`Project ${projectId} not found`);
+            const deploymentResult = await this.deploymentService.deployProject(projectId, project.userId);
+            const liveUrl = deploymentResult.url;
             await this.websiteDataService.upsert(projectId, {
                 generationStatus: 'completed',
             });
@@ -83,6 +94,7 @@ exports.GenerationService = GenerationService = GenerationService_1 = __decorate
         business_context_service_1.BusinessContextService,
         page_service_1.PageService,
         seo_artifacts_service_1.SeoArtifactsService,
-        nextjs_builder_service_1.NextjsBuilderService])
+        deployment_service_1.DeploymentService,
+        prisma_service_1.PrismaService])
 ], GenerationService);
 //# sourceMappingURL=generation.service.js.map

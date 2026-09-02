@@ -8,14 +8,19 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
+var BusinessContextService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.BusinessContextService = void 0;
 const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("../prisma/prisma.service");
-let BusinessContextService = class BusinessContextService {
+const location_metrics_service_1 = require("../seo/location-metrics.service");
+let BusinessContextService = BusinessContextService_1 = class BusinessContextService {
     prisma;
-    constructor(prisma) {
+    locationMetrics;
+    logger = new common_1.Logger(BusinessContextService_1.name);
+    constructor(prisma, locationMetrics) {
         this.prisma = prisma;
+        this.locationMetrics = locationMetrics;
     }
     async findByProjectId(projectId, userId) {
         if (userId) {
@@ -60,7 +65,13 @@ let BusinessContextService = class BusinessContextService {
                 ...(fontStyle !== undefined && { fontStyle }),
             };
         }
-        return this.prisma.businessContext.upsert({
+        if (rest.radius !== undefined) {
+            if (typeof rest.radius === 'string') {
+                const parsed = parseInt(String(rest.radius).replace(/[^0-9]/g, ''), 10);
+                rest.radius = isNaN(parsed) ? 50 : parsed;
+            }
+        }
+        const finalContext = await this.prisma.businessContext.upsert({
             where: { projectId },
             update: {
                 ...rest,
@@ -72,11 +83,21 @@ let BusinessContextService = class BusinessContextService {
                 ...(hasNewBrand && { brandIdentityInputs: newBrandIdentityInputs }),
             },
         });
+        if (finalContext.location && finalContext.services) {
+            const servicesArray = Array.isArray(finalContext.services) ? finalContext.services : [];
+            if (servicesArray.length > 0) {
+                this.locationMetrics.processProjectMetrics(projectId, finalContext.location, finalContext.radius || 50, servicesArray).catch(e => {
+                    this.logger.error(`Failed to process background location metrics for project ${projectId}`, e.stack);
+                });
+            }
+        }
+        return finalContext;
     }
 };
 exports.BusinessContextService = BusinessContextService;
-exports.BusinessContextService = BusinessContextService = __decorate([
+exports.BusinessContextService = BusinessContextService = BusinessContextService_1 = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [prisma_service_1.PrismaService])
+    __metadata("design:paramtypes", [prisma_service_1.PrismaService,
+        location_metrics_service_1.LocationMetricsService])
 ], BusinessContextService);
 //# sourceMappingURL=business-context.service.js.map

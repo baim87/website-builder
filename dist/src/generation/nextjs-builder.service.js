@@ -80,8 +80,16 @@ let NextjsBuilderService = NextjsBuilderService_1 = class NextjsBuilderService {
             this.logger.log(`Cloning template from ${templateDir} to ${tempDir}`);
             await fs.mkdir(tempDir, { recursive: true });
             await execAsync(`rsync -a --exclude 'node_modules' --exclude '.next' --exclude '.git' --exclude 'dist' ${templateDir}/ ${tempDir}/`);
+            const componentsDir = path.join(tempDir, 'src/components');
+            const backupDir = path.join(tempDir, 'src/components_backup');
+            await execAsync(`cp -R ${componentsDir} ${backupDir}`);
             const websiteData = await this.websiteDataService.findByProjectId(projectId);
             const pages = await this.pageService.getPagesByProjectId(projectId);
+            const designTokens = websiteData?.designTokens;
+            if (designTokens?.globalCss) {
+                this.logger.log('Writing AI-generated globals.css');
+                await fs.writeFile(path.join(tempDir, 'src/app/globals.css'), designTokens.globalCss);
+            }
             const siteContent = {
                 designTokens: websiteData?.designTokens || {},
                 seoMetadata: websiteData?.seoMetadata || {},
@@ -94,12 +102,34 @@ let NextjsBuilderService = NextjsBuilderService_1 = class NextjsBuilderService {
                 },
                 pages: pages.map((p) => ({ slug: p.slug, sections: p.content }))
             };
-            const contentJsonPath = path.join(tempDir, 'src/data/content.json');
-            await fs.writeFile(contentJsonPath, JSON.stringify(siteContent, null, 2));
-            const vercelToken = this.configService.get('VERCEL_API_TOKEN');
-            if (!vercelToken) {
-                throw new Error('VERCEL_API_TOKEN is not configured');
+            await fs.writeFile(path.join(tempDir, 'src/data/content.json'), JSON.stringify(siteContent, null, 2));
+            let buildSuccess = false;
+            let buildRetries = 0;
+            const MAX_RETRIES = 1;
+            while (!buildSuccess && buildRetries <= MAX_RETRIES) {
+                try {
+                    this.logger.log(`Running build validation... (Attempt ${buildRetries + 1})`);
+                    await execAsync('npm install', { cwd: tempDir });
+                    await execAsync('npm run build', { cwd: tempDir });
+                    buildSuccess = true;
+                    this.logger.log(`Build validation successful!`);
+                }
+                catch (error) {
+                    const stderr = error.stderr || error.message;
+                    this.logger.warn(`Build failed: ${stderr}`);
+                    if (buildRetries >= MAX_RETRIES) {
+                        this.logger.error('Max build retries exceeded. Falling back to safe hardcoded components.');
+                        await execAsync(`rm -rf ${componentsDir}`);
+                        await execAsync(`cp -R ${backupDir} ${componentsDir}`);
+                        await execAsync(`cp ${path.join(templateDir, 'src/app/globals.css')} ${path.join(tempDir, 'src/app/globals.css')}`);
+                        break;
+                    }
+                    buildRetries++;
+                }
             }
+            const vercelToken = this.configService.get('VERCEL_API_TOKEN');
+            if (!vercelToken)
+                throw new Error('VERCEL_API_TOKEN is not configured');
             const projectNameSlug = businessContext.businessName
                 ? businessContext.businessName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '')
                 : `project-${projectId.substring(0, 8)}`;

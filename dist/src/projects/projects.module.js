@@ -16,12 +16,13 @@ const page_service_1 = require("./page.service");
 const google_places_service_1 = require("./google-places.service");
 const prisma_module_1 = require("../prisma/prisma.module");
 const queue_module_1 = require("../queue/queue.module");
+const seo_module_1 = require("../seo/seo.module");
 let ProjectsModule = class ProjectsModule {
 };
 exports.ProjectsModule = ProjectsModule;
 exports.ProjectsModule = ProjectsModule = __decorate([
     (0, common_1.Module)({
-        imports: [prisma_module_1.PrismaModule, (0, common_1.forwardRef)(() => queue_module_1.QueueModule)],
+        imports: [prisma_module_1.PrismaModule, (0, common_1.forwardRef)(() => queue_module_1.QueueModule), seo_module_1.SeoModule],
         controllers: [projects_controller_1.ProjectsController],
         providers: [projects_service_1.ProjectsService, business_context_service_1.BusinessContextService, website_data_service_1.WebsiteDataService, page_service_1.PageService, google_places_service_1.GooglePlacesService],
         exports: [projects_service_1.ProjectsService, business_context_service_1.BusinessContextService, website_data_service_1.WebsiteDataService, page_service_1.PageService, google_places_service_1.GooglePlacesService],

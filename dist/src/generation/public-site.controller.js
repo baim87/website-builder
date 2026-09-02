@@ -20,7 +20,10 @@ let PublicSiteController = class PublicSiteController {
     constructor(siteContentService) {
         this.siteContentService = siteContentService;
     }
-    async getSiteContent(projectId) {
+    async getSiteContent(projectId, apiKey) {
+        if (process.env.BUILDER_API_SECRET && apiKey !== process.env.BUILDER_API_SECRET) {
+            throw new common_1.UnauthorizedException('Invalid API Key');
+        }
         try {
             const content = await this.siteContentService.getSiteContent(projectId);
             if (!content) {
@@ -39,8 +42,9 @@ exports.PublicSiteController = PublicSiteController;
 __decorate([
     (0, common_1.Get)(':projectId'),
     __param(0, (0, common_1.Param)('projectId')),
+    __param(1, (0, common_1.Headers)('x-builder-api-key')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [String, String]),
     __metadata("design:returntype", Promise)
 ], PublicSiteController.prototype, "getSiteContent", null);
 exports.PublicSiteController = PublicSiteController = __decorate([

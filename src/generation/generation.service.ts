@@ -4,7 +4,8 @@ import { WebsiteDataService } from '../projects/website-data.service';
 import { BusinessContextService } from '../projects/business-context.service';
 import { PageService } from '../projects/page.service';
 import { SeoArtifactsService } from '../seo/seo-artifacts.service';
-import { NextjsBuilderService } from './nextjs-builder.service';
+import { DeploymentService } from '../deployment/deployment.service';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class GenerationService {
@@ -16,7 +17,8 @@ export class GenerationService {
     private readonly businessContextService: BusinessContextService,
     private readonly pageService: PageService,
     private readonly seoArtifacts: SeoArtifactsService,
-    private readonly nextjsBuilder: NextjsBuilderService,
+    private readonly deploymentService: DeploymentService,
+    private readonly prisma: PrismaService,
   ) {}
 
   async generateProject(projectId: string) {
@@ -35,7 +37,12 @@ export class GenerationService {
         businessContext,
         async (pageContent) => {
           if (pageContent && pageContent.slug) {
-            await this.pageService.upsertPage(projectId, pageContent.slug, pageContent.sections);
+            await this.pageService.upsertPage(projectId, pageContent.slug, {
+              content: pageContent.sections,
+              componentCode: pageContent.componentCode,
+              seoMeta: pageContent.seoMeta,
+              keywordTarget: pageContent.keywordTarget
+            });
           }
         }
       );
@@ -53,7 +60,6 @@ export class GenerationService {
       // 6. Assemble and save to WebsiteData
       await this.websiteDataService.upsert(projectId, {
         designTokens: results.designTokens,
-        seoMetadata: results.seoMetadata,
         sitemapXml,
         robotsTxt,
         jsonLdSchemas,
@@ -62,9 +68,13 @@ export class GenerationService {
         lastGeneratedAt: new Date(),
       });
 
-      // 7. Build and Deploy Next.js Project via Vercel
-      this.logger.log(`Initiating Next.js build and deploy for project ${projectId}`);
-      const liveUrl = await this.nextjsBuilder.buildAndDeploy(projectId);
+      // 7. Deploy via multi-tenant architecture
+      this.logger.log(`Initiating deployment for project ${projectId}`);
+      const project = await this.prisma.project.findUnique({ where: { id: projectId } });
+      if (!project) throw new Error(`Project ${projectId} not found`);
+      
+      const deploymentResult = await this.deploymentService.deployProject(projectId, project.userId);
+      const liveUrl = deploymentResult.url;
 
       // 8. Update generation status with live URL
       await this.websiteDataService.upsert(projectId, {

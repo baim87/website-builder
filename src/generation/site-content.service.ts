@@ -85,7 +85,11 @@ export class SiteContentService {
         accent: tokens.colors?.accent || "#f59e0b",
         fontFamily: tokens.typography?.headingFont || "Inter"
       },
-      pages: pages.map(p => p.content),
+      pages: pages.map(p => ({ 
+        slug: p.slug, 
+        sections: p.content,
+        ...(p.componentCode ? { componentCode: p.componentCode } : {})
+      })),
       // Optional: keep global lists if needed for navigation/footers
       services: businessContext.services?.map((s: string) => ({
         slug: s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, ''),

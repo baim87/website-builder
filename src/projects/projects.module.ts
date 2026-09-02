@@ -7,9 +7,10 @@ import { PageService } from './page.service';
 import { GooglePlacesService } from './google-places.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { QueueModule } from '../queue/queue.module';
+import { SeoModule } from '../seo/seo.module';
 
 @Module({
-  imports: [PrismaModule, forwardRef(() => QueueModule)],
+  imports: [PrismaModule, forwardRef(() => QueueModule), SeoModule],
   controllers: [ProjectsController],
   providers: [ProjectsService, BusinessContextService, WebsiteDataService, PageService, GooglePlacesService],
   exports: [ProjectsService, BusinessContextService, WebsiteDataService, PageService, GooglePlacesService],

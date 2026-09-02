@@ -91,8 +91,8 @@ You MUST respond with ONLY a JSON object exactly matching this structure (no mar
         const response = await this.aiGateway.generateText('claude-fable-5', {
             systemPrompt: 'You output ONLY valid JSON. No markdown fences, no explanation, no commentary. Just the raw JSON object.',
             messages: [{ role: 'user', content: prompt }],
-            temperature: 0.3,
-            maxTokens: 1500,
+            temperature: 0.2,
+            maxTokens: 8192,
             responseFormat: 'json',
         });
         this.logger.debug(`[${pageSlug}] SectionContent (${sectionType}) raw output: ${response.text.substring(0, 100)}...`);

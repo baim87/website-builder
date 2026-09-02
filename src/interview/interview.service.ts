@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InterviewExtractorService } from './interview-extractor.service';
 import { InterviewPromptBuilder } from './interview-prompt.builder';
 import { BusinessContextService } from '../projects/business-context.service';
+import { GooglePlacesService } from '../projects/google-places.service';
 import { REQUIRED_FIELDS } from './constants/interview-fields.constant';
 import { ChatService } from '../chat/chat.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -13,6 +14,7 @@ export class InterviewService {
     private readonly extractor: InterviewExtractorService,
     private readonly promptBuilder: InterviewPromptBuilder,
     private readonly businessContextService: BusinessContextService,
+    private readonly googlePlacesService: GooglePlacesService,
     private readonly chatService: ChatService,
     private readonly prisma: PrismaService,
   ) {}
@@ -81,11 +83,41 @@ export class InterviewService {
         const { extractedFields } = this.extractor.extract(fullResponse);
         
         if (Object.keys(extractedFields).length > 0) {
-          await this.businessContextService.upsert(projectId, extractedFields);
-          // Yield an event to notify client of updated fields
+          const finalContext = await this.businessContextService.upsert(projectId, extractedFields);
           for (const [field, value] of Object.entries(extractedFields)) {
             yield { event: 'field-update', data: { field, value } };
           }
+          
+          // Auto-fetch cities if location and radius are provided, but no service areas
+          if (finalContext.location && finalContext.radius) {
+            const hasServiceAreas = finalContext.serviceAreas && Array.isArray(finalContext.serviceAreas) && finalContext.serviceAreas.length > 0;
+            if (!hasServiceAreas) {
+              const cities = await this.googlePlacesService.getCitiesInRadius(finalContext.location, finalContext.radius);
+              if (cities.length > 0) {
+                await this.prisma.businessContext.update({
+                  where: { projectId },
+                  data: { serviceAreas: cities }
+                });
+                yield { event: 'field-update', data: { field: 'serviceAreas', value: cities } };
+              }
+            }
+          }
+        }
+
+        // Failsafe: if the AI outputted absolutely nothing (or just the extract block), ask manually
+        const cleanResponse = fullResponse.replace(/<!-- EXTRACT:.*?-->/gs, '').trim();
+        if (cleanResponse === '' && missingFields.length > 0) {
+           const fallbackMsg = `Could you please tell me about your ${missingFields[0]}?`;
+           yield { event: 'token', data: { token: fallbackMsg } };
+           
+           // IMPORTANT: We must save this fallback message to the database, otherwise the AI has no idea what the user's next answer means!
+           await this.prisma.chatMessage.create({
+             data: {
+               projectId,
+               role: 'assistant',
+               content: fallbackMsg,
+             }
+           });
         }
         
         yield { event: 'done', data: {} };

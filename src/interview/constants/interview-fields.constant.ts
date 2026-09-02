@@ -6,7 +6,8 @@ export const BUSINESS_FIELDS = [
   'email',
   'trade',
   'services',
-  'serviceAreas',
+  'location',
+  'radius',
   'hours',
 ] as const;
 

@@ -11,6 +11,8 @@ exports.UpdateBusinessContextSchema = zod_1.z.object({
     hours: zod_1.z.record(zod_1.z.string(), zod_1.z.string()).optional(),
     gbpData: zod_1.z.any().optional(),
     trade: zod_1.z.string().optional(),
+    location: zod_1.z.string().optional(),
+    radius: zod_1.z.any().optional(),
     services: zod_1.z.array(zod_1.z.string()).optional(),
     serviceAreas: zod_1.z.array(zod_1.z.string()).optional(),
     brandIdentityInputs: zod_1.z.record(zod_1.z.string(), zod_1.z.any()).optional(),
