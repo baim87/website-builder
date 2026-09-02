@@ -70,7 +70,6 @@ export class DeploymentService {
     let liveUrl = project.domain?.domainName ? `https://${project.domain.domainName}` : null;
     
     // Poll Vercel for the latest deployment to finish and get the true URL
-    let deploymentStatus = 'generating';
     let maxRetries = 40; // Wait up to 2 minutes (3s * 40)
     
     while (!liveUrl && maxRetries > 0) {
@@ -81,7 +80,6 @@ export class DeploymentService {
         const deployRes = await this.vercelClient.getProjectDeployments(vercelProjectName);
         if (deployRes && deployRes.deployments && deployRes.deployments.length > 0) {
           const latestDeploy = deployRes.deployments[0];
-          deploymentStatus = latestDeploy.readyState; // e.g. 'READY', 'ERROR', 'BUILDING'
           
           if (latestDeploy.readyState === 'READY' && latestDeploy.url) {
             liveUrl = `https://${latestDeploy.url}`;
