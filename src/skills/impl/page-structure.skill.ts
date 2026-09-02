@@ -25,20 +25,20 @@ export class PageStructureSkill implements Skill {
         'GallerySection', 'TimelineSection', 'TestimonialsSection', 'CallToActionSection'
       ],
       'about-us': [
-        'HeroSection', 'AboutSection', 'WhyUsSection', 'LocationsSection', 
+        'PageHeaderSection', 'AboutSection', 'WhyUsSection', 'LocationsSection', 
         'TestimonialsSection', 'CallToActionSection'
       ],
       'portfolio': [
-        'HeroSection', 'GallerySection'
+        'PageHeaderSection', 'GallerySection'
       ],
       'services': [
-        'HeroSection', 'ServicesSection'
+        'PageHeaderSection', 'ServicesSection'
       ],
       'service-areas': [
-        'HeroSection', 'LocationsSection', 'TestimonialsSection', 'CallToActionSection'
+        'PageHeaderSection', 'LocationsSection', 'TestimonialsSection', 'CallToActionSection'
       ],
       'contact': [
-        'HeroSection', 'LeadFormSection', 'FindUsSection'
+        'PageHeaderSection', 'LeadFormSection', 'FindUsSection'
       ]
     };
 

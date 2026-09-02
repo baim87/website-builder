@@ -40,6 +40,8 @@ export class CopyWriterSkill implements Skill {
       sectionSpecificRules = galleryRules;
     } else if (sectionType === 'TimelineSection') {
       sectionSpecificRules = `5. IMPORTANT: Generate a MAXIMUM of 4 process steps.`;
+    } else if (sectionType === 'PageHeaderSection') {
+      sectionSpecificRules = `5. IMPORTANT: This is for an inner page. Generate a shorter, punchy headline and a brief subtitle without a massive call to action like a primary Hero.`;
     } else if (sectionType === 'HeroSection') {
       let heroRules = `5. IMPORTANT: Generate a strong, conversion-optimized hero headline. Include a primary Call to Action (CTA).`;
       if (pageSlug === 'portfolio') {
