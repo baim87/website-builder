@@ -4,8 +4,9 @@ import { WebsiteDataService } from '../projects/website-data.service';
 import { BusinessContextService } from '../projects/business-context.service';
 import { PageService } from '../projects/page.service';
 import { SeoArtifactsService } from '../seo/seo-artifacts.service';
-import { DeploymentService } from '../deployment/deployment.service';
+import { NextjsBuilderService } from './nextjs-builder.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { DeploymentService } from '../deployment/deployment.service';
 
 @Injectable()
 export class GenerationService {
@@ -17,8 +18,9 @@ export class GenerationService {
     private readonly businessContextService: BusinessContextService,
     private readonly pageService: PageService,
     private readonly seoArtifacts: SeoArtifactsService,
-    private readonly deploymentService: DeploymentService,
+    private readonly nextjsBuilder: NextjsBuilderService,
     private readonly prisma: PrismaService,
+    private readonly deploymentService: DeploymentService,
   ) {}
 
   async generateProject(projectId: string) {
@@ -41,7 +43,8 @@ export class GenerationService {
               content: pageContent.sections,
               componentCode: pageContent.componentCode,
               seoMeta: pageContent.seoMeta,
-              keywordTarget: pageContent.keywordTarget
+              keywordTarget: pageContent.keywordTarget,
+              status: pageContent.status
             });
           }
         }
@@ -68,18 +71,28 @@ export class GenerationService {
         lastGeneratedAt: new Date(),
       });
 
-      // 7. Deploy via multi-tenant architecture
-      this.logger.log(`Initiating deployment for project ${projectId}`);
+      // 7. Push to GitHub and Trigger Vercel
+      this.logger.log(`Initiating GitHub push & Vercel deployment for project ${projectId}`);
       const project = await this.prisma.project.findUnique({ where: { id: projectId } });
       if (!project) throw new Error(`Project ${projectId} not found`);
       
-      const deploymentResult = await this.deploymentService.deployProject(projectId, project.userId);
-      const liveUrl = deploymentResult.url;
+      const pushResult = await this.nextjsBuilder.buildAndDeploy(projectId, project.userId);
+      
+      // 8. Call DeploymentService to connect Vercel and poll for the live URL
+      this.logger.log(`Connecting GitHub to Vercel and waiting for build...`);
+      const deployResult = await this.deploymentService.deployProjectFromGithub(projectId, project.userId, pushResult.repoOwner, pushResult.repoName);
+      
+      const liveUrl = deployResult.url;
 
-      // 8. Update generation status with live URL
+      // 8. Mark project as published
+      await this.prisma.project.update({
+        where: { id: projectId },
+        data: { status: 'PUBLISHED' },
+      });
+
+      // 9. Update generation status
       await this.websiteDataService.upsert(projectId, {
         generationStatus: 'completed',
-        // In a real app we might store the liveUrl in the WebsiteData or Project model
       });
 
       this.logger.log(`Completed generation for project ${projectId}. Live at: ${liveUrl}`);

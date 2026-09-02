@@ -50,6 +50,70 @@ export class DeploymentService {
     };
   }
 
+  async deployProjectFromGithub(projectId: string, userId: string, githubRepoOwner: string, githubRepoName: string) {
+    this.logger.log(`Deploying project ${projectId} for user ${userId} from GitHub repo ${githubRepoOwner}/${githubRepoName}`);
+
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId, userId },
+      include: { domain: true },
+    });
+
+    if (!project) {
+      throw new NotFoundException('Project not found');
+    }
+    
+    // Create Vercel project linked to GitHub
+    const vercelProjectName = `${githubRepoName}`;
+    const result = await this.vercelClient.createProjectFromGithub(vercelProjectName, githubRepoOwner, githubRepoName);
+
+    // If custom domain is set, use it. Otherwise, we'll poll Vercel for the exact URL.
+    let liveUrl = project.domain?.domainName ? `https://${project.domain.domainName}` : null;
+    
+    // Poll Vercel for the latest deployment to finish and get the true URL
+    let deploymentStatus = 'generating';
+    let maxRetries = 40; // Wait up to 2 minutes (3s * 40)
+    
+    while (!liveUrl && maxRetries > 0) {
+      await new Promise(res => setTimeout(res, 3000));
+      maxRetries--;
+      
+      try {
+        const deployRes = await this.vercelClient.getProjectDeployments(vercelProjectName);
+        if (deployRes && deployRes.deployments && deployRes.deployments.length > 0) {
+          const latestDeploy = deployRes.deployments[0];
+          deploymentStatus = latestDeploy.readyState; // e.g. 'READY', 'ERROR', 'BUILDING'
+          
+          if (latestDeploy.readyState === 'READY' && latestDeploy.url) {
+            liveUrl = `https://${latestDeploy.url}`;
+            break;
+          } else if (latestDeploy.readyState === 'ERROR') {
+            throw new Error('Vercel deployment failed with ERROR state.');
+          }
+        }
+      } catch (err) {
+        this.logger.warn(`Polling Vercel API failed: ${err.message}`);
+      }
+    }
+
+    if (!liveUrl) {
+      this.logger.warn('Timed out waiting for Vercel deployment URL. Falling back to default format.');
+      liveUrl = `https://${vercelProjectName}.vercel.app`;
+    }
+
+    const updatedProject = await this.prisma.project.update({
+      where: { id: projectId },
+      data: { status: 'PUBLISHED' },
+    });
+
+    return {
+      success: true,
+      deploymentId: result.id || 'existing',
+      status: 'READY',
+      url: liveUrl,
+      project: updatedProject,
+    };
+  }
+
   async getDeploymentStatus(projectId: string, userId: string) {
     // Verify ownership
     const project = await this.prisma.project.findUnique({

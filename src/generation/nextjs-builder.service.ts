@@ -174,35 +174,7 @@ export class NextjsBuilderService {
 
       this.logger.log(`Successfully pushed codebase to GitHub: ${repo.clone_url}`);
 
-      // 6. Deploy directly to Vercel via CLI (bypasses GitHub integration requirement)
-      const vercelToken = process.env.VERCEL_API_TOKEN;
-      const vercelTeamId = process.env.VERCEL_TEAM_ID;
-      let vercelUrl = `https://${repoName}.vercel.app`;
-
-      if (vercelToken) {
-        try {
-          this.logger.log(`Deploying to Vercel via CLI...`);
-          const teamFlag = vercelTeamId ? `--scope ${vercelTeamId}` : '';
-          const { stdout } = await execAsync(
-            `npx -y vercel deploy --prod --yes --token ${vercelToken} ${teamFlag} --name ${repoName}`,
-            { cwd: tempDir, env: { ...process.env, NODE_ENV: 'production' } }
-          );
-          
-          // Vercel CLI prints the deployment URL as the last line
-          const lines = stdout.trim().split('\n');
-          const lastLine = lines[lines.length - 1].trim();
-          if (lastLine.startsWith('https://')) {
-            vercelUrl = lastLine;
-          }
-          this.logger.log(`Vercel deployment live at: ${vercelUrl}`);
-        } catch (vercelErr: any) {
-          this.logger.warn(`Vercel CLI deploy failed: ${vercelErr.message}. GitHub push succeeded — import manually if needed.`);
-        }
-      } else {
-        this.logger.warn(`VERCEL_API_TOKEN not set — skipping Vercel deploy. GitHub push succeeded.`);
-      }
-
-      return { repoOwner: repo.owner, repoName, cloneUrl: repo.clone_url, vercelUrl };
+      return { repoOwner: repo.owner, repoName, cloneUrl: repo.clone_url };
 
     } catch (error: any) {
       this.logger.error(`Failed to build and push project ${projectId}`, error.stack);

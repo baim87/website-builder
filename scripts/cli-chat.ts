@@ -395,13 +395,29 @@ async function bootstrap() {
             if (projectData?.domain?.domainName) {
               liveUrl = `https://${projectData.domain.domainName}`;
             } else {
-              // Build the vercel.app URL from the business name, matching NextjsBuilderService logic
               const ctx = await businessContextService.findByProjectId(project.id).catch(() => null);
               const slug = ctx?.businessName
                 ? ctx.businessName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '')
                 : `project-${project.id.substring(0, 8)}`;
               const repoName = `${slug}-${project.id.substring(0, 4)}`;
-              liveUrl = `https://${repoName}.vercel.app`;
+              
+              // Instead of assuming the URL, fetch it from Vercel's API
+              try {
+                const vercelClient = app.get(require('../src/vercel/vercel.client').VercelClient);
+                const deployRes = await vercelClient.getProjectDeployments(repoName);
+                if (deployRes && deployRes.deployments && deployRes.deployments.length > 0) {
+                  const latestDeploy = deployRes.deployments[0];
+                  if (latestDeploy.url) {
+                    liveUrl = `https://${latestDeploy.url}`;
+                  }
+                }
+              } catch (e) {
+                // Ignore fallback to generic
+              }
+              
+              if (!liveUrl) {
+                liveUrl = `https://${repoName}.vercel.app`;
+              }
             }
         }
       }

@@ -37,7 +37,7 @@ export class VercelClient {
     this.logger.log(`Adding domain ${domain} to Vercel project ${this.projectId}`);
     
     // Stub implementation if not configured
-    if (!this.apiToken) return { status: 'mocked', domain };
+    if (!this.apiToken || !this.projectId) return { status: 'mocked', domain };
 
     const url = new URL(`${this.baseUrl}/v10/projects/${this.projectId}/domains`);
     this.appendTeamId(url);
@@ -64,6 +64,61 @@ export class VercelClient {
     // In a multi-tenant setup with a single project, we typically don't trigger a full deployment.
     // We just ensure the domain exists. The actual "deployment" might just be a no-op or returning the current prod deployment.
     return { status: 'READY', url: `https://${domain}` };
+  }
+
+  async createProjectFromGithub(projectName: string, githubRepoOwner: string, githubRepoName: string): Promise<any> {
+    this.logger.log(`Creating Vercel Project ${projectName} linked to GitHub repo ${githubRepoOwner}/${githubRepoName}`);
+    
+    if (!this.apiToken) return { status: 'mocked', id: 'mock-vercel-id' };
+
+    const url = new URL(`${this.baseUrl}/v9/projects`);
+    this.appendTeamId(url);
+
+    const response = await fetch(url.toString(), {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify({
+        name: projectName,
+        framework: 'nextjs',
+        repository: {
+          type: 'github',
+          repo: `${githubRepoOwner}/${githubRepoName}`,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      if (error.error?.code === 'project_already_exists') {
+         this.logger.log(`Vercel project ${projectName} already exists`);
+         return { status: 'exists' };
+      }
+      this.logger.warn(`Vercel API linking failed: ${error.error?.message || response.statusText}. Proceeding without auto-Vercel link.`);
+      return { status: 'mocked', id: 'mock-vercel-id' };
+    }
+
+    return response.json();
+  }
+
+  async getProjectDeployments(vercelProjectId: string): Promise<any> {
+    this.logger.log(`Fetching Vercel deployments for project ${vercelProjectId}`);
+    
+    if (!this.apiToken) return { deployments: [] };
+
+    const url = new URL(`${this.baseUrl}/v6/deployments`);
+    url.searchParams.append('projectId', vercelProjectId);
+    this.appendTeamId(url);
+
+    const response = await fetch(url.toString(), {
+      headers: this.getHeaders(),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new HttpException(`Vercel get deployments failed: ${error.message || response.statusText}`, response.status);
+    }
+
+    return response.json();
   }
 
   async getDeploymentStatus(deploymentId: string): Promise<any> {
