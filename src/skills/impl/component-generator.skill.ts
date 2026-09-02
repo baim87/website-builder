@@ -34,6 +34,7 @@ REQUIREMENTS:
 7. Wrap the main return in a \`<section className="...">\` tag.
 8. NEVER return markdown fences like \`\`\`tsx. Return EXACTLY and ONLY the raw source code.
 9. IF generating a TestimonialsSection, you MUST render the testimonial text using \`dangerouslySetInnerHTML\` to support HTML \`<strong>\` tags. You MUST display the rating accurately (e.g., 4.9 stars) and include a Google logo icon SVG if the source is Google. Ensure the testimonial text is prominently displayed.
+10. IF generating a Contact, Location, or FindUs section, you MUST NOT hardcode any dummy business data (e.g., fake addresses, phone numbers, or hours) into the visual layout. You MUST ONLY use the real business data passed through the \`data\` prop. Do NOT duplicate or repeat the display of the contact information (e.g., do not hardcode a sidebar and then loop over \`data.items\` below it). Integrate the real \`data\` directly into the primary layout.
 
 BRAND TYPOGRAPHY CONTEXT:
 Heading Font: ${brandIdentity?.typography?.headingFont || 'Inter'}
