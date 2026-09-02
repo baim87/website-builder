@@ -29,7 +29,9 @@ export class CopyWriterSkill implements Skill {
     let sectionSpecificRules = '';
     
     if (sectionType === 'AboutSection') {
-      sectionSpecificRules = `5. IMPORTANT: You must include the business owner's name: ${businessContext.contactPerson || 'The Owner'} in the copy. Make it a personal, professional about us section.`;
+      const ownerName = businessContext.contactPerson || 'The Owner';
+      const bizName = businessContext.businessName || 'our company';
+      sectionSpecificRules = `5. IMPORTANT: Write the About Us section strictly in the first-person ("I"), from the perspective of the business owner (${ownerName}). Use a warm, highly personal, story-driven tone (e.g., "Hi! I'm ${ownerName}, the owner of ${bizName}. After years of experience..."). Focus on their personal expertise, passion, and dedication to delivering stress-free results for the customer.`;
     } else if (sectionType === 'WhyUsSection') {
       sectionSpecificRules = `5. IMPORTANT: Highlight Unique Selling Propositions (USPs).`;
     } else if (sectionType === 'GallerySection') {
