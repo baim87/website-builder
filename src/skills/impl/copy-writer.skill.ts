@@ -57,7 +57,13 @@ export class CopyWriterSkill implements Skill {
     } else if (sectionType === 'FindUsSection') {
       sectionSpecificRules = `5. IMPORTANT: Ensure the exact address, phone, email, and hours from the business context are included perfectly.`;
     } else if (sectionType === 'TestimonialsSection') {
-      sectionSpecificRules = `5. IMPORTANT: Generate 3 realistic testimonials relevant to the target services. Include a fictional customer name and a 5-star rating.`;
+      const contactName = businessContext.contactPerson || 'the owner';
+      const bizName = businessContext.businessName || 'this company';
+      sectionSpecificRules = `5. IMPORTANT: Generate between 6 and 9 highly realistic, detailed testimonials relevant to the target services. 
+      - Ratings MUST be varied (e.g., 4.8, 4.9, 5.0).
+      - The testimonial text MUST explicitly mention the contact person ("${contactName}") or the business name ("${bizName}") in a natural way.
+      - You MUST wrap the most impactful phrases in the testimonial text with <strong> tags (e.g., "They were <strong>fast, affordable, and professional</strong>").
+      - Each testimonial must include the source of the review, which MUST be "Google".`;
     }
 
     let locationMetricsStr = '';
@@ -106,6 +112,7 @@ RULES:
 3. Write compelling, high-converting copy that matches the brand voice.
 4. Output a single JSON object (key-value map) containing all headlines, subheadlines, paragraphs, lists, and image queries.
 5. Provide a flexible structure that a UI Designer can easily map into a layout.
+6. IMPORTANT: If a section includes buttons, cards, or actionable items, you MUST include a relative URL path (e.g., '/services', '/contact', '/portfolio') in a 'link' or 'href' field.
 ${sectionSpecificRules}
 
 OUTPUT FORMAT:

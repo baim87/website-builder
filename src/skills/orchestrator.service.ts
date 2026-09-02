@@ -9,6 +9,7 @@ import { KeywordStrategySkill } from './impl/keyword-strategy.skill';
 import { CSSStyleSkill } from './impl/css-style.skill';
 import { CopyWriterSkill } from './impl/copy-writer.skill';
 import { UIDesignerSkill } from './impl/ui-designer.skill';
+import { ComponentGeneratorSkill } from './impl/component-generator.skill';
 import { PrismaService } from '../prisma/prisma.service';
 import { UnsplashService } from '../images/unsplash.service';
 
@@ -27,6 +28,7 @@ export class OrchestratorService {
     private readonly cssStyle: CSSStyleSkill,
     private readonly copyWriter: CopyWriterSkill,
     private readonly uiDesigner: UIDesignerSkill,
+    private readonly componentGenerator: ComponentGeneratorSkill,
     private readonly prisma: PrismaService,
     private readonly unsplash: UnsplashService,
   ) {}
@@ -52,7 +54,7 @@ export class OrchestratorService {
     this.logger.log(`Starting 6-phase generation pipeline for project ${projectId}`);
 
     // Determine Pages to generate early so we can pass to Keyword Strategy
-    const pagesToGenerate = ['home', 'about-us', 'services', 'service-areas', 'portfolio', 'contact'];
+    const pagesToGenerate = ['home', 'about-us', 'services', 'service-areas', 'portfolio', 'contact', 'privacy-policy', 'terms-of-service', 'layout'];
     
     // Add dynamic pages for each service and location
     const serviceSlugs: string[] = [];
@@ -107,51 +109,104 @@ export class OrchestratorService {
     this.logger.log('Phase 1: Brand & Design System');
     const phase1Input = { projectId, context: { businessContext } };
     
-    const [brandIdentitySettled, brandVoiceSettled] = await Promise.allSettled([
-      this.executeWithRetries(this.brandIdentity, phase1Input),
-      this.executeWithRetries(this.brandVoice, phase1Input),
-    ]);
+    const existingWebsiteData = await this.prisma.websiteData.findUnique({ where: { projectId } });
+    
+    let brandIdentityResult = null;
+    let brandVoiceResult = null;
+    let designSystemResult = existingWebsiteData?.designTokens || null;
+    let globalCssResult = null; // Stored in site-template eventually, but for now we re-generate or assume it's not strictly needed for page loop if already done
 
-    if (brandIdentitySettled.status === 'rejected') throw brandIdentitySettled.reason;
-    if (brandVoiceSettled.status === 'rejected') throw brandVoiceSettled.reason;
+    if (!designSystemResult) {
+      const [brandIdentitySettled, brandVoiceSettled] = await Promise.allSettled([
+        this.executeWithRetries(this.brandIdentity, phase1Input),
+        this.executeWithRetries(this.brandVoice, phase1Input),
+      ]);
 
-    const brandIdentityResult = brandIdentitySettled.value;
-    const brandVoiceResult = brandVoiceSettled.value;
+      if (brandIdentitySettled.status === 'rejected') throw brandIdentitySettled.reason;
+      if (brandVoiceSettled.status === 'rejected') throw brandVoiceSettled.reason;
 
-    const designSystemResult = await this.executeWithRetries(this.designSystem, {
-      projectId,
-      context: { businessContext, brandIdentity: brandIdentityResult }
-    });
+      brandIdentityResult = brandIdentitySettled.value;
+      brandVoiceResult = brandVoiceSettled.value;
 
-    const globalCssResult = await this.executeWithRetries(this.cssStyle, {
-      projectId,
-      context: { designSystem: designSystemResult }
-    });
+      designSystemResult = await this.executeWithRetries(this.designSystem, {
+        projectId,
+        context: { businessContext, brandIdentity: brandIdentityResult }
+      });
+
+      globalCssResult = await this.executeWithRetries(this.cssStyle, {
+        projectId,
+        context: { designSystem: designSystemResult }
+      });
+      
+      await this.prisma.websiteData.update({
+        where: { projectId },
+        data: { designTokens: designSystemResult ? (designSystemResult as any) : undefined, generationStatus: 'components' }
+      });
+    } else {
+        this.logger.log('Skipping Phase 1 - Design System already exists');
+        // Still need brandVoice/brandIdentity for later stages if we resume, ideally we should persist these to DB.
+        // For MVP of resumability, we can re-run them quickly (they are cheap), or assume we don't need them if we already have the DesignSystem.
+        // Let's re-run just identity and voice since they aren't saved to DB independently right now.
+        brandIdentityResult = await this.executeWithRetries(this.brandIdentity, phase1Input);
+        brandVoiceResult = await this.executeWithRetries(this.brandVoice, phase1Input);
+    }
+
+
 
     // --- PHASE 2: Keyword Strategy ---
     this.logger.log('Phase 2: Keyword Strategy');
-    const keywordStrategyResult = await this.executeWithRetries(this.keywordStrategy, {
-      projectId,
-      context: { businessContext, pages: pagesToGenerate }
-    });
+    let keywordStrategyResult = existingWebsiteData?.seoMetadata as any;
+    
+    if (!keywordStrategyResult || !keywordStrategyResult.pages) {
+        keywordStrategyResult = await this.executeWithRetries(this.keywordStrategy, {
+          projectId,
+          context: { businessContext, pages: pagesToGenerate.filter(p => p !== 'layout') }
+        });
+        await this.prisma.websiteData.update({
+            where: { projectId },
+            data: { seoMetadata: keywordStrategyResult, generationStatus: 'pages' }
+        });
+    } else {
+        this.logger.log('Skipping Phase 2 - Keyword Strategy already exists');
+    }
 
     const successfulPages: any[] = [];
 
     // --- PHASE 3, 4, 5: Per-Page Generation ---
     for (const pageSlug of pagesToGenerate) {
       try {
+        // Check if page already exists and is completed
+        const existingPage = await this.prisma.page.findUnique({
+          where: { projectId_slug: { projectId, slug: pageSlug } }
+        });
+        
+        if (existingPage && existingPage.status === 'completed') {
+           this.logger.log(`\n[${pageSlug}] Skipping - already completed`);
+           successfulPages.push({
+               slug: existingPage.slug,
+               sections: existingPage.content,
+               componentCode: existingPage.componentCode,
+               seoMeta: existingPage.seoMeta,
+               keywordTarget: existingPage.keywordTarget
+           });
+           continue;
+        }
+
         this.logger.log(`\n[${pageSlug}] Starting Generation Loop`);
 
         // Find assigned keyword
         const keywordTarget = keywordStrategyResult.pages.find((p: any) => p.slug === pageSlug);
 
         // Phase 3: SEO Metadata
-        const seoResult = await this.executeWithRetries(this.seoMetadata, {
-          projectId,
-          context: { businessContext, pageSlug, keywordTarget }
-        });
+        let seoResult = null;
+        if (pageSlug !== 'layout') {
+          seoResult = await this.executeWithRetries(this.seoMetadata, {
+            projectId,
+            context: { businessContext, pageSlug, keywordTarget }
+          });
+        }
 
-            // Phase 4a: Page Structure
+        // Phase 4a: Page Structure
         const isLocationServicePage = isLocationServicePageMap.has(pageSlug);
         let serviceSlug = null;
         if (isLocationServicePage) {
@@ -159,17 +214,46 @@ export class OrchestratorService {
           if (parts.length === 2) serviceSlug = parts[1];
         }
 
-        const structureResult = await this.executeWithRetries(this.pageStructure, {
-          projectId,
-          context: { businessContext, brandVoice: brandVoiceResult, pageSlug, isLocationServicePage }
-        });
-        const sectionTypes: string[] = structureResult.sections;
+        let sectionTypes: string[] = [];
+        if (pageSlug === 'layout') {
+          sectionTypes = ['HeaderSection', 'FooterSection'];
+        } else {
+          const structureResult = await this.executeWithRetries(this.pageStructure, {
+            projectId,
+            context: { businessContext, brandVoice: brandVoiceResult, pageSlug, isLocationServicePage }
+          });
+          sectionTypes = structureResult.sections;
+        }
 
         const generatedSections: any[] = [];
         const generatedComponents: Record<string, string> = {};
 
         // Phase 4b & 5: Copy and Component Code
         for (const sectionType of sectionTypes) {
+          const componentName = sectionType; // e.g. "HeroSection"
+          
+          // Generate the reusable .tsx component if we don't have it yet
+          let websiteData = await this.prisma.websiteData.findUnique({ where: { projectId } });
+          let customComponents = (websiteData?.customComponents as Record<string, string>) || {};
+          
+          if (!customComponents[componentName]) {
+            try {
+              this.logger.log(`[${pageSlug}] Generating new component: ${componentName}`);
+              const componentResult = await this.executeWithRetries(this.componentGenerator, {
+                projectId,
+                context: { sectionType: componentName, brandIdentity: brandIdentityResult }
+              }, 2);
+              
+              customComponents[componentName] = componentResult.code;
+              await this.prisma.websiteData.update({
+                where: { projectId },
+                data: { customComponents }
+              });
+            } catch (err) {
+              this.logger.warn(`Failed to generate component ${componentName}: ${err.message}`);
+            }
+          }
+
           // Fallback mechanism per section
           let sectionCopy = null;
           try {
@@ -194,8 +278,13 @@ export class OrchestratorService {
           }
 
           // Intercept and resolve Unsplash images
-          if (sectionCopy && sectionCopy.content) {
-            await this.resolveImages(sectionCopy.content);
+          if (sectionCopy) {
+            if (sectionCopy.content) {
+              await this.resolveImages(sectionCopy.content);
+            }
+            if (sectionCopy.ast?.props?.data) {
+              await this.resolveImages(sectionCopy.ast.props.data);
+            }
           }
 
           generatedSections.push(sectionCopy);
@@ -207,6 +296,7 @@ export class OrchestratorService {
           componentCode: Object.keys(generatedComponents).length > 0 ? generatedComponents : null,
           seoMeta: seoResult,
           keywordTarget,
+          status: 'completed'
         };
         
         successfulPages.push(pagePayload);

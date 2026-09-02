@@ -1,7 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../src/app.module';
 import { InterviewService } from '../src/interview/interview.service';
-import { GenerationService } from '../src/generation/generation.service';
+import { GenerationProducer } from '../src/queue/producers/generation.producer';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { GooglePlacesService } from '../src/projects/google-places.service';
 import { BUSINESS_FIELDS, BRAND_FIELDS } from '../src/interview/constants/interview-fields.constant';
@@ -100,7 +100,7 @@ async function bootstrap() {
   const app = await NestFactory.createApplicationContext(AppModule, { logger: ['error', 'warn'] });
 
   const interviewService = app.get(InterviewService);
-  const generationService = app.get(GenerationService);
+  const generationProducer = app.get(GenerationProducer);
   const prisma = app.get(PrismaService);
   const googlePlacesService = app.get(GooglePlacesService);
   const businessContextService = app.get(BusinessContextService);
@@ -130,63 +130,95 @@ async function bootstrap() {
     });
   }
 
-  const projectName = await question('Enter a name for your new project:');
-  const project = await prisma.project.create({
-    data: {
-      userId: user.id,
-      name: projectName || 'Test Project',
-      status: 'draft',
-    },
+  const existingProjects = await prisma.project.findMany({
+    where: { userId: user.id },
+    orderBy: { createdAt: 'desc' },
+    take: 10
   });
 
-  await prisma.businessContext.create({
-    data: {
-      projectId: project.id,
-    },
-  });
+  let project;
 
-  ok(`Project created — ${paint(project.name, c.bold)} ${paint(`(${project.id})`, c.dim)}`);
+  if (existingProjects.length > 0) {
+    console.log('\nExisting Projects:');
+    existingProjects.forEach((p, idx) => {
+      console.log(`  ${paint(`${idx + 1})`, c.cyan, c.bold)} ${p.name} ${paint(`(${p.id})`, c.gray)}`);
+    });
+    console.log(`  ${paint('0)', c.gray)} ${paint('Create a new project', c.gray)}\n`);
+    
+    const choice = await question('Select a project to resume, or 0 to create new:');
+    const choiceNum = parseInt(choice, 10);
+    if (!isNaN(choiceNum) && choiceNum > 0 && choiceNum <= existingProjects.length) {
+       project = existingProjects[choiceNum - 1];
+       ok(`Resuming project — ${paint(project.name, c.bold)} ${paint(`(${project.id})`, c.dim)}`);
+    }
+  }
+
+  if (!project) {
+    const projectName = await question('Enter a name for your new project:');
+    project = await prisma.project.create({
+      data: {
+        userId: user.id,
+        name: projectName || 'Test Project',
+        status: 'draft',
+      },
+    });
+
+    await prisma.businessContext.create({
+      data: {
+        projectId: project.id,
+      },
+    });
+
+    ok(`Project created — ${paint(project.name, c.bold)} ${paint(`(${project.id})`, c.dim)}`);
+  }
+  
   info('Tip: type "exit" or "quit" at any prompt to stop.');
 
   // ==========================================
   // STATE 1: GMB Check
   // ==========================================
   section('Google Business Profile');
-  const gmbInput = await question('Got a Google Business Profile URL, or Business Name + City? (or type "no"):');
+  const existingContext = await businessContextService.findByProjectId(project.id).catch(() => null);
+  
+  if (!existingContext || !existingContext.businessName) {
+    const gmbInput = await question('Got a Google Business Profile URL, or Business Name + City? (or type "no"):');
 
-  if (gmbInput.toLowerCase() !== 'no' && gmbInput.trim() !== '') {
-    const stopSpinner = startSpinner('Searching Google Business Profiles...');
-    const scrapedResults = await googlePlacesService.scrapeGoogleBusinessProfile(gmbInput);
+    if (gmbInput.toLowerCase() !== 'no' && gmbInput.trim() !== '') {
+      const stopSpinner = startSpinner('Searching Google Business Profiles...');
+      const scrapedResults = await googlePlacesService.scrapeGoogleBusinessProfile(gmbInput);
 
-    if (scrapedResults && scrapedResults.length > 0) {
-      stopSpinner(`Found ${scrapedResults.length} matching business(es)`);
-      console.log();
+      if (scrapedResults && scrapedResults.length > 0) {
+        stopSpinner(`Found ${scrapedResults.length} matching business(es)`);
+        console.log();
 
-      scrapedResults.forEach((res: any, idx: number) => {
-        console.log(`  ${paint(`${idx + 1})`, c.cyan, c.bold)} ${res.businessName} ${paint(`— ${res.businessAddress}`, c.gray)}`);
-      });
-      console.log(`  ${paint('0)', c.gray)} ${paint('None of these, let\'s do it manually', c.gray)}`);
-      console.log();
+        scrapedResults.forEach((res: any, idx: number) => {
+          console.log(`  ${paint(`${idx + 1})`, c.cyan, c.bold)} ${res.businessName} ${paint(`— ${res.businessAddress}`, c.gray)}`);
+        });
+        console.log(`  ${paint('0)', c.gray)} ${paint('None of these, let\'s do it manually', c.gray)}`);
+        console.log();
 
-      const selection = await question('Select a number:');
-      const selNum = parseInt(selection, 10);
+        const selection = await question('Select a number:');
+        const selNum = parseInt(selection, 10);
 
-      if (!isNaN(selNum) && selNum > 0 && selNum <= scrapedResults.length) {
-        const chosenData = scrapedResults[selNum - 1];
-        await businessContextService.upsert(project.id, chosenData);
-        ok('Saved these details to your profile:');
-        for (const [k, v] of Object.entries(chosenData)) {
-          if (v) {
-            const displayValue = typeof v === 'object' ? JSON.stringify(v) : v;
-            console.log(`    ${paint(k, c.blue)}: ${displayValue}`);
+        if (!isNaN(selNum) && selNum > 0 && selNum <= scrapedResults.length) {
+          const chosenData = scrapedResults[selNum - 1];
+          await businessContextService.upsert(project.id, chosenData);
+          ok('Saved these details to your profile:');
+          for (const [k, v] of Object.entries(chosenData)) {
+            if (v) {
+              const displayValue = typeof v === 'object' ? JSON.stringify(v) : v;
+              console.log(`    ${paint(k, c.blue)}: ${displayValue}`);
+            }
           }
+        } else {
+          warn("No problem — we'll do it manually!");
         }
       } else {
-        warn("No problem — we'll do it manually!");
+        stopSpinner("No matches found — we'll do it manually", false);
       }
-    } else {
-      stopSpinner("No matches found — we'll do it manually", false);
     }
+  } else {
+    ok(`Found existing business: ${existingContext.businessName}`);
   }
 
   // ==========================================
@@ -241,43 +273,53 @@ async function bootstrap() {
   // STATE 3: Logo Check
   // ==========================================
   section('Brand Assets');
-  const logoInput = await question("Got an existing logo you'd like to use? (path/URL, or type \"no\"):");
-  if (logoInput.toLowerCase() !== 'no' && logoInput.trim() !== '') {
-    try {
-      say(`Fetching and uploading logo to R2...`);
-      const storageService = app.get(StorageService);
-      let buffer: Buffer;
-      let mimeType = 'image/png';
-      
-      if (logoInput.startsWith('http://') || logoInput.startsWith('https://')) {
-        const res = await fetch(logoInput);
-        buffer = Buffer.from(await res.arrayBuffer());
-        mimeType = res.headers.get('content-type') || mimeType;
-      } else {
-        buffer = fs.readFileSync(logoInput);
-        if (logoInput.endsWith('.jpg') || logoInput.endsWith('.jpeg')) mimeType = 'image/jpeg';
-        else if (logoInput.endsWith('.webp')) mimeType = 'image/webp';
-        else if (logoInput.endsWith('.svg')) mimeType = 'image/svg+xml';
+  const existingAssets = await prisma.asset.findFirst({ where: { projectId: project.id, purpose: 'logo' } });
+  
+  if (!existingAssets) {
+    const logoInput = await question("Got an existing logo you'd like to use? (path/URL, or type \"no\"):");
+    if (logoInput.toLowerCase() !== 'no' && logoInput.trim() !== '') {
+      try {
+        say(`Fetching and uploading logo to R2...`);
+        const storageService = app.get(StorageService);
+        let buffer: Buffer;
+        let mimeType = 'image/png';
+        
+        if (logoInput.startsWith('http://') || logoInput.startsWith('https://')) {
+          const axios = require('axios');
+          const res = await axios.get(logoInput, { 
+            responseType: 'arraybuffer',
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' }
+          });
+          buffer = Buffer.from(res.data);
+          mimeType = res.headers['content-type'] || mimeType;
+        } else {
+          buffer = fs.readFileSync(logoInput);
+          if (logoInput.endsWith('.jpg') || logoInput.endsWith('.jpeg')) mimeType = 'image/jpeg';
+          else if (logoInput.endsWith('.webp')) mimeType = 'image/webp';
+          else if (logoInput.endsWith('.svg')) mimeType = 'image/svg+xml';
+        }
+
+        const crypto = require('crypto');
+        const hash = crypto.createHash('md5').update(buffer).digest('hex');
+        const key = `projects/${project.id}/assets/${hash}-logo`;
+        const uploadedUrl = await storageService.upload(key, buffer, mimeType);
+
+        await prisma.asset.create({
+          data: {
+            projectId: project.id,
+            url: uploadedUrl,
+            type: 'image',
+            purpose: 'logo',
+            section: 'header,footer',
+          },
+        });
+        ok(`Logo uploaded and saved to R2 successfully!`);
+      } catch (e: any) {
+        fail(`Failed to upload logo: ${e.message}`);
       }
-
-      const crypto = require('crypto');
-      const hash = crypto.createHash('md5').update(buffer).digest('hex');
-      const key = `projects/${project.id}/assets/${hash}-logo`;
-      const uploadedUrl = await storageService.upload(key, buffer, mimeType);
-
-      await prisma.asset.create({
-        data: {
-          projectId: project.id,
-          url: uploadedUrl,
-          type: 'image',
-          purpose: 'logo',
-          section: 'header,footer',
-        },
-      });
-      ok(`Logo uploaded and saved to R2 successfully!`);
-    } catch (e: any) {
-      fail(`Failed to upload logo: ${e.message}`);
     }
+  } else {
+    ok(`Found existing logo asset.`);
   }
 
   // ==========================================
@@ -333,19 +375,50 @@ async function bootstrap() {
   app.useLogger(['log', 'warn', 'error']); // Enable logs so user can see progress
 
   try {
-    const liveUrl = await generationService.generateProject(project.id);
+    await generationProducer.generateSite(project.id);
+    
+    let isFinished = false;
+    let liveUrl = null;
+    let finalStatus = 'generating';
+    
+    const stopSpinner = startSpinner('Generating website in the background...');
 
-    const websiteData = await prisma.websiteData.findUnique({ where: { projectId: project.id } });
+    while (!isFinished) {
+      await new Promise(resolve => setTimeout(resolve, 3000)); // Poll every 3s
+      const websiteData = await prisma.websiteData.findUnique({ where: { projectId: project.id } });
+      const projectData = await prisma.project.findUnique({ where: { id: project.id }, include: { domain: true } });
+      
+      if (websiteData && (websiteData.generationStatus === 'completed' || websiteData.generationStatus === 'failed')) {
+        isFinished = true;
+        finalStatus = websiteData.generationStatus;
+        if (finalStatus === 'completed') {
+            if (projectData?.domain?.domainName) {
+              liveUrl = `https://${projectData.domain.domainName}`;
+            } else {
+              // Build the vercel.app URL from the business name, matching NextjsBuilderService logic
+              const ctx = await businessContextService.findByProjectId(project.id).catch(() => null);
+              const slug = ctx?.businessName
+                ? ctx.businessName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '')
+                : `project-${project.id.substring(0, 8)}`;
+              const repoName = `${slug}-${project.id.substring(0, 4)}`;
+              liveUrl = `https://${repoName}.vercel.app`;
+            }
+        }
+      }
+    }
+    
+    stopSpinner('', finalStatus === 'completed');
+
     console.log();
-    ok(`Generation complete — status: ${paint(websiteData?.generationStatus ?? 'unknown', c.bold, c.green)}`);
+    ok(`Generation complete — status: ${paint(finalStatus, c.bold, finalStatus === 'completed' ? c.green : c.red)}`);
     console.log();
     banner('Done! Your project is ready.');
-    if (liveUrl) {
+    if (liveUrl && finalStatus === 'completed') {
       console.log(`\n  Live URL: ${paint(liveUrl, c.bold, c.blue, c.reset)}`);
       console.log(`  (Note: It might take a minute for the DNS to propagate)`);
     }
   } catch (error) {
-    fail('Generation failed');
+    fail('Failed to enqueue generation job');
     console.error(paint(String(error), c.red));
   }
 
