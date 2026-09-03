@@ -85,8 +85,7 @@ export class LocationMetricsService {
       // Search for localities around this point
       const textRes = await this.mapsClient.textSearch({
         params: {
-          query: 'city',
-          type: 'locality' as any, // force the type to locality
+          query: `towns and cities near ${baseLocation}`,
           location: { lat, lng },
           radius: radiusMeters,
           key: this.apiKey,
@@ -101,7 +100,10 @@ export class LocationMetricsService {
       if (textRes.data.results) {
         for (const place of textRes.data.results) {
            if (place.name && !place.name.toLowerCase().includes('county')) {
-             cities.add(place.name);
+             // Ensure it is actually a city/town and not a building or point of interest
+             if (place.types && (place.types.includes('locality' as any) || place.types.includes('administrative_area_level_3' as any))) {
+               cities.add(place.name);
+             }
            }
         }
       }
