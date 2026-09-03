@@ -102,7 +102,13 @@ export class LocationMetricsService {
            if (place.name && !place.name.toLowerCase().includes('county')) {
              // Ensure it is actually a city/town and not a building or point of interest
              if (place.types && (place.types.includes('locality' as any) || place.types.includes('administrative_area_level_3' as any))) {
-               cities.add(place.name);
+               // Calculate actual distance to enforce strict radius since Google Maps bias is soft
+               if (place.geometry && place.geometry.location) {
+                 const distanceMeters = this.calculateDistance(lat, lng, place.geometry.location.lat, place.geometry.location.lng);
+                 if (distanceMeters <= radiusMeters) {
+                   cities.add(place.name);
+                 }
+               }
              }
            }
         }
@@ -143,5 +149,21 @@ export class LocationMetricsService {
         }
       });
     }
+  }
+
+  // Haversine distance formula in meters
+  private calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const R = 6371e3; // Earth radius in metres
+    const phi1 = lat1 * Math.PI / 180;
+    const phi2 = lat2 * Math.PI / 180;
+    const deltaPhi = (lat2 - lat1) * Math.PI / 180;
+    const deltaLambda = (lon2 - lon1) * Math.PI / 180;
+
+    const a = Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
+              Math.cos(phi1) * Math.cos(phi2) *
+              Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c;
   }
 }
