@@ -69,17 +69,13 @@ model BusinessContext {
 model WebsiteData {
   id               String    @id @default(uuid())
   projectId        String    @unique
-  colorPalette     Json?
-  typography       Json?
-  style            String?
-  sitemap          Json?
   designTokens     Json?
   seoMetadata      Json?
   sitemapXml       String?
   robotsTxt        String?
   jsonLdSchemas    Json?
-  ogTags           Json?
   internalLinkMap  Json?
+  customComponents Json?
   generationStatus String    @default("pending")
   lastGeneratedAt  DateTime?
   createdAt        DateTime  @default(now())
@@ -191,6 +187,7 @@ model Page {
   customCSS     String?
   seoMeta       Json?
   keywordTarget Json?
+  status        String   @default("pending")
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)

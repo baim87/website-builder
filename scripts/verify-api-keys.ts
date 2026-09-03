@@ -55,30 +55,26 @@ async function checkRedis() {
   }
 }
 
-// ─── 3. Anthropic (Claude) ──────────────────────────────
+// ─── 3. OpenRouter (Claude) ──────────────────────────────
 async function checkAnthropic() {
-  const model = process.env.ANTHROPIC_MODEL || 'claude-3-haiku-20240307';
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
+  const model = process.env.OPENROUTER_MODEL || 'anthropic/claude-fable-5';
+  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: {
-      'x-api-key': process.env.ANTHROPIC_API_KEY!,
-      'anthropic-version': '2023-06-01',
-      'content-type': 'application/json',
+      'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY!}`,
+      'Content-Type': 'application/json',
     },
     body: JSON.stringify({
       model,
+      messages: [{ role: 'user', content: 'Say "pong"' }],
       max_tokens: 5,
-      messages: [{ role: 'user', content: 'Say OK' }],
     }),
   });
-  const data = await res.json() as any;
-  if (res.status === 401) throw new Error(data.error?.message || 'Invalid API key');
-  // Model not found = key is valid, model just isn't on this endpoint
-  if (data.error?.type === 'not_found_error') {
-    return `Key valid ✓ (model "${model}" is a custom/preview model — not on public API)`;
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`OpenRouter API error: ${res.status} ${text}`);
   }
-  if (data.error) throw new Error(data.error.message);
-  return `Model "${model}" responded (${data.usage?.input_tokens} in / ${data.usage?.output_tokens} out)`;
+  return 'OK';
 }
 
 // ─── 4. Cloudflare R2 (S3-compatible) ──────────────────
@@ -155,7 +151,7 @@ async function main() {
 
   await check('PostgreSQL', checkPostgres);
   await check('Redis', checkRedis);
-  await check('Anthropic (Claude)', checkAnthropic);
+  await check('Open Router (Anthropic)', checkAnthropic);
 
   if (process.env.R2_ACCESS_KEY_ID && process.env.R2_ENDPOINT) {
     await check('Cloudflare R2', checkR2);

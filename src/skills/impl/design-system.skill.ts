@@ -20,6 +20,8 @@ export class DesignSystemSkill implements Skill {
 Business Context: ${JSON.stringify(input.context.businessContext)}
 Brand Identity Constraints: ${JSON.stringify(input.context.brandIdentity)}
 
+AESTHETICS RULE: The color palette MUST align perfectly with the brand's logo and identity. You may use dark colors if the logo/brand dictates it. You MUST ensure strict contrast (e.g., light text on dark backgrounds, or dark text on light backgrounds) for readability. Avoid generic SaaS defaults; focus on a professional, trustworthy contractor aesthetic.
+
 You MUST respond with ONLY a JSON object in this EXACT structure (no other text):
 {
   "colors": {

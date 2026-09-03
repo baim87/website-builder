@@ -15,4 +15,6 @@ export interface GenerateTextParams {
   temperature?: number;
   maxTokens?: number;
   responseFormat?: 'text' | 'json';
+  schema?: any;
+  schemaName?: string;
 }

@@ -85,7 +85,8 @@ export class LocationMetricsService {
       // Search for localities around this point
       const textRes = await this.mapsClient.textSearch({
         params: {
-          query: 'city OR town',
+          query: 'city',
+          type: 'locality' as any, // force the type to locality
           location: { lat, lng },
           radius: radiusMeters,
           key: this.apiKey,

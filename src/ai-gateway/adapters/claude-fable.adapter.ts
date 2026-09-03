@@ -10,7 +10,12 @@ export class ClaudeFableAdapter implements TextAdapter {
 
   constructor(private readonly configService: ConfigService) {
     this.client = new Anthropic({
-      apiKey: this.configService.get<string>('ANTHROPIC_API_KEY'),
+      apiKey: this.configService.get<string>('OPENROUTER_API_KEY'),
+      baseURL: 'https://openrouter.ai/api',
+      defaultHeaders: {
+        'HTTP-Referer': 'http://localhost:3000',
+        'X-Title': 'Contractor Website Builder',
+      }
     });
   }
 
@@ -35,8 +40,10 @@ export class ClaudeFableAdapter implements TextAdapter {
   }
 
   async *generateStream(model: string, params: GenerateTextParams): AsyncIterable<TextChunk> {
+    const openRouterModel = model === 'claude-fable-5' ? 'anthropic/claude-fable-5' : model;
+    
     const stream = await this.executeWithRetry(() => this.client.messages.create({
-      model,
+      model: openRouterModel,
       system: params.systemPrompt,
       messages: this.mapMessages(params.messages),
       max_tokens: params.maxTokens || 4096,
@@ -53,29 +60,76 @@ export class ClaudeFableAdapter implements TextAdapter {
   }
 
   async generateText(model: string, params: GenerateTextParams) {
-    const response = await this.executeWithRetry(() => this.client.messages.create({
-      model,
-      system: params.systemPrompt,
-      messages: this.mapMessages(params.messages),
-      max_tokens: params.maxTokens || 4096,
-    }, {
-      headers: params.maxTokens && params.maxTokens > 4096 ? { 'anthropic-beta': 'max-tokens-3-5-sonnet-2024-07-15' } : undefined
-    }));
+    const openRouterModel = model === 'claude-fable-5' ? 'anthropic/claude-fable-5' : model;
+    
+    let fullText = '';
+    let currentMessages = this.mapMessages(params.messages);
+    let totalPromptTokens = 0;
+    let totalCompletionTokens = 0;
+    let keepGenerating = true;
 
-    let text = '';
-    for (const block of response.content) {
-      if (block.type === 'text') {
-        text += block.text;
+    while (keepGenerating) {
+      const requestParams: any = {
+        model: openRouterModel,
+        system: params.systemPrompt,
+        messages: currentMessages,
+        max_tokens: params.maxTokens || 4096,
+      };
+      
+      if (params.schema) {
+        requestParams.tools = [
+          {
+            name: params.schemaName || 'output_data',
+            description: 'Output the structured data matching this schema.',
+            input_schema: params.schema
+          }
+        ];
+        requestParams.tool_choice = { type: 'tool', name: params.schemaName || 'output_data' };
+      }
+
+      const response = await this.executeWithRetry(() => this.client.messages.create(requestParams, {
+        headers: params.maxTokens && params.maxTokens > 4096 ? { 'anthropic-beta': 'max-tokens-3-5-sonnet-2024-07-15' } : undefined
+      }));
+
+      let textChunk = '';
+      let toolCall: any = null;
+      if (params.schema && response.content) {
+        toolCall = response.content.find((b: any) => b.type === 'tool_use');
+      }
+
+      if (toolCall) {
+        fullText += JSON.stringify(toolCall.input);
+        textChunk = JSON.stringify(toolCall.input);
       } else {
-        console.warn('[Claude Adapter] Ignoring non-text block:', block.type);
+        if (params.schema) {
+          console.warn('[Claude Adapter] Expected tool_use but not found! Content:', JSON.stringify(response.content));
+        }
+        for (const block of response.content) {
+          if (block.type === 'text') {
+            textChunk += block.text;
+          } else {
+            console.warn('[Claude Adapter] Ignoring non-text block:', block.type);
+          }
+        }
+        fullText += textChunk;
+      }
+      totalPromptTokens += response.usage.input_tokens;
+      totalCompletionTokens += response.usage.output_tokens;
+
+      if (response.stop_reason === 'max_tokens') {
+        console.warn(`[Claude Adapter] Max tokens hit. Resuming generation...`);
+        currentMessages.push({ role: 'assistant', content: textChunk });
+        currentMessages.push({ role: 'user', content: 'Continue generating exactly where you left off, with no preamble or explanations.' });
+      } else {
+        keepGenerating = false;
       }
     }
 
     return {
-      text,
+      text: fullText,
       usage: {
-        promptTokens: response.usage.input_tokens,
-        completionTokens: response.usage.output_tokens,
+        promptTokens: totalPromptTokens,
+        completionTokens: totalCompletionTokens,
       },
     };
   }

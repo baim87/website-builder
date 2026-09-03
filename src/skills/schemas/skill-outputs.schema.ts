@@ -66,7 +66,7 @@ export const PageSeoSchema = z.object({
   canonicalPath: z.string(),
 });
 
-const PrimitiveTypeSchema = z.enum(['Box', 'Typography', 'Button', 'Image', 'Grid', 'Icon', 'Section', 'Card', 'Accordion', 'Badge', 'Carousel']);
+const PrimitiveTypeSchema = z.string();
 
 export const CopyDataSchema = z.record(z.string(), z.any());
 

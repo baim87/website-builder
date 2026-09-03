@@ -11,6 +11,8 @@ import { KeywordStrategySkill } from './impl/keyword-strategy.skill';
 import { CSSStyleSkill } from './impl/css-style.skill';
 import { CopyWriterSkill } from './impl/copy-writer.skill';
 import { UIDesignerSkill } from './impl/ui-designer.skill';
+import { ComponentGeneratorSkill } from './impl/component-generator.skill';
+import { CodeRepairSkill } from './impl/code-repair.skill';
 import { OrchestratorService } from './orchestrator.service';
 import { AIGatewayModule } from '../ai-gateway/ai-gateway.module';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -33,9 +35,11 @@ import { UnsplashService } from '../images/unsplash.service';
     CSSStyleSkill,
     CopyWriterSkill,
     UIDesignerSkill,
+    ComponentGeneratorSkill,
+    CodeRepairSkill,
     OrchestratorService,
     UnsplashService,
   ],
-  exports: [SkillExecutorService, OrchestratorService],
+  exports: [SkillExecutorService, OrchestratorService, CodeRepairSkill],
 })
 export class SkillsModule {}

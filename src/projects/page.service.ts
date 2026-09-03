@@ -26,6 +26,7 @@ export class PageService {
         componentCode: pageData.componentCode,
         seoMeta: pageData.seoMeta,
         keywordTarget: pageData.keywordTarget,
+        status: pageData.status,
       },
       create: {
         projectId,
@@ -34,6 +35,7 @@ export class PageService {
         componentCode: pageData.componentCode,
         seoMeta: pageData.seoMeta,
         keywordTarget: pageData.keywordTarget,
+        status: pageData.status,
       },
     });
   }

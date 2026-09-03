@@ -25,7 +25,7 @@
 #   GOOGLE_CLIENT_ID=<your-google-oauth-client-id>
 #   GOOGLE_CLIENT_SECRET=<your-google-oauth-client-secret>
 #   GOOGLE_CALLBACK_URL=https://api.yourdomain.com/auth/google/callback
-#   ANTHROPIC_API_KEY=<your-anthropic-api-key>
+#   OPENROUTER_API_KEY=<your-openrouter-api-key>
 #   STRIPE_SECRET_KEY=<your-stripe-live-key>
 #   STRIPE_WEBHOOK_SECRET=<your-stripe-webhook-secret>
 #   STRIPE_SUBSCRIPTION_PRICE_ID=<your-stripe-price-id>

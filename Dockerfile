@@ -38,7 +38,7 @@ FROM node:22-alpine AS runner
 
 WORKDIR /app
 
-RUN apk add --no-cache openssl dumb-init
+RUN apk add --no-cache openssl dumb-init rsync git
 
 # Create non-root user
 RUN addgroup --system --gid 1001 nestjs && \

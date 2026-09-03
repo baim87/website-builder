@@ -17,6 +17,15 @@ export class InterviewExtractorService {
         try {
           // LLMs sometimes add newlines in JSON output
           const parsed = JSON.parse(match[1]);
+          
+          // Enforce arrays for specific fields
+          const arrayFields = ['services', 'hours', 'serviceAreas', 'competitors'];
+          for (const field of arrayFields) {
+            if (parsed[field] !== undefined && parsed[field] !== null && !Array.isArray(parsed[field])) {
+               parsed[field] = typeof parsed[field] === 'string' ? [parsed[field]] : [];
+            }
+          }
+          
           extractedFields = { ...extractedFields, ...parsed };
         } catch (e) {
           this.logger.error('Failed to parse JSON from extract block', e);

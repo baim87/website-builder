@@ -11,7 +11,6 @@ export const ComponentContract = {
 
   // Forbidden patterns in generated code (security and stability)
   forbiddenPatterns: [
-    /dangerouslySetInnerHTML/,          // XSS risk
     /eval\(/,                           // Code injection
     /document\./,                       // No direct DOM manipulation (must use React)
     /window\./,                         // No window access

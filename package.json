@@ -22,9 +22,11 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json --runInBand",
     "verify-keys": "npx ts-node scripts/verify-api-keys.ts",
-    "chat": "ANTHROPIC_BASE_URL= NODE_OPTIONS=--max-old-space-size=4096 npx ts-node -T scripts/cli-chat.ts"
+    "chat": "NODE_OPTIONS=--max-old-space-size=4096 npx ts-node -T scripts/cli-chat.ts",
+    "redeploy": "NODE_OPTIONS=--max-old-space-size=4096 npx ts-node -T scripts/redeploy-project.ts"
   },
   "dependencies": {
+    "@alcyone-labs/zod-to-json-schema": "^4.0.10",
     "@anthropic-ai/sdk": "^0.120.0",
     "@aws-sdk/client-s3": "^3.1115.0",
     "@aws-sdk/s3-request-presigner": "^3.1115.0",
@@ -38,6 +40,7 @@
     "@nestjs/jwt": "^11.0.2",
     "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-express": "^11.0.1",
+    "@octokit/rest": "^22.0.1",
     "@prisma/client": "^5.22.0",
     "@types/sharp": "^0.31.1",
     "bullmq": "^6.2.0",

@@ -51,6 +51,7 @@ services:
     environment: &app-env
       DATABASE_URL: postgresql://${POSTGRES_USER:-dev}:${POSTGRES_PASSWORD:-dev}@postgres:5432/${POSTGRES_DB:-contractor_website_builder}?schema=public
       REDIS_URL: redis://redis:6379
+      NODE_OPTIONS: "--dns-result-order=ipv4first"
     env_file:
       - .env
     depends_on:

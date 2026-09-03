@@ -82,8 +82,11 @@ export class OrchestratorService {
     if (locationMetrics.length > 0 && serviceSlugs.length > 0) {
       locationMetrics.forEach(metric => {
         const citySlug = metric.city.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+        
+        pagesToGenerate.push(`service-areas/${citySlug}`);
+        
         serviceSlugs.forEach(serviceSlug => {
-          const nestedSlug = `${citySlug}/${serviceSlug}`;
+          const nestedSlug = `service-areas/${citySlug}/${serviceSlug}`;
           pagesToGenerate.push(nestedSlug);
           isLocationServicePageMap.add(nestedSlug);
         });
@@ -96,8 +99,9 @@ export class OrchestratorService {
           : area.name?.toLowerCase().replace(/[^a-z0-9]+/g, '-');
         
         if (citySlug) {
+          pagesToGenerate.push(`service-areas/${citySlug}`);
           serviceSlugs.forEach(serviceSlug => {
-            const nestedSlug = `${citySlug}/${serviceSlug}`;
+            const nestedSlug = `service-areas/${citySlug}/${serviceSlug}`;
             pagesToGenerate.push(nestedSlug);
             isLocationServicePageMap.add(nestedSlug);
           });
@@ -211,7 +215,7 @@ export class OrchestratorService {
         let serviceSlug = null;
         if (isLocationServicePage) {
           const parts = pageSlug.split('/');
-          if (parts.length === 2) serviceSlug = parts[1];
+          if (parts.length === 3) serviceSlug = parts[2]; // service-areas/[city]/[service]
         }
 
         let sectionTypes: string[] = [];
@@ -232,33 +236,11 @@ export class OrchestratorService {
         for (const sectionType of sectionTypes) {
           const componentName = sectionType; // e.g. "HeroSection"
           
-          // Generate the reusable .tsx component if we don't have it yet
-          let websiteData = await this.prisma.websiteData.findUnique({ where: { projectId } });
-          let customComponents = (websiteData?.customComponents as Record<string, string>) || {};
-          
-          if (!customComponents[componentName]) {
-            try {
-              this.logger.log(`[${pageSlug}] Generating new component: ${componentName}`);
-              const componentResult = await this.executeWithRetries(this.componentGenerator, {
-                projectId,
-                context: { sectionType: componentName, brandIdentity: brandIdentityResult }
-              }, 2);
-              
-              customComponents[componentName] = componentResult.code;
-              await this.prisma.websiteData.update({
-                where: { projectId },
-                data: { customComponents }
-              });
-            } catch (err) {
-              this.logger.warn(`Failed to generate component ${componentName}: ${err.message}`);
-            }
-          }
-
-          // Fallback mechanism per section
+          let copyDataResult = null;
           let sectionCopy = null;
           try {
             // 1. Generate Raw Copy
-            const copyDataResult = await this.executeWithRetries(this.copyWriter, {
+            copyDataResult = await this.executeWithRetries(this.copyWriter, {
               projectId,
               context: { businessContext, brandVoice: brandVoiceResult, seoMeta: seoResult, sectionType, pageSlug, isLocationServicePage, serviceSlug }
             }, 2);
@@ -269,7 +251,33 @@ export class OrchestratorService {
               context: { sectionType, brandIdentity: brandIdentityResult, copyData: copyDataResult, pageSlug }
             }, 2);
           } catch (error) {
-            this.logger.warn(`[${pageSlug}] Failed to generate section ${sectionType}: ${error.message}`);
+            this.logger.warn(`[${pageSlug}] Failed to generate copy or AST for section ${sectionType}: ${error.message}`);
+          }
+          
+          // Generate the reusable .tsx component if we don't have it yet
+          let websiteData = await this.prisma.websiteData.findUnique({ where: { projectId } });
+          let customComponents = (websiteData?.customComponents as Record<string, string>) || {};
+          
+          if (!customComponents[componentName]) {
+            try {
+              this.logger.log(`[${pageSlug}] Generating new component: ${componentName}`);
+              const componentResult = await this.executeWithRetries(this.componentGenerator, {
+                projectId,
+                context: { 
+                  sectionType: componentName, 
+                  brandIdentity: brandIdentityResult,
+                  sampleData: copyDataResult?.data
+                }
+              }, 2);
+              
+              customComponents[componentName] = componentResult.code;
+              await this.prisma.websiteData.update({
+                where: { projectId },
+                data: { customComponents }
+              });
+            } catch (err) {
+              this.logger.warn(`Failed to generate component ${componentName}: ${err.message}`);
+            }
           }
 
           // Apply Fallback if generation failed

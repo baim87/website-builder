@@ -3,7 +3,6 @@ import { Page } from '@prisma/client';
 import { BusinessContextService } from '../projects/business-context.service';
 import { WebsiteDataService } from '../projects/website-data.service';
 import { PageService } from '../projects/page.service';
-import { DesignSystem } from '../skills/schemas/skill-outputs.schema';
 import { GithubService } from '../deployment/github.service';
 import { exec } from 'child_process';
 import { promisify } from 'util';
@@ -63,11 +62,66 @@ export class NextjsBuilderService {
       const assets = await this.prisma.asset.findMany({ where: { projectId } });
       const logoAsset = assets.find((a: any) => a.purpose === 'logo' || a.type === 'image');
 
-      // 2. Write global CSS
-      const designTokens = websiteData?.designTokens as DesignSystem | undefined;
-      if (designTokens?.globalCss) {
-        this.logger.log('Writing AI-generated globals.css');
-        await fs.writeFile(path.join(tempDir, 'src/app/globals.css'), designTokens.globalCss);
+      // 2. Inject CSS Variables into globals.css
+      const designTokens = websiteData?.designTokens as any;
+      if (designTokens?.colors && designTokens?.typography) {
+        this.logger.log('Injecting CSS variables into globals.css');
+        
+        const hexToHsl = (hex: string) => {
+          if (!hex) return '0 0% 0%';
+          hex = hex.replace(/^#/, '');
+          if (hex.length === 3) hex = hex.split('').map(x => x + x).join('');
+          const r = parseInt(hex.substring(0, 2), 16) / 255;
+          const g = parseInt(hex.substring(2, 4), 16) / 255;
+          const b = parseInt(hex.substring(4, 6), 16) / 255;
+          const max = Math.max(r, g, b), min = Math.min(r, g, b);
+          let h = 0, s = 0, l = (max + min) / 2;
+          if (max !== min) {
+            const d = max - min;
+            s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+            switch (max) {
+              case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+              case g: h = (b - r) / d + 2; break;
+              case b: h = (r - g) / d + 4; break;
+            }
+            h /= 6;
+          }
+          return `${Math.round(h * 360)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`;
+        };
+
+        const computeContrastColor = (hex: string) => {
+          if (!hex) return '#ffffff';
+          hex = hex.replace(/^#/, '');
+          if (hex.length === 3) hex = hex.split('').map(x => x + x).join('');
+          const r = parseInt(hex.substring(0, 2), 16);
+          const g = parseInt(hex.substring(2, 4), 16);
+          const b = parseInt(hex.substring(4, 6), 16);
+          const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+          return luminance > 0.5 ? '#000000' : '#ffffff';
+        };
+
+        const cssVars = `
+:root {
+  --background: ${hexToHsl(designTokens.colors.background || '#ffffff')};
+  --foreground: ${hexToHsl(designTokens.colors.foreground || designTokens.colors.text || '#000000')};
+  --primary: ${hexToHsl(designTokens.colors.primary || '#18181b')};
+  --primary-foreground: ${hexToHsl(designTokens.colors.primaryForeground || computeContrastColor(designTokens.colors.primary || '#18181b'))};
+  --secondary: ${hexToHsl(designTokens.colors.secondary || '#f4f4f5')};
+  --secondary-foreground: ${hexToHsl(designTokens.colors.secondaryForeground || computeContrastColor(designTokens.colors.secondary || '#f4f4f5'))};
+  --accent: ${hexToHsl(designTokens.colors.accent || '#f4f4f5')};
+  --accent-foreground: ${hexToHsl(designTokens.colors.accentForeground || computeContrastColor(designTokens.colors.accent || '#f4f4f5'))};
+  --font-heading: "${designTokens.typography.headingFont || 'Inter'}";
+  --font-body: "${designTokens.typography.bodyFont || 'Inter'}";
+}
+`;
+        const globalsPath = path.join(tempDir, 'src/app/globals.css');
+        let existingCss = '';
+        try {
+          existingCss = await fs.readFile(globalsPath, 'utf-8');
+        } catch (e) {
+          this.logger.warn('No globals.css found in template, creating a new one.');
+        }
+        await fs.writeFile(globalsPath, `${cssVars}\n${existingCss}`);
       }
       
       const layoutPage = pages.find((p: Page) => p.slug === 'layout');

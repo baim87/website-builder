@@ -37,8 +37,8 @@ export const envSchema = z.object({
   SERPAPI_API_KEY: z.string().optional(),
 
 
-  ANTHROPIC_API_KEY: z.string().min(1),
-  ANTHROPIC_MODEL: z.string().default('claude-fable-20260801'),
+  OPENROUTER_API_KEY: z.string().min(1),
+  OPENROUTER_MODEL: z.string().default('anthropic/claude-fable-5'),
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_REALTIME_MODEL: z.string().optional(),
   GEMINI_API_KEY: z.string().optional(),

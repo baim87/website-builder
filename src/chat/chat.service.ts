@@ -29,11 +29,12 @@ export class ChatService {
     });
 
     // 2. Build context
-    const history = await this.prisma.chatMessage.findMany({
+    const historyDesc = await this.prisma.chatMessage.findMany({
       where: { projectId },
-      orderBy: { createdAt: 'asc' },
+      orderBy: { createdAt: 'desc' },
       take: 20, // last 20 messages
     });
+    const history = historyDesc.reverse();
 
     const messages: Message[] = history.map((msg) => ({
       role: msg.role as 'system' | 'user' | 'assistant',

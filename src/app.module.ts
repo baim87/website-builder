@@ -28,8 +28,10 @@ import { DomainModule } from './domain/domain.module';
 import { LeadsModule } from './leads/leads.module';
 import { RedisModule } from './common/redis/redis.module';
 
+import { QualityControlModule } from './quality-control/quality-control.module';
+
 @Module({
-  imports: [ConfigModule, PrismaModule, AuthModule, ProjectsModule, ChatModule, InterviewModule, GbpModule, GuardrailsModule, SeoModule, GenerationModule, AssetsModule, AIGatewayModule, QueueModule, StorageModule, KeywordsModule, SkillsModule, BillingModule, HealthModule, AnalyticsModule, StripeModule, VercelModule, DeploymentModule, DomainModule, LeadsModule, RedisModule],
+  imports: [ConfigModule, PrismaModule, AuthModule, ProjectsModule, ChatModule, InterviewModule, GbpModule, GuardrailsModule, SeoModule, GenerationModule, AssetsModule, AIGatewayModule, QueueModule, StorageModule, KeywordsModule, SkillsModule, BillingModule, HealthModule, AnalyticsModule, StripeModule, VercelModule, DeploymentModule, DomainModule, LeadsModule, RedisModule, QualityControlModule],
   controllers: [AppController],
   providers: [AppService],
 })
