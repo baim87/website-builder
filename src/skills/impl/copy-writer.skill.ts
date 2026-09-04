@@ -36,7 +36,7 @@ export class CopyWriterSkill implements Skill {
     } else if (sectionType === 'WhyUsSection') {
       sectionSpecificRules = `8. SECTION SPECIFIC RULES: Highlight Unique Selling Propositions (USPs).`;
     } else if (sectionType === 'GallerySection') {
-      let galleryRules = `8. SECTION SPECIFIC RULES: Generate a highly descriptive caption and use a relevant Unsplash placeholder URL (e.g., "UNSPLASH:luxury modern bathroom") for the "image" field for EVERY service listed in the business context 'services' array.`;
+      let galleryRules = `8. SECTION SPECIFIC RULES: You MUST generate EXACTLY 4 or EXACTLY 8 images (a multiple of 4) to maintain a perfectly balanced bento grid layout. Generate a highly descriptive caption and use a relevant Unsplash placeholder URL (e.g., "UNSPLASH:luxury modern bathroom") for the "image" field for the services listed in the business context.`;
       if (pageSlug === 'portfolio') {
         galleryRules += `\n9. IMPORTANT PORTFOLIO RULE: Generate specific portfolio case studies.`;
       }
@@ -84,7 +84,7 @@ export class CopyWriterSkill implements Skill {
     } else if (sectionType === 'TestimonialsSection') {
       const contactName = businessContext.contactPerson || 'the owner';
       const bizName = businessContext.businessName || 'this company';
-      sectionSpecificRules = `8. SECTION SPECIFIC RULES: Generate between 6 and 9 highly realistic, detailed testimonials relevant to the target services. 
+      sectionSpecificRules = `8. SECTION SPECIFIC RULES: You MUST generate EXACTLY 9 highly realistic, detailed testimonials relevant to the target services. 
       - Ratings MUST be varied (e.g., 4.8, 4.9, 5.0).
       - The "quote" field MUST explicitly mention the contact person ("${contactName}") or the business name ("${bizName}") in a natural way.
       - You MUST wrap the most impactful phrases in the "quote" field with <strong> tags (e.g., "They were <strong>fast, affordable, and professional</strong>").
