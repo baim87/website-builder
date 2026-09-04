@@ -46,25 +46,41 @@ export class CopyWriterSkill implements Skill {
     } else if (sectionType === 'PageHeaderSection') {
       sectionSpecificRules = `8. SECTION SPECIFIC RULES: This is for an inner page. Generate a shorter, punchy headline and a brief subtitle without a massive call to action like a primary Hero.`;
     } else if (sectionType === 'HeroSection') {
-      let heroRules = `8. SECTION SPECIFIC RULES: Generate a strong, conversion-optimized hero headline. Include a primary Call to Action (CTA) using the "primaryCtaText" and "primaryCtaLink" fields.`;
+      let heroRules = `8. SECTION SPECIFIC RULES: Generate a strong, conversion-optimized hero headline. Include a primary Call to Action (CTA) using the "primaryCtaText" and "primaryCtaLink" fields. Also populate the new premium layout fields: eyebrow, trustMarks (e.g., ["Licensed & Insured", "On-Time Builds"]), reviewSnippet (e.g., {rating: 4.9, text: "rating from local homeowners"}), and floatingStat (e.g., {value: "320+", label: "Projects completed"}). For any avatars or stat images, use UNSPLASH queries.`;
       if (pageSlug === 'portfolio') {
         heroRules += `\n9. IMPORTANT PORTFOLIO RULE: Mention specific services like ${businessContext.services?.join(', ')}.`;
       } else if (pageSlug === 'service-areas') {
         heroRules += `\n9. IMPORTANT SERVICE AREAS RULE: You MUST explicitly mention the target service areas (from the business context) that have high search volume within the Hero copy.`;
       }
       sectionSpecificRules = heroRules;
+    } else if (sectionType === 'BrandsSection') {
+      sectionSpecificRules = `8. SECTION SPECIFIC RULES: Generate a list of realistic partner brands or certifications (e.g., HomeAdvisor, BBB, GAF, Trex). For their logos, generate realistic Unsplash placeholders like "UNSPLASH:company logo".`;
     } else if (sectionType === 'ServicesSection') {
       sectionSpecificRules = `8. SECTION SPECIFIC RULES: Generate copy for EVERY service listed in the business context 'services' array.`;
     } else if (sectionType === 'LocationsSection') {
-      sectionSpecificRules = `8. SECTION SPECIFIC RULES: Generate copy for EVERY service area listed in the business context 'serviceAreas' array.`;
+      const validRoutesStr = input.context.validRoutes
+        ? `\nVALID PAGE ROUTES (use ONLY these exact slugs for links):\n${input.context.validRoutes.map((r: string) => `- /${r === 'home' ? '' : r}`).join('\n')}`
+        : '';
+      sectionSpecificRules = `8. SECTION SPECIFIC RULES: Generate copy for EVERY service area listed in the business context 'serviceAreas' array. IMPORTANT: You MUST strictly use one of the provided valid routes for the 'link' field for each location (e.g., /service-areas/[city]/[service]). Do not invent or guess URLs.${validRoutesStr}`;
     } else if (sectionType === 'FaqSection') {
       sectionSpecificRules = `8. SECTION SPECIFIC RULES: You MUST generate between 3 and 6 relevant Frequently Asked Questions in the "faqs" array.`;
     } else if (sectionType === 'HeaderSection') {
-      sectionSpecificRules = `8. SECTION SPECIFIC RULES: This is the primary top navigation bar. Do NOT generate a large headline or hero copy. You MUST output a "navLinks" array containing navigation links (e.g., {"label": "Home", "href": "/"}, {"label": "Services", "href": "/services"}) and use the "ctaText" and "ctaLink" fields for the primary contact button. NEVER use SaaS terminology. You MUST include a "logoUrl" field mapped to the logoUrl from the business context, and a "logoText" field for fallback.`;
+      const validRoutesStr = input.context.validRoutes
+        ? `\nVALID PAGE ROUTES (use ONLY these exact slugs for navLinks):\n${input.context.validRoutes.map((r: string) => `- /${r === 'home' ? '' : r}`).join('\n')}`
+        : '';
+      sectionSpecificRules = `8. SECTION SPECIFIC RULES: This is the primary top navigation bar. Do NOT generate a large headline or hero copy. You MUST output a "navLinks" array. For sub-pages like /services/[x] or /service-areas/[x], you MUST group them under a parent link (e.g. "Services") using the "subLinks" array. Use the "ctaText" and "ctaLink" fields for the primary contact button. NEVER use SaaS terminology. You MUST include a "logoUrl" field mapped to the logoUrl from the business context, and a "logoText" field for fallback.${validRoutesStr}`;
     } else if (sectionType === 'FooterSection') {
-      sectionSpecificRules = `8. SECTION SPECIFIC RULES: This is the website footer. Do NOT generate massive headlines. You MUST output a "quickLinks" array representing footer links or columns. Include copyright text in the "copyright" field. You MUST include a "logoUrl" field mapped to the logoUrl from the business context.`;
-    } else if (sectionType === 'FindUsSection') {
-      sectionSpecificRules = `8. SECTION SPECIFIC RULES: Ensure the exact address, phone, email, and hours from the business context are included perfectly.`;
+      const validRoutesStr = input.context.validRoutes
+        ? `\nVALID PAGE ROUTES (use ONLY these exact slugs for quickLinks):\n${input.context.validRoutes.map((r: string) => `- /${r === 'home' ? '' : r}`).join('\n')}`
+        : '';
+      sectionSpecificRules = `8. SECTION SPECIFIC RULES: This is the website footer. Do NOT generate massive headlines. You MUST output a "quickLinks" array representing footer links or columns. Include copyright text in the "copyright" field. You MUST include a "logoUrl" field mapped to the logoUrl from the business context.${validRoutesStr}`;
+    } else if (sectionType === 'FindUsSection' || sectionType === 'ContactSection') {
+      let mapRule = '';
+      if (sectionType === 'FindUsSection') {
+        mapRule = ` You MUST also generate a "mapUrl" field containing a valid Google Maps embed URL. If the businessContext contains GBP (Google Business Profile) data with a map URL, you MUST extract and use it. Otherwise, build an embed URL using the business address (e.g. https://maps.google.com/maps?q=[Address]&output=embed).`;
+      }
+      sectionSpecificRules = `8. SECTION SPECIFIC RULES: Ensure the exact address, phone, email, and hours from the business context are included. 
+      - IMPORTANT HOURS FORMATTING: Do NOT just copy and paste the raw hours array/string blindly. Intelligently format and consolidate the operating hours into a concise, human-readable format. Group days with identical hours (e.g., "Mon-Fri: 7:00 AM - 5:00 PM | Sat-Sun: Closed" or "Mon-Sun: 9:00 AM - 7:00 PM"). Use the actual hours provided in the businessContext, but make them clean and compact.${mapRule}`;
     } else if (sectionType === 'TestimonialsSection') {
       const contactName = businessContext.contactPerson || 'the owner';
       const bizName = businessContext.businessName || 'this company';
@@ -73,6 +89,18 @@ export class CopyWriterSkill implements Skill {
       - The "quote" field MUST explicitly mention the contact person ("${contactName}") or the business name ("${bizName}") in a natural way.
       - You MUST wrap the most impactful phrases in the "quote" field with <strong> tags (e.g., "They were <strong>fast, affordable, and professional</strong>").
       - Make sure you include a "sectionTitle" field at the root level of the JSON.`;
+    } else if (sectionType === 'LeadFormSection') {
+      sectionSpecificRules = `8. SECTION SPECIFIC RULES: You MUST generate EXACTLY the following form fields in the "fields" array: 
+      - "First Name *" (type: text)
+      - "Last Name *" (type: text)
+      - "Phone *" (type: tel)
+      - "Email *" (type: email)
+      - "Address *" (type: text)
+      - "City" (type: text, not required)
+      - "Postal Code *" (type: text)
+      - "Upload Photos Here" (type: file)
+      - "Briefly Describe Your New Project" (type: textarea).
+      Do NOT invent random fields. Use these exact labels. Set "required" to true if the label has a "*".`;
     }
 
     let locationMetricsStr = '';
