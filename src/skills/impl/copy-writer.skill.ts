@@ -61,7 +61,7 @@ export class CopyWriterSkill implements Skill {
       const validRoutesStr = input.context.validRoutes
         ? `\nVALID PAGE ROUTES (use ONLY these exact slugs for links):\n${input.context.validRoutes.map((r: string) => `- /${r === 'home' ? '' : r}`).join('\n')}`
         : '';
-      sectionSpecificRules = `8. SECTION SPECIFIC RULES: Generate copy for EVERY service area listed in the business context 'serviceAreas' array. IMPORTANT: You MUST strictly use one of the provided valid routes for the 'link' field for each location (e.g., /service-areas/[city]/[service]). Do not invent or guess URLs.${validRoutesStr}`;
+      sectionSpecificRules = `8. SECTION SPECIFIC RULES: Generate copy for EVERY service area listed in the business context 'serviceAreas' array. IMPORTANT: You MUST strictly use one of the provided valid routes for the 'link' field for each location (e.g., /service-areas/[city]/[service]). Do not invent or guess URLs. You MUST provide a highly relevant Unsplash placeholder URL (e.g., "UNSPLASH:suburban house" or "UNSPLASH:city skyline") for the "image" field for every location. Do NOT output raw city names for the image field.${validRoutesStr}`;
     } else if (sectionType === 'FaqSection') {
       sectionSpecificRules = `8. SECTION SPECIFIC RULES: You MUST generate between 3 and 6 relevant Frequently Asked Questions in the "faqs" array.`;
     } else if (sectionType === 'HeaderSection') {
