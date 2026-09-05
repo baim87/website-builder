@@ -13,6 +13,7 @@ import { CopyWriterSkill } from './impl/copy-writer.skill';
 import { UIDesignerSkill } from './impl/ui-designer.skill';
 import { ComponentGeneratorSkill } from './impl/component-generator.skill';
 import { CodeRepairSkill } from './impl/code-repair.skill';
+import { ComponentValidationSkill } from './impl/component-validation.skill';
 import { OrchestratorService } from './orchestrator.service';
 import { AIGatewayModule } from '../ai-gateway/ai-gateway.module';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -37,9 +38,10 @@ import { UnsplashService } from '../images/unsplash.service';
     UIDesignerSkill,
     ComponentGeneratorSkill,
     CodeRepairSkill,
+    ComponentValidationSkill,
     OrchestratorService,
     UnsplashService,
   ],
-  exports: [SkillExecutorService, OrchestratorService, CodeRepairSkill],
+  exports: [SkillExecutorService, OrchestratorService, CodeRepairSkill, ComponentValidationSkill],
 })
 export class SkillsModule {}

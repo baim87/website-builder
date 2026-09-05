@@ -431,7 +431,90 @@ async function bootstrap() {
     banner('Done! Your project is ready.');
     if (liveUrl && finalStatus === 'completed') {
       console.log(`\n  Live URL: ${paint(liveUrl, c.bold, c.blue, c.reset)}`);
-      console.log(`  (Note: It might take a minute for the DNS to propagate)`);
+      console.log(`  (Note: It might take a minute for the DNS to propagate)\n`);
+      
+      const stopQcSpinner = startSpinner('Running Quality Control in the background... (You can Ctrl+C to exit safely)');
+      
+      let qcFinished = false;
+      let finalQcStatus = 'standby';
+      let qcReport: any = null;
+
+      while (!qcFinished) {
+        await new Promise(resolve => setTimeout(resolve, 5000)); // Poll every 5s
+        const websiteData = await prisma.websiteData.findUnique({ where: { projectId: project.id } });
+        
+        if (websiteData && (websiteData.qcStatus === 'passed' || websiteData.qcStatus === 'failed')) {
+          qcFinished = true;
+          finalQcStatus = websiteData.qcStatus;
+          qcReport = websiteData.qcReport;
+        }
+      }
+
+      stopQcSpinner('', true);
+
+      if (finalQcStatus === 'passed') {
+        console.log();
+        ok(paint('Quality Control PASSED ✓ All visual & performance checks look great.', c.green, c.bold));
+      } else if (finalQcStatus === 'failed' && qcReport) {
+        console.log();
+        const hrStr = '══════════════════════════════════════════════════';
+        console.log(paint(`╔${hrStr}╗`, c.red));
+        console.log(paint(`║     QC AUTO-REPAIR FAILED — MANUAL FIX NEEDED   ║`, c.red, c.bold));
+        console.log(paint(`╠${hrStr}╣`, c.red));
+        console.log(paint(`║ Project: ${project.id.padEnd(39)}║`, c.red));
+        console.log(paint(`║ Attempts: 3/3                                    ║`, c.red));
+        console.log(paint(`╠${hrStr}╣`, c.red));
+        console.log(paint(`║                                                  ║`, c.red));
+        console.log(paint(`║ UNRESOLVED ISSUES:                               ║`, c.red));
+        console.log(paint(`║                                                  ║`, c.red));
+        
+        // Render visual issues
+        if (qcReport.visualCritiques) {
+          const pageMap = new Map<string, any[]>();
+          for (const vCritique of qcReport.visualCritiques) {
+            if (!pageMap.has(vCritique.pageUrl)) pageMap.set(vCritique.pageUrl, []);
+            for (const comp of vCritique.issues) {
+              if (comp.issues.length > 0) {
+                pageMap.get(vCritique.pageUrl)!.push(comp);
+              }
+            }
+          }
+
+          for (const [pageUrl, components] of pageMap.entries()) {
+            if (components.length === 0) continue;
+            
+            const path = new URL(pageUrl).pathname;
+            console.log(paint(`║ Page: ${path.padEnd(43)}║`, c.red, c.bold));
+            
+            for (let i = 0; i < components.length; i++) {
+              const comp = components[i];
+              const isLastComp = i === components.length - 1;
+              console.log(paint(`║   ${isLastComp ? '└─' : '├─'} ${comp.componentName.padEnd(38)}║`, c.red));
+              
+              for (const issue of comp.issues) {
+                const truncated = issue.length > 40 ? issue.substring(0, 37) + '...' : issue;
+                console.log(paint(`║       • ${truncated.padEnd(41)}║`, c.red));
+              }
+            }
+            console.log(paint(`║                                                  ║`, c.red));
+          }
+        }
+        
+        // Render performance issues
+        if (qcReport.lighthouseReports) {
+          const perfIssues = qcReport.lighthouseReports.filter((r: any) => r.performance < 90);
+          if (perfIssues.length > 0) {
+            console.log(paint(`║ PERFORMANCE:                                     ║`, c.red, c.bold));
+            for (const r of perfIssues) {
+              const path = new URL(r.url).pathname;
+              console.log(paint(`║   • ${path}: ${r.performance}/100 (${r.strategy})`.padEnd(49) + `║`, c.red));
+            }
+            console.log(paint(`║                                                  ║`, c.red));
+          }
+        }
+
+        console.log(paint(`╚${hrStr}╝`, c.red));
+      }
     }
   } catch (error) {
     fail('Failed to enqueue generation job');

@@ -44,7 +44,11 @@ export const SectionDataSchemaRegistry = {
     navLinks: z.array(z.object({
       label: z.string(),
       href: z.string(),
-    })).describe('Main navigation links. Use EXACTLY the slugs provided in the layoutContext.'),
+      subLinks: z.array(z.object({
+        label: z.string(),
+        href: z.string(),
+      })).optional().describe('Nested dropdown links, use for grouping services or service-areas.'),
+    })).describe('Main navigation links. Use EXACTLY the slugs provided in the layoutContext. Group sub-pages under a logical parent (e.g. "Services" or "Service Areas") using subLinks.'),
     ctaText: z.string(),
     ctaLink: z.string(),
   }),
@@ -68,12 +72,24 @@ export const SectionDataSchemaRegistry = {
   }),
 
   HeroSection: z.object({
+    eyebrow: z.string().optional().describe('Small text above headline, e.g. "Your Partner in Outdoor Living"'),
     headline: z.string().describe('Main H1 headline'),
     subheadline: z.string().describe('Supporting paragraph text'),
     primaryCtaText: z.string(),
     primaryCtaLink: z.string(),
     secondaryCtaText: z.string().optional(),
     secondaryCtaLink: z.string().optional(),
+    trustMarks: z.array(z.string()).optional().describe('Short USPs displayed with checkmarks under CTAs, e.g. ["Licensed & Insured", "On-time Builds"]'),
+    reviewSnippet: z.object({
+      rating: z.number().describe('e.g. 4.9'),
+      text: z.string().describe('e.g. "rating from local homeowners"'),
+      avatars: z.array(ImageSchema).optional().describe('Array of small avatar images to stack'),
+    }).optional(),
+    floatingStat: z.object({
+      value: z.string().describe('e.g. "320+"'),
+      label: z.string().describe('e.g. "Projects completed"'),
+      image: ImageSchema.optional().describe('Optional thumbnail image inside the floating card'),
+    }).optional(),
     backgroundImage: ImageSchema,
   }),
 

@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Skill, SkillInput, SkillOutput } from '../interfaces/skill.interface';
 import { AIGatewayService } from '../../ai-gateway/ai-gateway.service';
 import { OutputValidatorService } from '../../guardrails/output-validator.service';
+import { getThemeById } from '../constants/theme-definitions.constant';
 import * as crypto from 'crypto';
 
 @Injectable()
@@ -15,10 +16,16 @@ export class CSSStyleSkill implements Skill {
   ) {}
 
   async execute(input: SkillInput): Promise<SkillOutput> {
-    const { designSystem } = input.context;
+    const { designSystem, themePreference } = input.context;
 
     if (!designSystem || !designSystem.colors || !designSystem.typography) {
       throw new Error('CSSStyleSkill requires designSystem in context');
+    }
+
+    const theme = themePreference ? getThemeById(themePreference) : undefined;
+    let themeHints = '';
+    if (theme && theme.globalCssHints) {
+      themeHints = `\nTHEME CSS RULES (${theme.label}):\n${theme.globalCssHints}\nYou MUST incorporate these rules into the generated CSS.\n`;
     }
 
     const prompt = `You are a Tailwind CSS configuration expert.
@@ -27,7 +34,7 @@ Given this design system, generate the CSS overrides for a modern Tailwind CSS v
 DESIGN SYSTEM:
 Colors: ${JSON.stringify(designSystem.colors, null, 2)}
 Typography: ${JSON.stringify(designSystem.typography, null, 2)}
-
+${themeHints}
 REQUIREMENTS:
 1. Output valid CSS that defines CSS variables on the :root pseudo-class.
 2. Define the @theme block to map these variables to Tailwind's color system (e.g., --color-primary: var(--color-primary);).
@@ -85,3 +92,4 @@ Return ONLY the raw CSS code. No explanations.`;
     };
   }
 }
+

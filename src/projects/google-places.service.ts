@@ -30,7 +30,7 @@ export class GooglePlacesService {
           'Content-Type': 'application/json',
           'X-Goog-Api-Key': this.apiKey,
           // We want these specific fields returned
-          'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.nationalPhoneNumber,places.websiteUri,places.regularOpeningHours,places.types',
+          'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.nationalPhoneNumber,places.websiteUri,places.regularOpeningHours,places.types,places.googleMapsUri',
         },
         body: JSON.stringify(searchBody),
       });
@@ -51,8 +51,8 @@ export class GooglePlacesService {
         businessName: place.displayName?.text,
         businessAddress: place.formattedAddress,
         phone: place.nationalPhoneNumber,
-        gbpData: { website: place.websiteUri },
-        trade: place.types ? place.types.join(', ') : undefined,
+        gbpData: { website: place.websiteUri, mapUrl: place.googleMapsUri },
+        trade: place.types && place.types.length > 0 ? place.types[0].replace(/_/g, ' ') : undefined,
         hours: place.regularOpeningHours?.weekdayDescriptions,
       }));
     } catch (error: any) {

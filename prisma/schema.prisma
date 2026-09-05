@@ -77,6 +77,8 @@ model WebsiteData {
   internalLinkMap  Json?
   customComponents Json?
   generationStatus String    @default("pending")
+  qcStatus         String?   @default("standby")
+  qcReport         Json?
   lastGeneratedAt  DateTime?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt

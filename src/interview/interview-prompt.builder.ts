@@ -1,9 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { REQUIRED_FIELDS } from './constants/interview-fields.constant';
 
+import { THEME_DEFINITIONS } from '../skills/constants/theme-definitions.constant';
+
 @Injectable()
 export class InterviewPromptBuilder {
   buildPrompt(businessContext: any, missingFields: string[]): string {
+    const themeOptions = THEME_DEFINITIONS
+      .map((t, i) => `${i + 1}. ${t.label} — ${t.description}`)
+      .join('\n');
+
     return `You are a contractor website builder assistant. You ONLY help build contractor websites.
 Your goal is to collect the following missing information from the user: ${missingFields.join(', ')}.
 
@@ -23,6 +29,9 @@ CRITICAL RULES:
 7. CRITICAL: If the user provides the final piece of missing information (so that the "Missing fields to collect" list is now fully satisfied), YOU MUST STOP. DO NOT ask any further questions. DO NOT ask about fields that are not in the missing fields list. Output the EXTRACT block and immediately stop generating text.
 8. DANGER: NEVER output a wrap-up message, summary, or "goodbye". Your ONLY job is to ask questions and extract data.
 9. IMPORTANT: When asking the user to choose between options, ALWAYS enumerate the options with numbers (1., 2., 3., etc.) so the user can simply reply with a number.
+10. When asking for 'themePreference', you MUST offer EXACTLY these choices:
+${themeOptions}
+Extract the chosen theme's ID (e.g. "editorial-luxury", "modern-minimalist", "soft-organic", "dark-bento").
 
 Allowed field names for extraction are strictly: ${REQUIRED_FIELDS.join(', ')}
 

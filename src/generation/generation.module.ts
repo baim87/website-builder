@@ -7,9 +7,10 @@ import { SkillsModule } from '../skills/skills.module';
 import { ProjectsModule } from '../projects/projects.module';
 import { SeoModule } from '../seo/seo.module';
 import { DeploymentModule } from '../deployment/deployment.module';
+import { QueueModule } from '../queue/queue.module';
 
 @Module({
-  imports: [SkillsModule, forwardRef(() => ProjectsModule), SeoModule, DeploymentModule],
+  imports: [SkillsModule, forwardRef(() => ProjectsModule), SeoModule, DeploymentModule, forwardRef(() => QueueModule)],
   controllers: [PublicSiteController],
   providers: [GenerationService, NextjsBuilderService, SiteContentService],
   exports: [GenerationService, NextjsBuilderService, SiteContentService],

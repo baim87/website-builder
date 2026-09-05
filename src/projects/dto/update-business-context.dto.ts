@@ -17,7 +17,7 @@ export const UpdateBusinessContextSchema = z.object({
   brandVoicePreference: z.string().optional(),
   primaryColor: z.string().optional(),
   secondaryColor: z.string().optional(),
-  fontStyle: z.string().optional(),
+  themePreference: z.string().optional(),
   usps: z.array(z.string()).optional(),
   interviewMetadata: z.record(z.string(), z.any()).optional(),
 });

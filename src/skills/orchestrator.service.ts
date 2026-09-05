@@ -79,11 +79,23 @@ export class OrchestratorService {
 
     const isLocationServicePageMap = new Set<string>();
 
-    if (locationMetrics.length > 0 && serviceSlugs.length > 0) {
-      locationMetrics.forEach(metric => {
-        const citySlug = metric.city.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-        
-        pagesToGenerate.push(`service-areas/${citySlug}`);
+    // Merge cities from locationMetrics and businessContext.serviceAreas
+    const allCities = new Set<string>();
+    
+    if (locationMetrics.length > 0) {
+      locationMetrics.forEach(metric => allCities.add(metric.city));
+    }
+    
+    if (businessContext.serviceAreas && Array.isArray(businessContext.serviceAreas)) {
+      businessContext.serviceAreas.forEach((area: any) => {
+        const cityName = typeof area === 'string' ? area : area.name;
+        if (cityName) allCities.add(cityName);
+      });
+    }
+
+    if (allCities.size > 0 && serviceSlugs.length > 0) {
+      allCities.forEach(city => {
+        const citySlug = city.toLowerCase().replace(/[^a-z0-9]+/g, '-');
         
         serviceSlugs.forEach(serviceSlug => {
           const nestedSlug = `service-areas/${citySlug}/${serviceSlug}`;
@@ -91,27 +103,12 @@ export class OrchestratorService {
           isLocationServicePageMap.add(nestedSlug);
         });
       });
-    } else if (businessContext.serviceAreas && Array.isArray(businessContext.serviceAreas)) {
-      // Fallback if no metrics were generated yet
-      businessContext.serviceAreas.forEach((area: any) => {
-        const citySlug = typeof area === 'string' 
-          ? area.toLowerCase().replace(/[^a-z0-9]+/g, '-') 
-          : area.name?.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-        
-        if (citySlug) {
-          pagesToGenerate.push(`service-areas/${citySlug}`);
-          serviceSlugs.forEach(serviceSlug => {
-            const nestedSlug = `service-areas/${citySlug}/${serviceSlug}`;
-            pagesToGenerate.push(nestedSlug);
-            isLocationServicePageMap.add(nestedSlug);
-          });
-        }
-      });
     }
 
     // --- PHASE 1: Brand & Design System ---
     this.logger.log('Phase 1: Brand & Design System');
-    const phase1Input = { projectId, context: { businessContext } };
+    const themePreference = businessContext.brandIdentityInputs?.themePreference || 'modern-minimalist';
+    const phase1Input = { projectId, context: { businessContext, themePreference } };
     
     const existingWebsiteData = await this.prisma.websiteData.findUnique({ where: { projectId } });
     
@@ -134,12 +131,12 @@ export class OrchestratorService {
 
       designSystemResult = await this.executeWithRetries(this.designSystem, {
         projectId,
-        context: { businessContext, brandIdentity: brandIdentityResult }
+        context: { businessContext, brandIdentity: brandIdentityResult, themePreference }
       });
 
       globalCssResult = await this.executeWithRetries(this.cssStyle, {
         projectId,
-        context: { designSystem: designSystemResult }
+        context: { designSystem: designSystemResult, themePreference }
       });
       
       await this.prisma.websiteData.update({
@@ -242,7 +239,16 @@ export class OrchestratorService {
             // 1. Generate Raw Copy
             copyDataResult = await this.executeWithRetries(this.copyWriter, {
               projectId,
-              context: { businessContext, brandVoice: brandVoiceResult, seoMeta: seoResult, sectionType, pageSlug, isLocationServicePage, serviceSlug }
+              context: { 
+                businessContext, 
+                brandVoice: brandVoiceResult, 
+                seoMeta: seoResult, 
+                sectionType, 
+                pageSlug, 
+                isLocationServicePage, 
+                serviceSlug,
+                validRoutes: pagesToGenerate.filter(p => p !== 'layout')
+              }
             }, 2);
 
             // 2. Generate UI AST Layout
@@ -266,7 +272,8 @@ export class OrchestratorService {
                 context: { 
                   sectionType: componentName, 
                   brandIdentity: brandIdentityResult,
-                  sampleData: copyDataResult?.data
+                  sampleData: copyDataResult?.data,
+                  themePreference
                 }
               }, 2);
               
@@ -337,22 +344,26 @@ export class OrchestratorService {
     const base = { id, type: sectionType };
 
     switch (sectionType) {
-      case 'HeroSection': return { ...base, content: { title: "Welcome", description: "Professional services.", eyebrow: "Top Rated", ctaText: "Contact Us", backgroundImage: "https://images.unsplash.com/photo-1541888081622-17b587b1c459", googleReviews: { rating: 5.0, count: 120 }, buttons: [{ text: "View Portfolio", link: "#portfolio" }] } };
-      case 'PageHeaderSection': return { ...base, content: { title: "Page Content", backgroundImage: "https://images.unsplash.com/photo-1541888081622-17b587b1c459" } };
-      case 'BrandsSection': return { ...base, content: [{ name: "Certified Pro", icon: "Award" }] };
-      case 'ServicesSection': return { ...base, content: { tagline: "What We Do", title: "Our Services", description: "Professional services built to last.", bullets: ["Expert craftsmanship", "Satisfaction guaranteed"], linkText: "Learn More", items: undefined } };
-      case 'AboutSection': return { ...base, content: { eyebrow: "About Us", title: "Your Local Experts", description: "Led by John Doe, we are professionals.", image: "https://images.unsplash.com/photo-1541888053-ce2073fb1155", ctaText: "Read More" } };
-      case 'WhyUsSection': return { ...base, content: { tagline: "Why Choose Us", title: "Experience the difference", description: "Our unique selling points.", items: [{ title: "Experience", description: "Years of experience.", icon: "CheckCircle" }] } };
-      case 'BeforeAfterSection': return { ...base, content: [{ title: "Amazing Transformation", description: "See the difference we can make.", beforeImage: "https://images.unsplash.com/photo-1541888053-ce2073fb1155", afterImage: "https://images.unsplash.com/photo-1541888081622-17b587b1c459" }] };
-      case 'TimelineSection': return { ...base, content: { tagline: "How It Works", title: "Our Process", description: "Simple and transparent process.", items: [{ step: 1, title: "Consultation", description: "Initial meeting.", icon: "Headphones" }] } };
-      case 'TestimonialsSection': return { ...base, content: { tagline: "Testimonials", title: "What Our Clients Say", description: "Read what our clients have to say.", items: [{ name: "Jane Doe", text: "Great service!", rating: 5.0 }] } };
-      case 'LocationsSection': return { ...base, content: { tagline: "Coverage", title: "Our Service Areas", linkText: "View Area", items: undefined } }; 
-      case 'ServiceDetailsSection': return { ...base, content: { overview: "Service overview.", whyChooseUs: ["Quality"], process: ["Step 1"], cta: { heading: "Need help?", subheading: "Contact us.", buttonText: "Get Quote" } } };
-      case 'CallToActionSection': return { ...base, content: { heading: "Ready to start?", subheading: "Get a free quote today.", buttonText: "Contact Us" } };
-      case 'LeadFormSection': return { ...base, content: { heading: "Request a Quote", subheading: "Fill out the form below.", submitButtonText: "Submit" } };
-      case 'GallerySection': return { ...base, content: { title: "Our Work", images: [{ url: "https://images.unsplash.com/photo-1541888081622-17b587b1c459", alt: "Work 1", serviceName: "General" }], ctaText: "View Details", ctaLink: "/services" } };
-      case 'FaqSection': return { ...base, content: { tagline: "FAQ", title: "Frequently Asked Questions", description: "Answers to common questions.", items: [{ question: "What is your process?", answer: "We start with a consultation." }] } };
-      case 'FindUsSection': return { ...base, content: { title: "Find Us", mapEmbedUrl: "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3313.2!2d-118.2!3d34.05!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zMzTCsDAzJzAwLjAiTiAxMTjCgDEyJzAwLjAiVw!5e0!3m2!1sen!2sus!4v1", address: "123 Main St", phone: "555-0100", email: "info@example.com", hours: { "Monday - Friday": "9am - 5pm" } } };
+      case 'HeroSection': return { ...base, content: { headline: "Welcome", subheadline: "Professional services.", eyebrow: "Top Rated", primaryCtaText: "Contact Us", primaryCtaLink: "/contact", backgroundImage: "https://images.unsplash.com/photo-1541888081622-17b587b1c459" } };
+      case 'PageHeaderSection': return { ...base, content: { headline: "Page Content", backgroundImage: "https://images.unsplash.com/photo-1541888081622-17b587b1c459" } };
+      case 'BrandsSection': return { ...base, content: { brands: [{ name: "Certified Pro", logo: "https://images.unsplash.com/photo-1541888081622-17b587b1c459" }] } };
+      case 'ServicesSection': return { ...base, content: { sectionTitle: "Our Services", sectionDescription: "Professional services built to last.", services: [{ title: "General Contracting", description: "Expert craftsmanship", link: "/services" }] } };
+      case 'AboutSection': return { ...base, content: { sectionTitle: "Your Local Experts", content: "Led by John Doe, we are professionals.", image: "https://images.unsplash.com/photo-1541888053-ce2073fb1155" } };
+      case 'WhyUsSection': return { ...base, content: { sectionTitle: "Experience the difference", items: [{ title: "Experience", description: "Years of experience.", icon: "CheckCircle" }] } };
+      case 'BeforeAfterSection': return { ...base, content: { sectionTitle: "Amazing Transformation", comparisons: [{ beforeImage: "https://images.unsplash.com/photo-1541888053-ce2073fb1155", afterImage: "https://images.unsplash.com/photo-1541888081622-17b587b1c459", title: "Kitchen Remodel" }] } };
+      case 'TimelineSection': return { ...base, content: { sectionTitle: "Our Process", steps: [{ title: "Consultation", description: "Initial meeting." }] } };
+      case 'TestimonialsSection': return { ...base, content: { sectionTitle: "What Our Clients Say", testimonials: [{ name: "Jane Doe", location: "Local Area", quote: "Great service!", rating: 5 }] } };
+      case 'LocationsSection': return { ...base, content: { sectionTitle: "Our Service Areas", locations: [{ city: "Local City", state: "ST", description: "Serving the local area.", link: "/service-areas" }] } }; 
+      case 'ServiceDetailsSection': return { ...base, content: { title: "Service overview.", content: "<p>Quality service description.</p>" } };
+      case 'CallToActionSection': return { ...base, content: { headline: "Ready to start?", callToAction: { text: "Contact Us", href: "/contact" } } };
+      case 'LeadFormSection': return { ...base, content: { sectionTitle: "Request a Quote", fields: [{ name: "name", type: "text", label: "Name", required: true }], submitText: "Submit" } };
+      case 'GallerySection': return { ...base, content: { sectionTitle: "Our Work", images: [{ image: "https://images.unsplash.com/photo-1541888081622-17b587b1c459", caption: "Work 1" }] } };
+      case 'FaqSection': return { ...base, content: { sectionTitle: "Frequently Asked Questions", faqs: [{ question: "What is your process?", answer: "We start with a consultation." }] } };
+      case 'FindUsSection': return { ...base, content: { sectionTitle: "Find Us", address: "123 Main St", phone: "555-0100", email: "info@example.com", hours: "Mon-Fri 9-5" } };
+      case 'PortfolioSection': return { ...base, content: { sectionTitle: "Our Recent Work", projects: [{ title: "Project 1", description: "A great project", image: "https://images.unsplash.com/photo-1541888081622-17b587b1c459" }] } };
+      case 'HeaderSection': return { ...base, content: { logoText: "Logo", phone: "555-0100", navLinks: [{ label: "Home", href: "/" }], ctaText: "Contact", ctaLink: "/contact" } };
+      case 'FooterSection': return { ...base, content: { companyName: "Company", description: "Professional services.", phone: "555-0100", email: "info@example.com", address: "123 Main St", quickLinks: [{ label: "Home", href: "/" }], copyright: "2026" } };
+      case 'ContentSection': return { ...base, content: { title: "Content", content: "<p>Rich content here.</p>" } };
       default: return { ...base, content: {} };
     }
   }

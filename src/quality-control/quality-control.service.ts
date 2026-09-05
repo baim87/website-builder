@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { SitemapCrawlerService } from './sitemap-crawler.service';
+import { PrismaService } from '../prisma/prisma.service';
+
 import { LinkIntegrityService, LinkIntegrityReport } from './link-integrity.service';
 import { PageSpeedService, LighthouseReport } from './pagespeed.service';
 import { VisualQAService, VisualCritique } from './visual-qa.service';
@@ -16,37 +17,77 @@ export class QualityControlService {
   private readonly logger = new Logger(QualityControlService.name);
 
   constructor(
-    private readonly sitemapCrawler: SitemapCrawlerService,
+
     private readonly linkIntegrity: LinkIntegrityService,
     private readonly pageSpeed: PageSpeedService,
     private readonly visualQA: VisualQAService,
+    private readonly prisma: PrismaService,
   ) {}
 
   async runQualityControl(projectId: string, vercelUrl: string, businessType: string): Promise<QCReport> {
     this.logger.log(`Starting QC run for project ${projectId} at ${vercelUrl}`);
 
-    // 1. Crawl sitemap
-    const sitemapUrls = await this.sitemapCrawler.crawlSitemap(vercelUrl);
+    // 1. Get sitemap from DB
+    const websiteData = await this.prisma.websiteData.findUnique({ where: { projectId } });
+    let sitemapUrls: string[] = [];
+    
+    if (websiteData && websiteData.sitemapXml) {
+      const urls = websiteData.sitemapXml.match(/<loc>(.*?)<\/loc>/g)
+        ?.map(m => m.replace(/<\/?loc>/g, '')) || [];
+      // Replace placeholder domain with actual vercelUrl
+      const vercelOrigin = new URL(vercelUrl).origin;
+      sitemapUrls = urls.map(u => {
+        try {
+          const path = new URL(u).pathname;
+          return `${vercelOrigin}${path}`;
+        } catch {
+          return u;
+        }
+      });
+    }
+
+    if (sitemapUrls.length === 0) {
+      this.logger.warn(`No sitemap found for ${projectId}, falling back to root`);
+      sitemapUrls = [vercelUrl];
+    }
     this.logger.log(`Found ${sitemapUrls.length} pages in sitemap`);
 
     // 2. Check link integrity
     const linkReport = await this.linkIntegrity.checkLinks(sitemapUrls);
 
-    // 3. Run PageSpeed on key pages
-    const keyPages = sitemapUrls.filter(u =>
-      ['/', '/services', '/contact', '/about-us', '/service-areas'].some(p => u.endsWith(p))
-    );
-    const lighthouseReports = await this.pageSpeed.auditAllPages(keyPages);
+    // 3. Run PageSpeed on all sitemap pages
+    const lighthouseReports = await this.pageSpeed.auditAllPages(sitemapUrls);
 
-    // 4. Send screenshots to AI vision model for critique
+    // 4. Send screenshots to AI vision model for critique (both mobile & desktop)
     const visualCritiques: VisualCritique[] = [];
-    for (const report of lighthouseReports.filter(r => r.strategy === 'mobile')) {
+    for (const report of lighthouseReports) {
       if (report.screenshotBase64) {
         try {
+          const urlObj = new URL(report.url);
+          const slug = urlObj.pathname === '/' ? 'home' : urlObj.pathname.slice(1).replace(/\/$/, '');
+          
+          const page = await this.prisma.page.findFirst({
+            where: { projectId, slug },
+          });
+          
+          let componentsOnPage: string[] = [];
+          if (page && page.content) {
+             try {
+               const ast = JSON.parse(page.content as string);
+               componentsOnPage = ast.map((node: any) => node.type);
+             } catch(e) {}
+          }
+          
+          if (componentsOnPage.length === 0) {
+            componentsOnPage = ['HeaderSection', 'HeroSection', 'FooterSection'];
+          }
+
           const critique = await this.visualQA.critiqueScreenshot(
             report.screenshotBase64,
             report.url,
             businessType,
+            componentsOnPage,
+            report.strategy
           );
           visualCritiques.push(critique);
         } catch (err: any) {
@@ -55,27 +96,11 @@ export class QualityControlService {
       }
     }
 
-    // Determine Status
+    // Determine Status (now just used for logging here, actual status logic is in consumer)
     const hasBrokenLinks = linkReport.brokenLinks.length > 0;
-    const hasPoorPerformance = lighthouseReports.some(r => r.performance < 70);
-    const hasVisualIssues = visualCritiques.some(c => c.overallScore < 7);
+    const hasPoorPerformance = lighthouseReports.some(r => r.performance < 90);
+    const hasVisualIssues = visualCritiques.some(c => c.overallScore < 9);
     const status = (hasBrokenLinks || hasPoorPerformance || hasVisualIssues) ? 'failed' : 'passed';
-
-    // 5. Store QC report in database
-    // For now we will mock this because Prisma Schema needs to be updated for QualityReport
-    /*
-    await this.prisma.qualityReport.create({
-      data: {
-        projectId,
-        sitemapUrls,
-        brokenLinks: linkReport.brokenLinks,
-        orphanPages: linkReport.orphanPages,
-        lighthouseScores: lighthouseReports,
-        visualCritiques,
-        status,
-      }
-    });
-    */
     
     this.logger.log(`QC completed for project ${projectId}. Status: ${status}`);
 

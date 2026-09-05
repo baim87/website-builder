@@ -17,6 +17,14 @@ export class GithubService {
   }
 
   /**
+   * Get the authenticated GitHub user.
+   */
+  async getAuthenticatedUser(): Promise<any> {
+    const { data: user } = await this.octokit.rest.users.getAuthenticated();
+    return user;
+  }
+
+  /**
    * Ensure a repository exists for this project. If it doesn't, create it.
    */
   async ensureRepository(repoName: string): Promise<{ owner: string, name: string, clone_url: string }> {
@@ -67,9 +75,10 @@ export class GithubService {
       // We are inside /tmp/builder-xxx
       // Need to init git, add remote, commit, and push
       await execAsync(`git init`, { cwd: directory });
-      // Configure temp git user
-      await execAsync(`git config user.name "AI Builder"`, { cwd: directory });
-      await execAsync(`git config user.email "ai@builder.local"`, { cwd: directory });
+      // Configure temp git user to match the authenticated user so Vercel doesn't block the commit author
+      const commitEmail = user.email || process.env.GITHUB_AUTHOR_EMAIL || 'ads@contractingempire.com';
+      await execAsync(`git config user.name "${user.login}"`, { cwd: directory });
+      await execAsync(`git config user.email "${commitEmail}"`, { cwd: directory });
       
       // Add and commit
       await execAsync(`git add .`, { cwd: directory });

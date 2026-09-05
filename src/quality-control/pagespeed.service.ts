@@ -61,15 +61,17 @@ export class PageSpeedService {
     const reports: LighthouseReport[] = [];
     for (const url of sitemapUrls) {
       try {
-        // Mobile audit
-        await new Promise(r => setTimeout(r, 4000));
-        reports.push(await this.auditPage(url, 'mobile'));
-        // Desktop audit
-        await new Promise(r => setTimeout(r, 4000));
-        reports.push(await this.auditPage(url, 'desktop'));
+        // Mobile + Desktop concurrently for the same page
+        const [mobile, desktop] = await Promise.all([
+          this.auditPage(url, 'mobile'),
+          this.auditPage(url, 'desktop'),
+        ]);
+        reports.push(mobile, desktop);
       } catch (err: any) {
         console.error(`Failed to audit ${url}:`, err.message);
       }
+      // Stagger between pages to respect rate limits
+      await new Promise(r => setTimeout(r, 2000));
     }
     return reports;
   }

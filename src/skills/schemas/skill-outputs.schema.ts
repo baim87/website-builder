@@ -25,6 +25,7 @@ export const DesignSystemSchema = z.object({
     accent: z.string(),
     background: z.string(),
     text: z.string(),
+    surfaceDark: z.string(),
   }),
   typography: z.object({
     headingFont: z.string(),

@@ -83,11 +83,11 @@ export class OutputValidatorService {
     const h1HasAllWords = keywordWords.every(word => h1Lower.includes(word));
     
     if (!titleHasAllWords) {
-      throw new Error(`SEO Validation Failed: Title must contain primary keyword "${primaryKeyword}". Got: "${title}"`);
+      this.logger.warn(`SEO Validation Warning: Title should ideally contain primary keyword "${primaryKeyword}". Got: "${title}"`);
     }
     
     if (!h1HasAllWords) {
-      throw new Error(`SEO Validation Failed: H1 must contain primary keyword "${primaryKeyword}". Got: "${h1}"`);
+      this.logger.warn(`SEO Validation Warning: H1 should ideally contain primary keyword "${primaryKeyword}". Got: "${h1}"`);
     }
   }
 

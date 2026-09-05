@@ -29,7 +29,11 @@ export class NextjsBuilderService {
     private readonly prisma: PrismaService,
   ) {}
 
-  async buildAndDeploy(projectId: string, userId?: string): Promise<any> {
+  async buildAndDeploy(
+    projectId: string, 
+    userId?: string, 
+    beforePushCallback?: (repoOwner: string, repoName: string) => Promise<void>
+  ): Promise<any> {
     this.logger.log(`Starting Next.js build and deploy for project ${projectId}`);
     
     const businessContext = await this.businessContextService.findByProjectId(projectId, userId);
@@ -110,6 +114,8 @@ export class NextjsBuilderService {
   --secondary-foreground: ${hexToHsl(designTokens.colors.secondaryForeground || computeContrastColor(designTokens.colors.secondary || '#f4f4f5'))};
   --accent: ${hexToHsl(designTokens.colors.accent || '#f4f4f5')};
   --accent-foreground: ${hexToHsl(designTokens.colors.accentForeground || computeContrastColor(designTokens.colors.accent || '#f4f4f5'))};
+  --surface-dark: ${hexToHsl(designTokens.colors.surfaceDark || '#1a202c')};
+  --surface-dark-foreground: ${hexToHsl(computeContrastColor(designTokens.colors.surfaceDark || '#1a202c'))};
   --font-heading: "${designTokens.typography.headingFont || 'Inter'}";
   --font-body: "${designTokens.typography.bodyFont || 'Inter'}";
 }
@@ -121,7 +127,20 @@ export class NextjsBuilderService {
         } catch (e) {
           this.logger.warn('No globals.css found in template, creating a new one.');
         }
-        await fs.writeFile(globalsPath, `${cssVars}\n${existingCss}`);
+        // Replace the fallback :root block instead of prepending, to avoid CSS cascade override
+        const rootBlockRegex = /:root\s*\{[^}]*\/\*\s*Fallback values[^}]*\}/s;
+        if (rootBlockRegex.test(existingCss)) {
+          existingCss = existingCss.replace(rootBlockRegex, cssVars.trim());
+        } else {
+          // No fallback block found — prepend the dynamic :root before @import
+          const importIndex = existingCss.indexOf('@import');
+          if (importIndex >= 0) {
+            existingCss = existingCss.slice(0, importIndex) + cssVars + '\n' + existingCss.slice(importIndex);
+          } else {
+            existingCss = cssVars + '\n' + existingCss;
+          }
+        }
+        await fs.writeFile(globalsPath, existingCss);
       }
       
       const layoutPage = pages.find((p: Page) => p.slug === 'layout');
@@ -182,7 +201,34 @@ export class NextjsBuilderService {
           const errorLog = error.stdout + '\n' + error.stderr;
           
           // Try to extract the file name from the error
-          const match = errorLog.match(/src\/components\/generated\/([a-zA-Z0-9_]+)\.tsx/);
+          // Pattern 1: Direct file reference (TypeScript errors)
+          let match = errorLog.match(/src\/components\/generated\/([a-zA-Z0-9_]+)\.tsx/);
+          
+          // Pattern 2: Prerender error referencing a page route (runtime errors)
+          // e.g. 'Error occurred prerendering page "/contact"'
+          if (!match) {
+            const prerenderMatch = errorLog.match(/Error occurred prerendering page "\/([^"]+)"/);
+            if (prerenderMatch) {
+              const failedRoute = prerenderMatch[1];
+              this.logger.warn(`Prerender error detected on route: /${failedRoute}. Scanning components...`);
+              
+              // Look up the page's sections from DB to find which component to repair
+              const failedPage = await this.prisma.page.findUnique({
+                where: { projectId_slug: { projectId, slug: failedRoute } }
+              }).catch(() => null);
+              if (failedPage && Array.isArray(failedPage.content)) {
+                for (const section of failedPage.content as any[]) {
+                  const compName = section?.type;
+                  if (compName && customComponents[compName]) {
+                    match = [compName, compName] as any;
+                    this.logger.warn(`Mapping prerender error to component: ${compName}`);
+                    break;
+                  }
+                }
+              }
+            }
+          }
+          
           if (match && match[1]) {
             const brokenCompName = match[1];
             this.logger.warn(`Broken component detected: ${brokenCompName}. Running CodeRepairSkill...`);
@@ -222,6 +268,11 @@ export class NextjsBuilderService {
 
       this.logger.log(`Ensuring GitHub repository exists: ${repoName}`);
       const repo = await this.githubService.ensureRepository(repoName);
+
+      if (beforePushCallback) {
+        this.logger.log(`Executing before-push callback for Vercel linking...`);
+        await beforePushCallback(repo.owner, repo.name);
+      }
 
       this.logger.log(`Committing and pushing code to GitHub repo: ${repoName}`);
       await this.githubService.commitAndPush(repoName, tempDir);

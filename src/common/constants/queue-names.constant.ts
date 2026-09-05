@@ -5,4 +5,5 @@ export const QUEUE_NAMES = {
   BILLING_RECONCILIATION: 'billing-reconciliation',
   DEPLOYMENT: 'deployment',
   TEST_JOB: 'test-job',
+  QUALITY_CONTROL: 'quality-control',
 } as const;

@@ -34,7 +34,7 @@ export class BusinessContextService {
       ...context,
       primaryColor: brandInputs.primaryColor,
       secondaryColor: brandInputs.secondaryColor,
-      fontStyle: brandInputs.fontStyle,
+      themePreference: brandInputs.themePreference,
     };
   }
 
@@ -47,8 +47,8 @@ export class BusinessContextService {
     }
     
     // Extract brand fields
-    const { primaryColor, secondaryColor, fontStyle, ...rest } = data;
-    const hasNewBrand = primaryColor !== undefined || secondaryColor !== undefined || fontStyle !== undefined;
+    const { primaryColor, secondaryColor, themePreference, ...rest } = data;
+    const hasNewBrand = primaryColor !== undefined || secondaryColor !== undefined || themePreference !== undefined;
     
     let newBrandIdentityInputs: any = undefined;
     
@@ -60,7 +60,7 @@ export class BusinessContextService {
         ...existingBrand,
         ...(primaryColor !== undefined && { primaryColor }),
         ...(secondaryColor !== undefined && { secondaryColor }),
-        ...(fontStyle !== undefined && { fontStyle }),
+        ...(themePreference !== undefined && { themePreference }),
       };
     }
 

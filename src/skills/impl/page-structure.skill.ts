@@ -21,7 +21,7 @@ export class PageStructureSkill implements Skill {
     // HARDCODED PAGE STRUCTURES (User Dictated)
     const userDictatedStructures: Record<string, string[]> = {
       'home': [
-        'HeroSection', 'AboutSection', 'ServicesSection', 'WhyUsSection', 
+        'HeroSection', 'BrandsSection', 'AboutSection', 'ServicesSection', 'WhyUsSection', 
         'GallerySection', 'TimelineSection', 'TestimonialsSection', 'CallToActionSection'
       ],
       'about-us': [

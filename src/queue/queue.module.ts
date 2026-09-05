@@ -12,12 +12,16 @@ import { TestJobConsumer } from './consumers/test-job.consumer';
 import { AnalyticsProvisioningProducer } from './producers/analytics-provisioning.producer';
 import { BillingReconciliationProducer } from './producers/billing-reconciliation.producer';
 import { TestJobProducer } from './producers/test-job.producer';
+import { QualityControlProducer } from './producers/quality-control.producer';
+import { QualityControlConsumer } from './consumers/quality-control.consumer';
 import { GenerationModule } from '../generation/generation.module';
 import { AssetsModule } from '../assets/assets.module';
 import { StorageModule } from '../storage/storage.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { BillingModule } from '../billing/billing.module';
 import { AnalyticsModule } from '../analytics/analytics.module';
+import { QualityControlModule } from '../quality-control/quality-control.module';
+import { DeploymentModule } from '../deployment/deployment.module';
 import { forwardRef } from '@nestjs/common';
 
 const consumers = process.env.APP_MODE !== 'api'
@@ -27,6 +31,7 @@ const consumers = process.env.APP_MODE !== 'api'
       AnalyticsProvisioningConsumer,
       BillingReconciliationConsumer,
       TestJobConsumer,
+      QualityControlConsumer,
     ]
   : [];
 
@@ -36,16 +41,19 @@ const producers = [
   AnalyticsProvisioningProducer,
   BillingReconciliationProducer,
   TestJobProducer,
+  QualityControlProducer,
 ];
 
 @Module({
   imports: [
-    GenerationModule,
+    forwardRef(() => GenerationModule),
     forwardRef(() => AssetsModule),
     StorageModule,
     PrismaModule,
     BillingModule,
     forwardRef(() => AnalyticsModule),
+    forwardRef(() => DeploymentModule),
+    QualityControlModule,
     BullModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
@@ -68,6 +76,9 @@ const producers = [
     }),
     BullModule.registerQueue({
       name: QUEUE_NAMES.TEST_JOB,
+    }),
+    BullModule.registerQueue({
+      name: QUEUE_NAMES.QUALITY_CONTROL,
     }),
     // Other queues registered here...
   ],

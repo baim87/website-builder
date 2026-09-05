@@ -7,6 +7,7 @@ import { SeoArtifactsService } from '../seo/seo-artifacts.service';
 import { NextjsBuilderService } from './nextjs-builder.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { DeploymentService } from '../deployment/deployment.service';
+import { QualityControlProducer } from '../queue/producers/quality-control.producer';
 
 @Injectable()
 export class GenerationService {
@@ -21,6 +22,7 @@ export class GenerationService {
     private readonly nextjsBuilder: NextjsBuilderService,
     private readonly prisma: PrismaService,
     private readonly deploymentService: DeploymentService,
+    private readonly qualityControlProducer: QualityControlProducer,
   ) {}
 
   async generateProject(projectId: string) {
@@ -31,7 +33,13 @@ export class GenerationService {
 
     try {
       // 2. Fetch context
-      const businessContext = await this.businessContextService.findByProjectId(projectId);
+      const businessContext = await this.businessContextService.findByProjectId(projectId) as any;
+      
+      const logoAsset = await this.prisma.asset.findFirst({
+        where: { projectId, OR: [{ purpose: 'logo' }, { type: 'image' }] },
+      });
+      
+      businessContext.logoUrl = logoAsset?.url || '';
 
       // 3. Orchestrate skills & save pages incrementally
       const results = await this.orchestrator.generateWebsite(
@@ -76,11 +84,18 @@ export class GenerationService {
       const project = await this.prisma.project.findUnique({ where: { id: projectId } });
       if (!project) throw new Error(`Project ${projectId} not found`);
       
-      const pushResult = await this.nextjsBuilder.buildAndDeploy(projectId, project.userId);
+      const pushResult = await this.nextjsBuilder.buildAndDeploy(
+        projectId, 
+        project.userId,
+        async (repoOwner: string, repoName: string) => {
+          this.logger.log(`Connecting GitHub to Vercel before push...`);
+          await this.deploymentService.linkProjectToGithub(projectId, project.userId, repoOwner, repoName);
+        }
+      );
       
-      // 8. Call DeploymentService to connect Vercel and poll for the live URL
-      this.logger.log(`Connecting GitHub to Vercel and waiting for build...`);
-      const deployResult = await this.deploymentService.deployProjectFromGithub(projectId, project.userId, pushResult.repoOwner, pushResult.repoName);
+      // 8. Call DeploymentService to poll for the live URL
+      this.logger.log(`Waiting for Vercel deployment to finish...`);
+      const deployResult = await this.deploymentService.waitForDeployment(projectId, project.userId, pushResult.repoName);
       
       const liveUrl = deployResult.url;
 
@@ -94,6 +109,14 @@ export class GenerationService {
       await this.websiteDataService.upsert(projectId, {
         generationStatus: 'completed',
       });
+
+      // 10. Trigger Quality Control in the background
+      this.logger.log(`Dispatching Quality Control job for project ${projectId}...`);
+      await this.qualityControlProducer.triggerQualityControl(
+        projectId, 
+        liveUrl, 
+        businessContext.businessName || 'service business'
+      );
 
       this.logger.log(`Completed generation for project ${projectId}. Live at: ${liveUrl}`);
       return liveUrl;

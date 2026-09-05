@@ -52,7 +52,11 @@ export class DeploymentService {
 
   async deployProjectFromGithub(projectId: string, userId: string, githubRepoOwner: string, githubRepoName: string) {
     this.logger.log(`Deploying project ${projectId} for user ${userId} from GitHub repo ${githubRepoOwner}/${githubRepoName}`);
+    await this.linkProjectToGithub(projectId, userId, githubRepoOwner, githubRepoName);
+    return this.waitForDeployment(projectId, userId, githubRepoName);
+  }
 
+  async linkProjectToGithub(projectId: string, userId: string, githubRepoOwner: string, githubRepoName: string) {
     const project = await this.prisma.project.findUnique({
       where: { id: projectId, userId },
       include: { domain: true },
@@ -65,6 +69,18 @@ export class DeploymentService {
     // Create Vercel project linked to GitHub
     const vercelProjectName = `${githubRepoName}`;
     const result = await this.vercelClient.createProjectFromGithub(vercelProjectName, githubRepoOwner, githubRepoName);
+    return result;
+  }
+
+  async waitForDeployment(projectId: string, userId: string, vercelProjectName: string) {
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId, userId },
+      include: { domain: true },
+    });
+
+    if (!project) {
+      throw new NotFoundException('Project not found');
+    }
 
     // If custom domain is set, use it. Otherwise, we'll poll Vercel for the exact URL.
     let liveUrl = project.domain?.domainName ? `https://${project.domain.domainName}` : null;
@@ -105,7 +121,7 @@ export class DeploymentService {
 
     return {
       success: true,
-      deploymentId: result.id || 'existing',
+      deploymentId: 'linked',
       status: 'READY',
       url: liveUrl,
       project: updatedProject,

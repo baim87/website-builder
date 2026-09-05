@@ -80,10 +80,11 @@ export class VercelClient {
       body: JSON.stringify({
         name: projectName,
         framework: 'nextjs',
-        repository: {
+        gitRepository: {
           type: 'github',
           repo: `${githubRepoOwner}/${githubRepoName}`,
         },
+        ssoProtection: null,
       }),
     });
 

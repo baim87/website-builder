@@ -3,6 +3,8 @@ import { Skill, SkillInput, SkillOutput } from '../interfaces/skill.interface';
 import { AIGatewayService } from '../../ai-gateway/ai-gateway.service';
 import { OutputValidatorService } from '../../guardrails/output-validator.service';
 import { BrandIdentitySchema } from '../schemas/skill-outputs.schema';
+import { getThemeById } from '../constants/theme-definitions.constant';
+import { zodToJsonSchema } from '@alcyone-labs/zod-to-json-schema';
 import * as crypto from 'crypto';
 
 @Injectable()
@@ -16,46 +18,55 @@ export class BrandIdentitySkill implements Skill {
   ) {}
 
   async execute(input: SkillInput): Promise<SkillOutput> {
+    const { businessContext, themePreference } = input.context;
+    const theme = themePreference ? getThemeById(themePreference) : undefined;
+    
+    let typoHints = '';
+    if (theme && theme.typographyHints) {
+      typoHints = `\nTYPOGRAPHY GUIDANCE for '${theme.label}':\n`;
+      if (!theme.typographyHints.headingStyle.includes('TODO')) typoHints += `- Heading Style: ${theme.typographyHints.headingStyle}\n`;
+      if (!theme.typographyHints.bodyStyle.includes('TODO')) typoHints += `- Body Style: ${theme.typographyHints.bodyStyle}\n`;
+      if (typoHints === `\nTYPOGRAPHY GUIDANCE for '${theme.label}':\n`) typoHints = ''; // Nothing added
+    }
+
+    // Convert Zod schema to JSON Schema for Claude's tool_use
+    const fullJsonSchema = zodToJsonSchema(BrandIdentitySchema, 'BrandIdentity');
+    const bareJsonSchema = fullJsonSchema.definitions
+      ? fullJsonSchema.definitions['BrandIdentity']
+      : fullJsonSchema;
+    if ((bareJsonSchema as any).$schema) delete (bareJsonSchema as any).$schema;
+
     const prompt = `You are a Brand Identity expert for home service contractors.
 
-Given this business context, generate a brand identity as a JSON object.
+Given this business context, generate a brand identity using the provided tool.
 
 Business Context:
-${JSON.stringify(input.context, null, 2)}
+${JSON.stringify(businessContext, null, 2)}${typoHints}
 
-You MUST respond with ONLY a JSON object in this EXACT structure (no other text):
-{
-  "colors": {
-    "primary": "#hexvalue",
-    "secondary": "#hexvalue",
-    "accent": "#hexvalue"
-  },
-  "typography": {
-    "headingFont": "Font Family Name",
-    "bodyFont": "Font Family Name"
-  }
-}`;
+CRITICAL RULE: If the Business Context explicitly contains 'primaryColor' or 'secondaryColor' (e.g. extracted from a logo), you MUST use those EXACT hex values for the primary and secondary colors. Do not alter them to fit a theme. The brand's official logo colors always take precedence.
+
+Output the brand identity via the provided tool.`;
 
     const result = await this.aiGateway.generateText('claude-fable-5', {
-      systemPrompt: 'You output ONLY valid JSON. No markdown fences, no explanation, no commentary. Just the raw JSON object.',
+      systemPrompt: 'You are a brand identity expert. Output structured data via the provided tool.',
       messages: [
         { role: 'user' as const, content: prompt }
       ],
       maxTokens: 8192,
       temperature: 0.3,
-      responseFormat: 'json',
+      schema: bareJsonSchema,
+      schemaName: 'BrandIdentity',
     });
 
     this.logger.debug(`Raw LLM output: ${result.text}`);
 
-    // Normalize: if the LLM returned a flat structure, reshape it
     let parsed: any;
     try {
       let raw = result.text.trim();
-      // Strip markdown fences if present
+      // Strip markdown fences if present (safety net)
       const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
       if (fenceMatch) raw = fenceMatch[1].trim();
-      if (!raw.startsWith('{')) {
+      if (!raw.startsWith('{') && raw.includes('{')) {
         const start = raw.indexOf('{');
         const end = raw.lastIndexOf('}');
         if (start !== -1 && end > start) raw = raw.substring(start, end + 1);
@@ -66,7 +77,7 @@ You MUST respond with ONLY a JSON object in this EXACT structure (no other text)
       throw new Error(`BrandIdentity LLM returned unparseable output: ${result.text.substring(0, 200)}`);
     }
 
-    // Reshape flat structures into the expected nested format
+    // Reshape flat structures into the expected nested format (safety net)
     if (!parsed.colors && (parsed.primary || parsed.primaryColor || parsed.primary_color)) {
       this.logger.warn('LLM returned flat color structure, normalizing...');
       parsed = {
@@ -92,3 +103,4 @@ You MUST respond with ONLY a JSON object in this EXACT structure (no other text)
     };
   }
 }
+

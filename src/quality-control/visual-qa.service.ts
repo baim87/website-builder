@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { AIGatewayService } from '../ai-gateway/ai-gateway.service';
 
 export interface VisualCritique {
+  pageUrl: string;
+  strategy: 'mobile' | 'desktop';
   scores: {
     visualHierarchy: number;
     colorConsistency: number;
@@ -10,7 +12,7 @@ export interface VisualCritique {
     mobileFriendliness: number;
     contractorRelevance: number;
   };
-  issues: string[];
+  issues: { componentName: string; issues: string[] }[];
   overallScore: number;
 }
 
@@ -26,6 +28,8 @@ export class VisualQAService {
     screenshotBase64: string,
     pageUrl: string,
     businessType: string,
+    componentsOnPage: string[],
+    strategy: 'mobile' | 'desktop'
   ): Promise<VisualCritique> {
     const prompt = `
 You are a senior UI/UX reviewer for contractor websites.
@@ -40,7 +44,12 @@ Evaluate the following and score each 1-10:
 6. Contractor relevance — Does this look like a real contractor site (not SaaS)?
 7. Empty/broken content — Any missing images, empty text, or placeholder content?
 
-Return JSON: { "scores": { "visualHierarchy": 0, "colorConsistency": 0, "typography": 0, "spacing": 0, "mobileFriendliness": 0, "contractorRelevance": 0 }, "issues": [], "overallScore": 0 }
+This page is composed of the following React components (from top to bottom):
+${componentsOnPage.join(', ')}
+
+For any visual flaws or issues you find, you MUST map them to the specific component responsible for that part of the screen.
+
+Return JSON: { "scores": { "visualHierarchy": 0, "colorConsistency": 0, "typography": 0, "spacing": 0, "mobileFriendliness": 0, "contractorRelevance": 0 }, "issues": [{ "componentName": "HeroSection", "issues": ["Text is too dark"] }], "overallScore": 0 }
 `;
 
     // Assuming aiService has generateText with multimodal support for base64 image strings
@@ -74,7 +83,12 @@ Return JSON: { "scores": { "visualHierarchy": 0, "colorConsistency": 0, "typogra
         const end = raw.lastIndexOf('}');
         if (start !== -1 && end > start) raw = raw.substring(start, end + 1);
       }
-      return JSON.parse(raw) as VisualCritique;
+      const parsed = JSON.parse(raw) as Omit<VisualCritique, 'pageUrl' | 'strategy'>;
+      return {
+        ...parsed,
+        pageUrl,
+        strategy,
+      };
     } catch {
       throw new Error(`Visual QA LLM returned unparseable output: ${response.text.substring(0, 200)}`);
     }

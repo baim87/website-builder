@@ -78,6 +78,7 @@ export class SiteContentService {
       seo: {
         title: seoData.title || businessContext.businessName,
         description: seoData.description || `Expert ${businessContext.trade} services.`,
+        jsonLd: websiteData.jsonLdSchemas || null,
       },
       theme: {
         primary: tokens.colors?.primary || "#2563eb",
