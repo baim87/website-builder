@@ -53,7 +53,8 @@ export class GithubSyncConsumer extends WorkerHost {
       }
       
       const commitEmail = process.env.GITHUB_AUTHOR_EMAIL || user.email || 'ads@contractingempire.com';
-      await execAsync(`git config user.name "${user.login}"`, { cwd: directory });
+      const commitName = process.env.GITHUB_AUTHOR_NAME || user.login || 'ads-baim';
+      await execAsync(`git config user.name "${commitName}"`, { cwd: directory });
       await execAsync(`git config user.email "${commitEmail}"`, { cwd: directory });
       
       await execAsync(`git add .`, { cwd: directory });
