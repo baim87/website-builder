@@ -69,6 +69,8 @@ export const SectionDataSchemaRegistry = {
       url: z.string(),
     })).optional(),
     copyright: z.string(),
+    developerCredit: z.string().optional(),
+    developerLink: z.string().optional(),
   }),
 
   HeroSection: z.object({

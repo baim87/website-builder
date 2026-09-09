@@ -70,7 +70,7 @@ export function buildCopyWriterPrompt(context: CopyWriterContext, locationMetric
     const validRoutesStr = validRoutes
       ? `\nVALID PAGE ROUTES (use ONLY these exact slugs for quickLinks):\n${validRoutes.map((r: string) => `- /${r === 'home' ? '' : r}`).join('\n')}`
       : '';
-    sectionSpecificRules = `8. SECTION SPECIFIC RULES: This is the website footer. Do NOT generate massive headlines. You MUST output a "quickLinks" array representing footer links or columns. Include copyright text in the "copyright" field. You MUST include a "logoUrl" field mapped to the logoUrl from the business context. For "socialLinks", ALWAYS generate standard social media platforms (e.g., Facebook, Instagram, YouTube) with placeholder URLs if real ones aren't provided. Do NOT use "Google" or "Website" as social links.${validRoutesStr}`;
+    sectionSpecificRules = `8. SECTION SPECIFIC RULES: This is the website footer. Do NOT generate massive headlines. You MUST output a "quickLinks" array representing footer links or columns. Include copyright text in the "copyright" field. You MUST also generate "developerCredit" EXACTLY as "Contractor Website by Local Empire" and "developerLink" EXACTLY as "https://localempire.com/". You MUST include a "logoUrl" field mapped to the logoUrl from the business context. For "socialLinks", ALWAYS generate standard social media platforms (e.g., Facebook, Instagram, YouTube) with placeholder URLs if real ones aren't provided. Do NOT use "Google" or "Website" as social links.${validRoutesStr}`;
   } else if (sectionType === 'FindUsSection' || sectionType === 'ContactSection') {
     let mapRule = '';
     if (sectionType === 'FindUsSection') {
