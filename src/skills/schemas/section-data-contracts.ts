@@ -63,7 +63,11 @@ export const SectionDataSchemaRegistry = {
     quickLinks: z.array(z.object({
       label: z.string(),
       href: z.string(),
-    })).describe('Footer quick links. Use EXACTLY the slugs provided in the layoutContext.'),
+    })).describe('General footer links like Home, About, Contact. Use EXACTLY the slugs provided in the layoutContext.'),
+    serviceLinks: z.array(z.object({
+      label: z.string(),
+      href: z.string(),
+    })).optional().describe('Specific service pages. Use EXACTLY the slugs provided in the layoutContext.'),
     socialLinks: z.array(z.object({
       platform: z.string(),
       url: z.string(),
