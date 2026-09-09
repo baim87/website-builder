@@ -36,7 +36,12 @@ export function buildCopyWriterPrompt(context: CopyWriterContext, locationMetric
   } else if (sectionType === 'TimelineSection') {
     sectionSpecificRules = `8. SECTION SPECIFIC RULES: Generate a MAXIMUM of 4 process steps.`;
   } else if (sectionType === 'PageHeaderSection') {
-    sectionSpecificRules = `8. SECTION SPECIFIC RULES: This is for an inner page. Generate a shorter, punchy headline and a brief subtitle without a massive call to action like a primary Hero. Write engaging, straight-to-the-point copy designed to hook the customer. Keep the text length carefully balanced so the layout looks visually pleasing (e.g. avoid long sentences that leave a single orphaned word on a new line).`;
+    let headerRules = `8. SECTION SPECIFIC RULES: This is for an inner page. Generate a shorter, punchy headline and a brief subtitle without a massive call to action like a primary Hero. Write engaging, straight-to-the-point copy designed to hook the customer. Keep the text length carefully balanced so the layout looks visually pleasing (e.g. avoid long sentences that leave a single orphaned word on a new line).`;
+    if (pageSlug.startsWith('services/') || (pageSlug.startsWith('service-areas/') && pageSlug.split('/').length >= 3)) {
+      const phone = businessContext.phone || '(555) 555-5555';
+      headerRules += `\n9. IMPORTANT CTA RULE: For this specific service page, you MUST generate 2 Call To Action buttons. The first MUST be "primaryCtaText" linking to "/contact" via "primaryCtaLink". The second MUST be "secondaryCtaText" displaying the phone number (e.g. "Call ${phone}") linking to "tel:${phone.replace(/[^0-9]/g, '')}" via "secondaryCtaLink".`;
+    }
+    sectionSpecificRules = headerRules;
   } else if (sectionType === 'HeroSection') {
     let heroRules = `8. SECTION SPECIFIC RULES: Generate a strong, conversion-optimized hero headline. Include a primary Call to Action (CTA) using the "primaryCtaText" and "primaryCtaLink" fields. Also populate the new premium layout fields: eyebrow, trustMarks (e.g., ["Licensed & Insured", "On-Time Builds"]), reviewSnippet (e.g., {rating: 4.9, text: "rating from local homeowners"}), and floatingStat (e.g., {value: "320+", label: "Projects completed"}). For any avatars or stat images, use UNSPLASH queries.`;
     if (pageSlug === 'portfolio') {

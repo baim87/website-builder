@@ -227,6 +227,10 @@ export const SectionDataSchemaRegistry = {
     headline: z.string(),
     subheadline: z.string().optional(),
     backgroundImage: ImageSchema.optional(),
+    primaryCtaText: z.string().optional(),
+    primaryCtaLink: z.string().optional(),
+    secondaryCtaText: z.string().optional(),
+    secondaryCtaLink: z.string().optional(),
   }),
 
   ServiceDetailsSection: z.object({
