@@ -60,7 +60,7 @@ export class ProjectsController {
   async triggerGeneration(@Param('id') id: string, @CurrentUser('id') userId: string) {
     // Verify ownership
     await this.projectsService.findOne(id, userId);
-    await this.generationProducer.generateSite(id);
+    await this.generationProducer.generateSite(id, userId);
     return { message: 'Generation queued successfully' };
   }
 }

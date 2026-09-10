@@ -13,7 +13,8 @@ export class AssetConversionProducer extends BaseProducer<AssetConversionJobData
     super();
   }
 
-  async convertAsset(projectId: string, assetId: string, sourceUrl: string) {
-    return this.addJob('convert', { projectId, assetId, sourceUrl }, { attempts: 2 });
+  async convertAsset(projectId: string, assetId: string, sourceUrl: string, userId: string) {
+    this.logger.log(`Queueing asset conversion for ${assetId}`);
+    return this.addJob('convert', { projectId, assetId, sourceUrl, userId }, { attempts: 2 });
   }
 }

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateBusinessContextDto } from './dto/update-business-context.dto';
 import { LocationMetricsService } from '../seo/location-metrics.service';
@@ -17,10 +17,10 @@ export class BusinessContextService {
       const project = await this.prisma.project.findUnique({
         where: { id: projectId, userId },
       });
-      if (!project) throw new NotFoundException(`Project ${projectId} not found or access denied`);
+      if (!project) throw new ForbiddenException(`Project ${projectId} not found or access denied`);
     }
 
-    const context = await this.prisma.businessContext.findUnique({
+    let context = await this.prisma.businessContext.findUnique({
       where: { projectId },
     });
     
@@ -39,31 +39,10 @@ export class BusinessContextService {
   }
 
   async upsert(projectId: string, data: UpdateBusinessContextDto, userId?: string) {
-    if (userId) {
-      const project = await this.prisma.project.findUnique({
-        where: { id: projectId, userId },
-      });
-      if (!project) throw new NotFoundException(`Project ${projectId} not found or access denied`);
-    }
-    
     // Extract brand fields
     const { primaryColor, secondaryColor, themePreference, ...rest } = data;
     const hasNewBrand = primaryColor !== undefined || secondaryColor !== undefined || themePreference !== undefined;
     
-    let newBrandIdentityInputs: any = undefined;
-    
-    if (hasNewBrand) {
-      const existing = await this.prisma.businessContext.findUnique({ where: { projectId } });
-      const existingBrand = existing?.brandIdentityInputs as any || {};
-      
-      newBrandIdentityInputs = {
-        ...existingBrand,
-        ...(primaryColor !== undefined && { primaryColor }),
-        ...(secondaryColor !== undefined && { secondaryColor }),
-        ...(themePreference !== undefined && { themePreference }),
-      };
-    }
-
     if (rest.radius !== undefined) {
       if (typeof rest.radius === 'string') {
         const parsed = parseInt(String(rest.radius).replace(/[^0-9]/g, ''), 10);
@@ -71,18 +50,40 @@ export class BusinessContextService {
       }
     }
 
-    // Run background location metrics process if location and services exist
-    const finalContext = await this.prisma.businessContext.upsert({
-      where: { projectId },
-      update: {
-        ...rest,
-        ...(hasNewBrand && { brandIdentityInputs: newBrandIdentityInputs }),
-      },
-      create: {
-        projectId,
-        ...rest,
-        ...(hasNewBrand && { brandIdentityInputs: newBrandIdentityInputs }),
-      },
+    const finalContext = await this.prisma.$transaction(async (tx) => {
+      if (userId) {
+        const project = await tx.project.findUnique({
+          where: { id: projectId, userId },
+        });
+        if (!project) throw new NotFoundException(`Project ${projectId} not found or access denied`);
+      }
+
+      let newBrandIdentityInputs: any = undefined;
+      
+      if (hasNewBrand) {
+        const existing = await tx.businessContext.findUnique({ where: { projectId } });
+        const existingBrand = existing?.brandIdentityInputs as any || {};
+        
+        newBrandIdentityInputs = {
+          ...existingBrand,
+          ...(primaryColor !== undefined && { primaryColor }),
+          ...(secondaryColor !== undefined && { secondaryColor }),
+          ...(themePreference !== undefined && { themePreference }),
+        };
+      }
+
+      return tx.businessContext.upsert({
+        where: { projectId },
+        update: {
+          ...rest,
+          ...(hasNewBrand && { brandIdentityInputs: newBrandIdentityInputs }),
+        },
+        create: {
+          projectId,
+          ...rest,
+          ...(hasNewBrand && { brandIdentityInputs: newBrandIdentityInputs }),
+        },
+      });
     });
 
     if (finalContext.location && finalContext.services) {

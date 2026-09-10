@@ -84,9 +84,23 @@ export class GoogleAdsClient {
         const apiData = await apiResponse.json();
         const results = apiData.results || [];
 
+        this.logger.log([
+          `Google Ads API Results for "${trade}" in "${location}" (${results.length} keywords):`,
+          ...results.slice(0, 10).map((r: any) =>
+            `  ${(r.text || '').padEnd(40)} │ Vol: ${r.keywordIdeaMetrics?.avgMonthlySearches || 0} │ CPC: $${r.keywordIdeaMetrics?.averageCpcMicros ? (Number(r.keywordIdeaMetrics.averageCpcMicros) / 1_000_000).toFixed(2) : 'N/A'}`
+          ),
+        ].join('\n'));
+
         return results.map((idea: any) => ({
           keyword: idea.text || '',
           searchVolume: idea.keywordIdeaMetrics?.avgMonthlySearches ? Number(idea.keywordIdeaMetrics.avgMonthlySearches) : 0,
+          monthlySearchVolumes: (idea.keywordIdeaMetrics?.monthlySearchVolumes || []).map((m: any) => ({
+            month: m.month,
+            year: m.year,
+            monthlySearches: Number(m.monthlySearches || 0),
+          })),
+          competition: idea.keywordIdeaMetrics?.competition || undefined,
+          cpc: idea.keywordIdeaMetrics?.averageCpcMicros ? Number(idea.keywordIdeaMetrics.averageCpcMicros) / 1_000_000 : undefined,
           source: 'google',
         }));
       } catch (error: any) {

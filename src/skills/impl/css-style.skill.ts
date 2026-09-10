@@ -61,7 +61,7 @@ Return ONLY the raw CSS code. No explanations.`;
 
     this.logger.log(`Generating global CSS configuration...`);
 
-    const response = await this.aiGateway.generateText('claude-fable-5', {
+    const response = await this.aiGateway.generateText('anthropic/claude-fable-5', {
       systemPrompt: 'You output ONLY raw CSS code. Do not wrap in markdown fences. Do not explain anything.',
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.2,
@@ -88,7 +88,8 @@ Return ONLY the raw CSS code. No explanations.`;
     return {
       data: css,
       hash,
-      model: 'claude-fable-5',
+      model: 'anthropic/claude-fable-5',
+      usage: (response as any).usage || response.usage,
     };
   }
 }

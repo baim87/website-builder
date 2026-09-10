@@ -15,12 +15,12 @@ export class BrandIdentitySkill implements Skill {
   constructor(
     private readonly aiGateway: AIGatewayService,
     private readonly validator: OutputValidatorService,
-  ) {}
+  ) { }
 
   async execute(input: SkillInput): Promise<SkillOutput> {
     const { businessContext, themePreference } = input.context;
     const theme = themePreference ? getThemeById(themePreference) : undefined;
-    
+
     let typoHints = '';
     if (theme && theme.typographyHints) {
       typoHints = `\nTYPOGRAPHY GUIDANCE for '${theme.label}':\n`;
@@ -36,18 +36,18 @@ export class BrandIdentitySkill implements Skill {
       : fullJsonSchema;
     if ((bareJsonSchema as any).$schema) delete (bareJsonSchema as any).$schema;
 
-    const prompt = `You are a Brand Identity expert for home service contractors.
+    const prompt = `You are a Brand Identity expert for US home service contractors.
 
-Given this business context, generate a brand identity using the provided tool.
+Given this business context, generate a brand identity using the provided tool. Pay special attention to 'brandIdentityInputs' if they exist, as they contain the owner's direct answers to our branding questionnaire. Remember: We are selling a home service (like remodeling, plumbing, fencing), NOT a physical product.
 
 Business Context:
 ${JSON.stringify(businessContext, null, 2)}${typoHints}
 
-CRITICAL RULE: If the Business Context explicitly contains 'primaryColor' or 'secondaryColor' (e.g. extracted from a logo), you MUST use those EXACT hex values for the primary and secondary colors. Do not alter them to fit a theme. The brand's official logo colors always take precedence.
+CRITICAL RULE: If the Business Context explicitly contains 'extractedBrand' with colors, you MUST use those EXACT hex values for the primary and secondary colors. Do not alter them to fit a theme. The brand's official logo colors always take precedence. Additionally, pass through the 'headerBg' and 'footerBg' colors from 'extractedBrand' if they are present.
 
 Output the brand identity via the provided tool.`;
 
-    const result = await this.aiGateway.generateText('claude-fable-5', {
+    const result = await this.aiGateway.generateText('anthropic/claude-fable-5', {
       systemPrompt: 'You are a brand identity expert. Output structured data via the provided tool.',
       messages: [
         { role: 'user' as const, content: prompt }
@@ -96,11 +96,11 @@ Output the brand identity via the provided tool.`;
     const validatedData = this.validator.validate(parsed, BrandIdentitySchema);
     const hash = crypto.createHash('sha256').update(JSON.stringify(validatedData)).digest('hex');
 
-    return { 
-      data: validatedData, 
+    return {
+      data: validatedData,
       hash,
-      model: 'claude-fable-5',
+      model: 'anthropic/claude-fable-5',
+      usage: (result as any).usage || result.usage,
     };
   }
 }
-

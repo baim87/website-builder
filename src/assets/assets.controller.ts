@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Delete, Patch, Param, UseGuards, UseInterceptors, UploadedFile, Body } from '@nestjs/common';
+import { Controller, Post, Get, Delete, Patch, Param, UseGuards, UseInterceptors, UploadedFile, Body, Request } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { AssetsService } from './assets.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -14,9 +14,10 @@ export class AssetsController {
     @Param('projectId') projectId: string,
     @UploadedFile() file: Express.Multer.File,
     @Body('purpose') purpose: string,
-    @Body('section') section?: string,
+    @Body('section') section: string | undefined,
+    @Request() req: any,
   ) {
-    return this.assetsService.uploadAsset(projectId, file, purpose, section);
+    return this.assetsService.uploadAsset(projectId, req.user.id, file, purpose, section);
   }
 
   @Get()

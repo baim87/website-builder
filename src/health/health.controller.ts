@@ -1,7 +1,6 @@
 import { Controller, Get } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { ConfigService } from '@nestjs/config';
-import Redis from 'ioredis';
+import { RedisService } from '../common/redis/redis.service';
 import { StorageService } from '../storage/storage.service';
 import { Public } from '../common/decorators/public.decorator';
 
@@ -9,7 +8,7 @@ import { Public } from '../common/decorators/public.decorator';
 export class HealthController {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly configService: ConfigService,
+    private readonly redisService: RedisService,
     private readonly storage: StorageService,
   ) {}
 
@@ -33,9 +32,7 @@ export class HealthController {
 
     // Redis
     try {
-      const redis = new Redis(this.configService.get<string>('REDIS_URL')!);
-      await redis.ping();
-      redis.disconnect();
+      await this.redisService.getClient().ping();
       status.services.redis = 'ok';
     } catch (e) {
       status.services.redis = 'error';

@@ -7,6 +7,7 @@ export interface Message {
 
 export interface TextChunk {
   text: string;
+  usage?: UsageMetrics;
 }
 
 export interface GenerateTextParams {
@@ -17,4 +18,10 @@ export interface GenerateTextParams {
   responseFormat?: 'text' | 'json';
   schema?: any;
   schemaName?: string;
+}
+
+export interface UsageMetrics {
+  promptTokens: number;
+  completionTokens: number;
+  cost?: number;
 }

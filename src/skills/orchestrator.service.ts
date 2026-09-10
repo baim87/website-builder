@@ -13,6 +13,12 @@ import { ComponentGeneratorSkill } from './impl/component-generator.skill';
 import { PrismaService } from '../prisma/prisma.service';
 import { UnsplashService } from '../images/unsplash.service';
 
+import { ImagePlannerSkill } from './impl/image-planner.skill';
+import { ImageGenerationProducer } from '../queue/producers/image-generation.producer';
+import { PartnerBrandService } from '../assets/partner-brand.service';
+import { ServiceRankingService } from '../keywords/service-ranking.service';
+import { SeasonalityService } from '../keywords/seasonality.service';
+
 @Injectable()
 export class OrchestratorService {
   private readonly logger = new Logger(OrchestratorService.name);
@@ -29,8 +35,13 @@ export class OrchestratorService {
     private readonly copyWriter: CopyWriterSkill,
     private readonly uiDesigner: UIDesignerSkill,
     private readonly componentGenerator: ComponentGeneratorSkill,
+    private readonly imagePlanner: ImagePlannerSkill,
+    private readonly imageGenerationProducer: ImageGenerationProducer,
     private readonly prisma: PrismaService,
     private readonly unsplash: UnsplashService,
+    private readonly partnerBrandService: PartnerBrandService,
+    private readonly serviceRankingService: ServiceRankingService,
+    private readonly seasonalityService: SeasonalityService,
   ) {}
 
   private async executeWithRetries(skill: any, input: any, retries: number = 3): Promise<any> {
@@ -105,12 +116,55 @@ export class OrchestratorService {
       });
     }
 
+    // --- PHASE 0: Pre-Generation Intelligence (Ranking & Seasonality) ---
+    this.logger.log('Phase 0: Pre-Generation Intelligence');
+    
+    // Create WebsiteData early if it doesn't exist to store config
+    let existingWebsiteData = await this.prisma.websiteData.findUnique({ where: { projectId } });
+    if (!existingWebsiteData) {
+      existingWebsiteData = await this.prisma.websiteData.create({ data: { projectId } });
+    }
+
+    const servicesList = Array.isArray(businessContext.services) 
+      ? businessContext.services.map((s: any) => typeof s === 'string' ? s : (s.name || s.title || 'Service'))
+      : [];
+      
+    // Execute Ranking
+    await this.serviceRankingService.rankServices(
+      projectId,
+      servicesList,
+      businessContext.location || 'Unknown City',
+      businessContext.county,
+      businessContext.state
+    );
+    
+    // Execute Seasonality
+    const seasonalConfig = { announcementBar: await this.seasonalityService.generateSeasonalConfig(projectId) };
+    
+    // Store in DB
+    const serviceKeywordMetrics = await this.prisma.serviceKeywordMetrics.findMany({
+      where: { projectId },
+      orderBy: { rank: 'asc' }
+    });
+    
+    await this.prisma.websiteData.update({
+      where: { projectId },
+      data: { 
+        serviceRanking: serviceKeywordMetrics as any,
+        seasonalConfig: seasonalConfig as any 
+      },
+    });
+    
+    // Inject into context for later skills
+    businessContext.seasonalConfig = seasonalConfig;
+    businessContext.serviceRanking = serviceKeywordMetrics;
+
     // --- PHASE 1: Brand & Design System ---
     this.logger.log('Phase 1: Brand & Design System');
     const themePreference = businessContext.brandIdentityInputs?.themePreference || 'modern-minimalist';
-    const phase1Input = { projectId, context: { businessContext, themePreference } };
+    const phase1Input = { projectId, context: { businessContext, themePreference }, metadata: { phase: 'generation' } };
     
-    const existingWebsiteData = await this.prisma.websiteData.findUnique({ where: { projectId } });
+    // existingWebsiteData was already fetched in Phase 0
     
     let brandIdentityResult = null;
     let brandVoiceResult = null;
@@ -131,12 +185,14 @@ export class OrchestratorService {
 
       designSystemResult = await this.executeWithRetries(this.designSystem, {
         projectId,
-        context: { businessContext, brandIdentity: brandIdentityResult, themePreference }
+        context: { businessContext, brandIdentity: brandIdentityResult, themePreference },
+        metadata: { phase: 'generation' }
       });
 
       globalCssResult = await this.executeWithRetries(this.cssStyle, {
         projectId,
-        context: { designSystem: designSystemResult, themePreference }
+        context: { designSystem: designSystemResult, themePreference },
+        metadata: { phase: 'generation' }
       });
       
       await this.prisma.websiteData.update({
@@ -155,13 +211,14 @@ export class OrchestratorService {
 
 
     // --- PHASE 2: Keyword Strategy ---
-    this.logger.log('Phase 2: Keyword Strategy');
+    this.logger.log('Phase 2: Keyword Strategy & Asset Planning');
     let keywordStrategyResult = existingWebsiteData?.seoMetadata as any;
     
     if (!keywordStrategyResult || !keywordStrategyResult.pages) {
         keywordStrategyResult = await this.executeWithRetries(this.keywordStrategy, {
           projectId,
-          context: { businessContext, pages: pagesToGenerate.filter(p => p !== 'layout') }
+          context: { businessContext, pages: pagesToGenerate.filter(p => p !== 'layout') },
+          metadata: { phase: 'generation' }
         });
         await this.prisma.websiteData.update({
             where: { projectId },
@@ -169,6 +226,61 @@ export class OrchestratorService {
         });
     } else {
         this.logger.log('Skipping Phase 2 - Keyword Strategy already exists');
+    }
+
+    // --- PHASE 2.25: Partner Brands ---
+    this.logger.log('Phase 2.25: Extracting and Caching Partner Brands');
+    const existingBrands = await this.prisma.asset.count({ where: { projectId, purpose: 'partner_brand' } });
+    if (existingBrands === 0 && businessContext.trade) {
+      await this.partnerBrandService.processPartnerBrands(projectId, businessContext.trade, businessContext.services || []);
+    }
+
+    // --- PHASE 2.5: Image Planning & Queueing ---
+    this.logger.log('Phase 2.5: Image Planning & Generation Setup');
+    const existingAssets = await this.prisma.projectAsset.count({ where: { projectId } });
+    if (existingAssets === 0) {
+      const imagePlanResult = await this.executeWithRetries(this.imagePlanner, {
+        projectId,
+        context: { businessContext, pagesToGenerate },
+        metadata: { phase: 'generation' }
+      });
+      
+      const { assets } = imagePlanResult;
+      this.logger.log(`Queueing ${assets.length} images for generation...`);
+      for (const asset of assets) {
+        // userId isn't strictly available here easily unless we fetch it from the project, let's fetch it:
+        const project = await this.prisma.project.findUnique({ where: { id: projectId } });
+        if (project) {
+          await this.imageGenerationProducer.generateImage(projectId, project.userId, asset.id);
+        }
+      }
+    } else {
+      this.logger.log('Skipping Image Planning - Assets already planned');
+    }
+
+    // --- PHASE 2.75: Blocking Wait for Images ---
+    this.logger.log('Phase 2.75: Waiting for all planned images to finish generating before proceeding...');
+    let allImagesCompleted = false;
+    let waitLoopCount = 0;
+    while (!allImagesCompleted) {
+      const [pendingAssets, completedAssets, failedAssets, totalAssets] = await Promise.all([
+        this.prisma.projectAsset.count({ where: { projectId, status: { in: ['pending', 'generating'] } } }),
+        this.prisma.projectAsset.count({ where: { projectId, status: 'completed' } }),
+        this.prisma.projectAsset.count({ where: { projectId, status: 'failed' } }),
+        this.prisma.projectAsset.count({ where: { projectId } }),
+      ]);
+      
+      if (pendingAssets === 0) {
+        allImagesCompleted = true;
+        this.logger.log(`✓ All images complete! ${completedAssets} succeeded, ${failedAssets} failed out of ${totalAssets} total.`);
+      } else {
+        // Log progress every 15 seconds (every 3rd iteration of the 5s loop)
+        if (waitLoopCount % 3 === 0) {
+          this.logger.log(`⏳ Image progress: ${completedAssets}/${totalAssets} done, ${pendingAssets} remaining, ${failedAssets} failed. Waiting...`);
+        }
+        waitLoopCount++;
+        await new Promise(resolve => setTimeout(resolve, 5000));
+      }
     }
 
     const successfulPages: any[] = [];
@@ -198,12 +310,38 @@ export class OrchestratorService {
         // Find assigned keyword
         const keywordTarget = keywordStrategyResult.pages.find((p: any) => p.slug === pageSlug);
 
+        // Fetch available project assets to use in copy generation and SEO
+        const projectAssets = await this.prisma.projectAsset.findMany({
+          where: { projectId },
+          select: { id: true, type: true, prompt: true }
+        });
+
+        const partnerBrandAssets = await this.prisma.asset.findMany({
+          where: { projectId, purpose: 'partner_brand' },
+          select: { id: true, url: true }
+        });
+
+        const combinedAssets = [
+          ...projectAssets,
+          ...partnerBrandAssets.map(a => {
+            // Extract domain from global/brands/domain.com/logo.png if possible
+            const match = a.url.match(/global\/brands\/([^\/]+)\/logo/);
+            const brandName = match ? match[1].split('.')[0] : 'Unknown';
+            return {
+              id: a.id,
+              type: 'PARTNER_BRAND',
+              prompt: `Logo for partner brand: ${brandName}`
+            };
+          })
+        ];
+
         // Phase 3: SEO Metadata
         let seoResult = null;
         if (pageSlug !== 'layout') {
           seoResult = await this.executeWithRetries(this.seoMetadata, {
             projectId,
-            context: { businessContext, pageSlug, keywordTarget }
+            context: { businessContext, pageSlug, keywordTarget, projectAssets: combinedAssets },
+            metadata: { phase: 'generation', pageSlug }
           });
         }
 
@@ -221,7 +359,8 @@ export class OrchestratorService {
         } else {
           const structureResult = await this.executeWithRetries(this.pageStructure, {
             projectId,
-            context: { businessContext, brandVoice: brandVoiceResult, pageSlug, isLocationServicePage }
+            context: { businessContext, brandVoice: brandVoiceResult, pageSlug, isLocationServicePage },
+            metadata: { phase: 'generation', pageSlug }
           });
           sectionTypes = structureResult.sections;
         }
@@ -247,44 +386,47 @@ export class OrchestratorService {
                 pageSlug, 
                 isLocationServicePage, 
                 serviceSlug,
+                projectAssets: combinedAssets,
                 validRoutes: pagesToGenerate.filter(p => p !== 'layout')
-              }
+              },
+              metadata: { phase: 'generation', pageSlug, componentName }
             }, 2);
 
             // 2. Generate UI AST Layout
             sectionCopy = await this.executeWithRetries(this.uiDesigner, {
               projectId,
-              context: { sectionType, brandIdentity: brandIdentityResult, copyData: copyDataResult, pageSlug }
+              context: { sectionType, brandIdentity: brandIdentityResult, copyData: copyDataResult, pageSlug },
+              metadata: { phase: 'generation', pageSlug, componentName }
             }, 2);
           } catch (error) {
             this.logger.warn(`[${pageSlug}] Failed to generate copy or AST for section ${sectionType}: ${error.message}`);
           }
           
-          // Generate the reusable .tsx component if we don't have it yet
+          // Generate the reusable .tsx component
           let websiteData = await this.prisma.websiteData.findUnique({ where: { projectId } });
           let customComponents = (websiteData?.customComponents as Record<string, string>) || {};
           
-          if (!customComponents[componentName]) {
-            try {
-              this.logger.log(`[${pageSlug}] Generating new component: ${componentName}`);
-              const componentResult = await this.executeWithRetries(this.componentGenerator, {
-                projectId,
-                context: { 
-                  sectionType: componentName, 
-                  brandIdentity: brandIdentityResult,
-                  sampleData: copyDataResult?.data,
-                  themePreference
-                }
-              }, 2);
-              
-              customComponents[componentName] = componentResult.code;
-              await this.prisma.websiteData.update({
-                where: { projectId },
-                data: { customComponents }
-              });
-            } catch (err) {
-              this.logger.warn(`Failed to generate component ${componentName}: ${err.message}`);
-            }
+          try {
+            this.logger.log(`[${pageSlug}] Generating new component: ${componentName}`);
+            const componentResult = await this.executeWithRetries(this.componentGenerator, {
+              projectId,
+              context: { 
+                sectionType: componentName, 
+                brandIdentity: brandIdentityResult,
+                sampleData: copyDataResult,
+                themePreference,
+                designTokens: designSystemResult,
+              },
+              metadata: { phase: 'generation', componentName }
+            }, 2);
+            
+            customComponents[componentName] = componentResult.code;
+            await this.prisma.websiteData.update({
+              where: { projectId },
+              data: { customComponents }
+            });
+          } catch (err) {
+            this.logger.warn(`Failed to generate component ${componentName}: ${err.message}`);
           }
 
           // Apply Fallback if generation failed
@@ -303,6 +445,11 @@ export class OrchestratorService {
           }
 
           generatedSections.push(sectionCopy);
+        }
+        
+        // Resolve images in SEO metadata
+        if (seoResult && seoResult.data) {
+          await this.resolveImages(seoResult.data);
         }
 
         const pagePayload = {
@@ -373,11 +520,21 @@ export class OrchestratorService {
 
     for (const key of Object.keys(obj)) {
       const val = obj[key];
-      if (typeof val === 'string' && val.startsWith('UNSPLASH:')) {
-        const query = val.replace('UNSPLASH:', '').trim();
-        const url = await this.unsplash.searchImage(query);
-        if (url) {
-          obj[key] = url;
+      if (typeof val === 'string') {
+        if (val.startsWith('UNSPLASH:')) {
+          const query = val.replace('UNSPLASH:', '').trim();
+          const url = await this.unsplash.searchImage(query);
+          if (url) {
+            obj[key] = url;
+          }
+        } else if (val.startsWith('ASSET:')) {
+          const assetId = val.replace('ASSET:', '').trim();
+          const asset = await this.prisma.projectAsset.findUnique({ where: { id: assetId } });
+          if (asset && asset.status === 'completed' && asset.webpUrl) {
+            obj[key] = asset.webpUrl;
+          } else {
+            obj[key] = `/api/assets/${assetId}`;
+          }
         }
       } else if (typeof val === 'object') {
         await this.resolveImages(val);

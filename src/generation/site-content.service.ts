@@ -38,9 +38,15 @@ export class SiteContentService {
     const businessContext = await this.businessContextService.findByProjectId(projectId, userId);
     const pages = await this.prisma.page.findMany({ where: { projectId } });
     const assets = await this.prisma.asset.findMany({ where: { projectId } });
+    const projectAssets = await this.prisma.projectAsset.findMany({ 
+      where: { projectId, status: 'completed' } 
+    });
+    const siteAnalytics = await this.prisma.siteAnalytics.findUnique({
+      where: { projectId }
+    });
 
     // 3. Map to SiteContent
-    const siteContent = this.mapToSiteContent(businessContext, websiteData, pages, assets);
+    const siteContent = this.mapToSiteContent(businessContext, websiteData, pages, assets, projectAssets, siteAnalytics);
 
     // 4. Update Redis Cache
     await this.redisService.set(cacheKey, siteContent, this.CACHE_TTL_SECONDS);
@@ -60,25 +66,70 @@ export class SiteContentService {
   /**
    * Maps backend entities to the frontend SiteContent interface
    */
-  private mapToSiteContent(businessContext: any, websiteData: any, pages: any[], assets: any[]): any {
+  private mapToSiteContent(businessContext: any, websiteData: any, pages: any[], assets: any[], projectAssets: any[] = [], siteAnalytics: any = null): any {
     const logoAsset = assets.find(a => a.purpose === 'logo' || a.type === 'image');
+    const faviconAsset = assets.find(a => a.purpose === 'favicon');
+    const portraitAsset = assets.find(a => a.purpose === 'portrait');
     
     const seoData = websiteData.seoMetadata || {};
     const tokens = websiteData.designTokens || {};
 
+    const portfolio = projectAssets
+      .filter(pa => pa.type === 'GALLERY' && (pa.webpUrl || pa.originalUrl))
+      .map(pa => ({
+        title: pa.metadata?.service || "Project Gallery",
+        slug: pa.id,
+        category: pa.metadata?.service || "Gallery",
+        image: pa.webpUrl || pa.originalUrl
+      }));
+
+    const beforeAfter = projectAssets
+      .filter(pa => pa.type === 'AFTER' && (pa.webpUrl || pa.originalUrl) && pa.referenceAssetId)
+      .map(afterAsset => {
+        const beforeAsset = projectAssets.find(pa => pa.id === afterAsset.referenceAssetId && (pa.webpUrl || pa.originalUrl));
+        if (beforeAsset) {
+          return {
+            beforeImage: beforeAsset.webpUrl || beforeAsset.originalUrl,
+            afterImage: afterAsset.webpUrl || afterAsset.originalUrl,
+            title: afterAsset.metadata?.service || "Project Completion"
+          };
+        }
+        return null;
+      })
+      .filter(Boolean);
+
+    const heroImages = projectAssets
+      .filter(pa => pa.type === 'HERO' && (pa.webpUrl || pa.originalUrl))
+      .map(pa => pa.webpUrl || pa.originalUrl);
+    
+    let heroImageIndex = 0;
+
+    const layoutPage = pages.find(p => p.slug === 'layout');
+    const headerSection = Array.isArray(layoutPage?.content) ? layoutPage.content.find((s: any) => s.type === 'HeaderSection') : null;
+    const footerSection = Array.isArray(layoutPage?.content) ? layoutPage.content.find((s: any) => s.type === 'FooterSection') : null;
+
     return {
+      designTokens: tokens,
+      seoMetadata: seoData,
+      layout: {
+        header: headerSection || null,
+        footer: footerSection || null,
+      },
       business: {
         name: businessContext.businessName || "Contractor Pro",
         tagline: seoData.title || `${businessContext.trade} Experts`,
         phone: businessContext.phone || "(555) 123-4567",
         email: businessContext.email || "contact@example.com",
         address: businessContext.businessAddress || "123 Main St, Anytown USA",
-        logoUrl: logoAsset?.url || ""
+        logoUrl: logoAsset?.url || "",
+        faviconUrl: faviconAsset?.url || "",
+        contactPhotoUrl: portraitAsset?.url || ""
       },
       seo: {
         title: seoData.title || businessContext.businessName,
         description: seoData.description || `Expert ${businessContext.trade} services.`,
         jsonLd: websiteData.jsonLdSchemas || null,
+        gtmId: siteAnalytics?.gtmContainerId || process.env.GOOGLE_TAG_MANAGER_CONTAINER_ID || null,
       },
       theme: {
         primary: tokens.colors?.primary || "#2563eb",
@@ -86,34 +137,70 @@ export class SiteContentService {
         accent: tokens.colors?.accent || "#f59e0b",
         fontFamily: tokens.typography?.headingFont || "Inter"
       },
-      pages: pages.map(p => ({ 
-        slug: p.slug, 
-        sections: p.content,
-        ...(p.componentCode ? { componentCode: p.componentCode } : {})
-      })),
-      // Optional: keep global lists if needed for navigation/footers
-      services: businessContext.services?.map((s: string) => ({
-        slug: s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, ''),
-        name: s,
-        description: `Professional ${s} services for your home or business.`,
-        icon: "Wrench",
-        image: "https://images.unsplash.com/photo-1504307651254-35680f356f58?q=80&w=2070&auto=format&fit=crop"
-      })) || [
-        {
-          slug: "residential-services",
-          name: "Residential Services",
-          description: "Complete residential services for your home.",
-          icon: "Home",
-          image: "https://images.unsplash.com/photo-1504307651254-35680f356f58?q=80&w=2070&auto=format&fit=crop"
+      pages: pages.filter(p => p.slug !== 'layout').map(p => {
+        let sections = p.content;
+        if (Array.isArray(sections)) {
+          const partnerBrands = assets.filter(a => a.purpose === 'partner_brand');
+          
+          sections = sections.map((s: any) => {
+            // Inject Portrait Asset into AboutSection
+            if ((s.id === 'about' || s.type === 'AboutSection') && portraitAsset) {
+              return { ...s, content: { ...s.content, image: portraitAsset.url } };
+            }
+            
+            // Inject Partner Brands into BrandsSection
+            if (s.type === 'BrandsSection' && partnerBrands.length > 0) {
+              return { 
+                ...s, 
+                content: { 
+                  ...s.content, 
+                  brands: partnerBrands.map(b => ({
+                    name: b.section || 'Partner Brand',  // section field stores the brand name
+                    logo: b.url
+                  }))
+                } 
+              };
+            }
+
+            // Inject Hero/PageHeader images
+            if (s.type === 'HeroSection' || s.type === 'PageHeader') {
+              const bgImage = heroImages[heroImageIndex] || portfolio[heroImageIndex]?.image;
+              if (bgImage) {
+                heroImageIndex++;
+                return { ...s, content: { ...s.content, backgroundImage: bgImage, image: bgImage } };
+              }
+            }
+            
+            return s;
+          });
         }
-      ],
-      locations: businessContext.serviceAreas?.map((area: string) => ({
-        slug: area.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, ''),
-        name: area,
-        description: `Proudly serving ${area} and surrounding communities.`,
-        image: "https://images.unsplash.com/photo-1449844908441-8829872d2607?q=80&w=2070&auto=format&fit=crop"
-      })) || [],
-      portfolio: [],
+        return { 
+          slug: p.slug, 
+          sections,
+          ...(p.componentCode ? { componentCode: p.componentCode } : {})
+        };
+      }),
+      // Optional: keep global lists if needed for navigation/footers
+      services: (businessContext.services || []).map((s: any) => {
+        const name = typeof s === 'string' ? s : (s?.name || s?.title || String(s));
+        return {
+          slug: name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, ''),
+          name: name,
+          description: `Professional ${name} services for your home or business.`,
+          icon: "Wrench",
+          image: "https://images.unsplash.com/photo-1504307651254-35680f356f58?q=80&w=2070&auto=format&fit=crop"
+        };
+      }),
+      locations: (businessContext.serviceAreas || []).map((area: any) => {
+        const name = typeof area === 'string' ? area : (area?.name || String(area));
+        return {
+          slug: name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, ''),
+          name: name,
+          description: `Proudly serving ${name} and surrounding communities.`,
+          image: "https://images.unsplash.com/photo-1449844908441-8829872d2607?q=80&w=2070&auto=format&fit=crop"
+        };
+      }),
+      portfolio,
       whyUs: [
         {
           title: "Expert Team",
@@ -128,7 +215,7 @@ export class SiteContentService {
           rating: 5
         }
       ],
-      beforeAfter: [],
+      beforeAfter,
       timeline: [],
       cta: {
         heading: "Ready to get started?",

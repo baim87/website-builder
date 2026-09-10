@@ -6,5 +6,8 @@
   "transform": {
     "^.+\\.(t|j)s$": "ts-jest"
   },
-  "setupFiles": ["<rootDir>/setup.ts"]
+  "setupFiles": ["<rootDir>/setup.ts"],
+  "moduleNameMapper": {
+    "^@octokit/rest$": "<rootDir>/mock-octokit.ts"
+  }
 }

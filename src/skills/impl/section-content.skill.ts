@@ -48,7 +48,7 @@ You MUST respond with ONLY a JSON object exactly matching this structure (no mar
 - CallToActionSection: { heading: string, subheading: string, buttonText: string, backgroundImage: string }
 `;
 
-    const response = await this.aiGateway.generateText('claude-fable-5', {
+    const response = await this.aiGateway.generateText('anthropic/claude-fable-5', {
       systemPrompt: 'You output ONLY valid JSON. No markdown fences, no explanation, no commentary. Just the raw JSON object.',
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.2,
@@ -85,7 +85,8 @@ You MUST respond with ONLY a JSON object exactly matching this structure (no mar
     return {
       data: validatedData,
       hash,
-      model: 'claude-fable-5',
+      model: 'anthropic/claude-fable-5',
+      usage: (response as any).usage || response.usage,
     };
   }
 }

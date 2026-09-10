@@ -20,7 +20,7 @@ async function bootstrap() {
     }
 
     console.log(`Triggering generation for project: ${project.name} (${project.id})`);
-    const liveUrl = await generationService.generateProject(project.id);
+    const liveUrl = await generationService.generateProject(project.id, project.userId, 'manual-cli');
 
     console.log('\n=============================================');
     console.log(`DEPLOYMENT SUCCESSFUL!`);

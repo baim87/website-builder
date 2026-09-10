@@ -46,6 +46,8 @@ FIELD GUIDANCE (for the tool output):
 - colors.background: The main page background. Usually light (white or near-white). Hex value.
 - colors.text: The default body text color. Must have strong contrast against the background. Hex value.
 - colors.surfaceDark: A generated DARK contrasting color used for overlays and dark sections (footers, hero overlays). MUST be dark enough (luminance < 0.3) so white text is readable on top. You MUST invent this complementary dark color if the user provides a light secondary color. Hex value.
+- colors.headerBg: Background color for the Header. Pass through from Brand Identity if available. Hex value.
+- colors.footerBg: Background color for the Footer. Pass through from Brand Identity if available. Hex value.
 - typography.headingFont: A Google Fonts heading font family name.
 - typography.bodyFont: A Google Fonts body font family name.
 - spacing.small: e.g. "8px"
@@ -54,7 +56,7 @@ FIELD GUIDANCE (for the tool output):
 
 Output the design system via the provided tool.`;
 
-    const response = await this.aiGateway.generateText('claude-fable-5', {
+    const response = await this.aiGateway.generateText('anthropic/claude-fable-5', {
       systemPrompt: 'You are a design system expert. Output structured data via the provided tool.',
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.1,
@@ -95,7 +97,8 @@ Output the design system via the provided tool.`;
     return {
       data: validatedData,
       hash,
-      model: 'claude-fable-5',
+      model: 'anthropic/claude-fable-5',
+      usage: (response as any).usage || response.usage,
     };
   }
 }

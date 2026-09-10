@@ -31,15 +31,29 @@ export class AnalyticsService {
       let measurementId = existing?.ga4MeasurementId;
       let gtmContainerId = existing?.gtmContainerId;
 
+      let gtmInternalId: string | undefined;
+
       // Only create if they don't exist yet (idempotency)
-      if (!gtmContainerId) {
-        gtmContainerId = await this.gtmClient.createContainer(domainName);
-      }
-      
       if (!propertyId || !measurementId) {
         const ga4 = await this.ga4Client.createPropertyAndStream(domainName);
         propertyId = ga4.propertyId;
         measurementId = ga4.measurementId;
+      }
+
+      if (!gtmContainerId) {
+        const gtm = await this.gtmClient.createContainer(domainName);
+        gtmContainerId = gtm.publicId || undefined;
+        gtmInternalId = gtm.containerId || undefined;
+      }
+
+      // Configure newly created containers
+      if (gtmInternalId && measurementId && propertyId) {
+        await this.gtmClient.configureContainer(gtmInternalId, measurementId);
+        
+        // The user specifically requested to test with this email
+        const adminEmail = 'baim@contractingempire.com';
+        await this.ga4Client.grantAdminAccess(propertyId, adminEmail);
+        await this.gtmClient.grantAdminAccess(gtmInternalId, adminEmail);
       }
       
       // Attempt GSC Verification

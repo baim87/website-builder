@@ -14,12 +14,19 @@ export class LinkIntegrityService {
    */
   async checkLinks(sitemapUrls: string[]): Promise<LinkIntegrityReport> {
     const allLinkedUrls = new Set<string>();
+    const checkedLinks = new Map<string, number>();
     const brokenLinks: { source: string; href: string; status: number }[] = [];
     const sitemapSet = new Set(sitemapUrls);
 
     for (const pageUrl of sitemapUrls) {
       try {
-        const html = await fetch(pageUrl).then(r => r.text());
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        const res = await fetch(pageUrl, { signal: controller.signal });
+        clearTimeout(timeoutId);
+
+        if (!res.ok) throw new Error(`Status ${res.status}`);
+        const html = await res.text();
         const hrefs = html.match(/href="(\/[^"]*?)"/g)
           ?.map(m => m.replace(/href="|"/g, '')) || [];
 
@@ -28,10 +35,29 @@ export class LinkIntegrityService {
           const fullUrl = `${baseUrl}${href}`;
           allLinkedUrls.add(fullUrl);
 
+          // Check if we already verified this link
+          if (checkedLinks.has(fullUrl)) {
+             const cachedStatus = checkedLinks.get(fullUrl)!;
+             if (cachedStatus >= 400) {
+                brokenLinks.push({ source: pageUrl, href, status: cachedStatus });
+             }
+             continue;
+          }
+
           // Check if the link resolves
-          const res = await fetch(fullUrl, { method: 'HEAD' });
-          if (res.status >= 400) {
-            brokenLinks.push({ source: pageUrl, href, status: res.status });
+          try {
+             const controller = new AbortController();
+             const timeoutId = setTimeout(() => controller.abort(), 10000);
+             const headRes = await fetch(fullUrl, { method: 'HEAD', signal: controller.signal });
+             clearTimeout(timeoutId);
+             
+             checkedLinks.set(fullUrl, headRes.status);
+             if (headRes.status >= 400) {
+               brokenLinks.push({ source: pageUrl, href, status: headRes.status });
+             }
+          } catch (e) {
+             checkedLinks.set(fullUrl, 500);
+             brokenLinks.push({ source: pageUrl, href, status: 500 });
           }
         }
       } catch (err: any) {

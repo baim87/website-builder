@@ -22,7 +22,15 @@ import { BillingModule } from '../billing/billing.module';
 import { AnalyticsModule } from '../analytics/analytics.module';
 import { QualityControlModule } from '../quality-control/quality-control.module';
 import { DeploymentModule } from '../deployment/deployment.module';
+import { SkillsModule } from '../skills/skills.module';
+import { AIGatewayModule } from '../ai-gateway/ai-gateway.module';
 import { forwardRef } from '@nestjs/common';
+
+import { ImageGenerationProducer } from './producers/image-generation.producer';
+import { ImageGenerationConsumer } from './consumers/image-generation.consumer';
+import { ImagesModule } from '../images/images.module';
+import { GithubSyncConsumer } from './consumers/github-sync.consumer';
+import { DeploymentTrackerConsumer } from './consumers/deployment-tracker.consumer';
 
 const consumers = process.env.APP_MODE !== 'api'
   ? [
@@ -32,6 +40,9 @@ const consumers = process.env.APP_MODE !== 'api'
       BillingReconciliationConsumer,
       TestJobConsumer,
       QualityControlConsumer,
+      ImageGenerationConsumer,
+      GithubSyncConsumer,
+      DeploymentTrackerConsumer,
     ]
   : [];
 
@@ -42,6 +53,7 @@ const producers = [
   BillingReconciliationProducer,
   TestJobProducer,
   QualityControlProducer,
+  ImageGenerationProducer,
 ];
 
 @Module({
@@ -53,7 +65,10 @@ const producers = [
     BillingModule,
     forwardRef(() => AnalyticsModule),
     forwardRef(() => DeploymentModule),
-    QualityControlModule,
+    forwardRef(() => QualityControlModule),
+    forwardRef(() => SkillsModule),
+    AIGatewayModule,
+    ImagesModule,
     BullModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
@@ -79,6 +94,15 @@ const producers = [
     }),
     BullModule.registerQueue({
       name: QUEUE_NAMES.QUALITY_CONTROL,
+    }),
+    BullModule.registerQueue({
+      name: QUEUE_NAMES.IMAGE_GENERATION,
+    }),
+    BullModule.registerQueue({
+      name: QUEUE_NAMES.GITHUB_SYNC,
+    }),
+    BullModule.registerQueue({
+      name: QUEUE_NAMES.DEPLOYMENT_TRACKER,
     }),
     // Other queues registered here...
   ],

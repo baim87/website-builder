@@ -13,7 +13,8 @@ export class GenerationProducer extends BaseProducer<SiteGenerationJobData> {
     super();
   }
 
-  async generateSite(projectId: string) {
-    return this.addJob('generate', { projectId, generateFullSite: true }, { attempts: 3 });
+  async generateSite(projectId: string, userId: string) {
+    const jobId = `generate-${projectId}-${Date.now()}`;
+    return this.addJob('generate', { projectId, userId, generateFullSite: true }, { attempts: 3, jobId });
   }
 }

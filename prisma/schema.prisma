@@ -21,22 +21,24 @@ model User {
 }
 
 model Project {
-  id               String            @id @default(uuid())
-  userId           String
-  name             String
-  status           String            @default("draft")
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  assets           Asset[]
-  businessContext  BusinessContext?
-  chatMessages     ChatMessage[]
-  domain           Domain?
-  pages            Page[]
-  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  siteAnalytics    SiteAnalytics?
-  skillInvocations         SkillInvocation[]
-  websiteData              WebsiteData?
-  locationKeywordMetrics   LocationKeywordMetrics[]
+  id                     String                   @id @default(uuid())
+  userId                 String
+  name                   String
+  status                 String                   @default("draft")
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
+  assets                 Asset[]
+  businessContext        BusinessContext?
+  chatMessages           ChatMessage[]
+  domain                 Domain?
+  locationKeywordMetrics LocationKeywordMetrics[]
+  pages                  Page[]
+  user                   User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectAssets          ProjectAsset[]
+  siteAnalytics          SiteAnalytics?
+  skillInvocations       SkillInvocation[]
+  websiteData            WebsiteData?
+  serviceKeywordMetrics  ServiceKeywordMetrics[]
 }
 
 model BusinessContext {
@@ -56,13 +58,13 @@ model BusinessContext {
   competitors          Json?
   rawText              String?
   serviceAreas         Json?
-  radius               Int?
   brandIdentityInputs  Json?
   brandVoicePreference String?
   usps                 Json?
   interviewMetadata    Json?
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
+  radius               Int?
   project              Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }
 
@@ -75,13 +77,16 @@ model WebsiteData {
   robotsTxt        String?
   jsonLdSchemas    Json?
   internalLinkMap  Json?
-  customComponents Json?
   generationStatus String    @default("pending")
-  qcStatus         String?   @default("standby")
-  qcReport         Json?
   lastGeneratedAt  DateTime?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
+  customComponents Json?
+  serviceRanking   Json?
+  seasonalConfig   Json?
+  qcReport         Json?
+  qcStatus         String?   @default("standby")
+  generationJobId  String?
   project          Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }
 
@@ -116,6 +121,22 @@ model Asset {
   project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }
 
+model ProjectAsset {
+  id               String   @id @default(uuid())
+  projectId        String
+  type             String
+  prompt           String?
+  originalUrl      String?
+  webpUrl          String?
+  status           String   @default("pending")
+  cost             Float?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  referenceAssetId String?
+  metadata         Json?
+  project          Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
 model ChatMessage {
   id                 String   @id @default(uuid())
   projectId          String
@@ -129,19 +150,24 @@ model ChatMessage {
 }
 
 model SkillInvocation {
-  id         String   @id @default(uuid())
-  projectId  String
-  skillType  String
-  inputHash  String
-  model      String
-  tokens     Int?
-  latencyMs  Int?
-  outputHash String?
-  status     String
-  error      String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  id               String   @id @default(uuid())
+  projectId        String
+  skillType        String
+  inputHash        String
+  model            String
+  tokens           Int?
+  latencyMs        Int?
+  outputHash       String?
+  status           String
+  error            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  completionTokens Int?
+  cost             Float?
+  metadata         Json?
+  promptTokens     Int?
+  outputData       Json?
+  project          Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }
 
 model Subscription {
@@ -185,13 +211,13 @@ model Page {
   projectId     String
   slug          String
   content       Json
-  componentCode Json?
-  customCSS     String?
-  seoMeta       Json?
-  keywordTarget Json?
-  status        String   @default("pending")
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+  componentCode Json?
+  customCSS     String?
+  keywordTarget Json?
+  seoMeta       Json?
+  status        String   @default("pending")
   project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, slug])
@@ -216,6 +242,28 @@ model LocationKeywordMetrics {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, city, service])
+}
+
+model ServiceKeywordMetrics {
+  id               String   @id @default(uuid())
+  projectId        String
+  city             String
+  service          String
+  keyword          String // Best transactional keyword for this (city, service)
+  searchVolume     Int
+  monthlyVolumes   Json? // 12-month breakdown from Google Ads
+  competition      String? // LOW / MEDIUM / HIGH
+  cpc              Float?
+  rank             Int // 1 = main, 2 = secondary, etc.
+  geoScope         String   @default("city") // "city" | "county" | "ai_inferred"
+  avgTicketPrice   Float? // Future: from user interview
+  revenuePotential Float? // Future: volume × ticket
+  userOverrideRank Int? // Future: manual user preference
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  project          Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, city, service])
 }

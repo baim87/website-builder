@@ -12,7 +12,7 @@ export class AssetsService {
     @Inject(forwardRef(() => AssetConversionProducer)) private readonly conversionProducer: AssetConversionProducer,
   ) {}
 
-  async uploadAsset(projectId: string, file: Express.Multer.File, purpose: string, section?: string) {
+  async uploadAsset(projectId: string, userId: string, file: Express.Multer.File, purpose: string, section?: string) {
     const isImage = file.mimetype.startsWith('image/');
     const isVideo = file.mimetype.startsWith('video/');
     let mimeType = file.mimetype;
@@ -46,7 +46,7 @@ export class AssetsService {
 
     if (isRasterImageToConvert || isVideoToConvert) {
       // Async convert to WebP or WebM
-      await this.conversionProducer.convertAsset(projectId, asset.id, url);
+      await this.conversionProducer.convertAsset(projectId, asset.id, url, userId);
     } else if (mimeType === 'image/webp' || mimeType === 'video/webm') {
       // If it's already a WebP/WebM, just set convertedUrl to be the same as url
       await this.prisma.asset.update({

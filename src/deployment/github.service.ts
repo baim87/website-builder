@@ -1,17 +1,19 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Octokit } from '@octokit/rest';
-import { exec } from 'child_process';
-import { promisify } from 'util';
-
-const execAsync = promisify(exec);
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
+import { QUEUE_NAMES } from '../common/constants/queue-names.constant';
 
 @Injectable()
 export class GithubService {
   private readonly logger = new Logger(GithubService.name);
   private octokit: Octokit;
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    @InjectQueue(QUEUE_NAMES.GITHUB_SYNC) private readonly githubSyncQueue: Queue
+  ) {
     const token = this.configService.get<string>('GITHUB_API_TOKEN');
     this.octokit = new Octokit({ auth: token });
   }
@@ -60,50 +62,26 @@ export class GithubService {
   }
 
   /**
-   * Commits the directory to the GitHub repository using local git CLI.
+   * Enqueues a job to commit the directory to the GitHub repository using the background worker.
    */
-  async commitAndPush(repoName: string, directory: string): Promise<void> {
-    const token = this.configService.get<string>('GITHUB_API_TOKEN');
-    if (!token) throw new Error('GITHUB_API_TOKEN is not configured');
-
-    const { data: user } = await this.octokit.rest.users.getAuthenticated();
-    const remoteUrl = `https://${user.login}:${token}@github.com/${user.login}/${repoName}.git`;
-
+  async commitAndPush(repoName: string, directory: string, projectId?: string, userId?: string, triggerDeployment?: boolean): Promise<void> {
     try {
-      this.logger.log(`Pushing code to GitHub for ${repoName}...`);
+      this.logger.log(`Queueing GitHub sync job for ${repoName}...`);
       
-      // We are inside /tmp/builder-xxx
-      // Need to init git, add remote, commit, and push
-      await execAsync(`git init`, { cwd: directory });
-      // Configure temp git user to match the authenticated user so Vercel doesn't block the commit author
-      const commitEmail = user.email || process.env.GITHUB_AUTHOR_EMAIL || 'ads@contractingempire.com';
-      await execAsync(`git config user.name "${user.login}"`, { cwd: directory });
-      await execAsync(`git config user.email "${commitEmail}"`, { cwd: directory });
-      
-      // Add and commit
-      await execAsync(`git add .`, { cwd: directory });
-      
-      try {
-          await execAsync(`git commit -m "feat: AI generated update"`, { cwd: directory });
-      } catch (commitErr: any) {
-          if (commitErr.message.includes('nothing to commit')) {
-              this.logger.log(`No changes to commit for ${repoName}`);
-              return;
-          }
-          throw commitErr;
-      }
-      
-      // Force push to main
-      await execAsync(`git branch -M main`, { cwd: directory });
-      await execAsync(`git remote add origin ${remoteUrl}`, { cwd: directory }).catch(() => {
-          // If remote already exists
-          return execAsync(`git remote set-url origin ${remoteUrl}`, { cwd: directory });
+      await this.githubSyncQueue.add('sync', {
+        projectId: projectId || 'unknown',
+        userId: userId || 'unknown',
+        repoName,
+        directory,
+        commitMessage: 'feat: AI generated update',
+        triggerDeployment,
+      }, {
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 5000 }
       });
-      await execAsync(`git push -u origin main --force`, { cwd: directory });
       
-      this.logger.log(`Successfully pushed to GitHub repository ${repoName}`);
     } catch (error: any) {
-      this.logger.error(`Failed to push to GitHub: ${error.message}`);
+      this.logger.error(`Failed to queue GitHub sync: ${error.message}`);
       throw error;
     }
   }

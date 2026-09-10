@@ -15,8 +15,8 @@ async function bootstrap() {
   const projectId = 'f2062e3f-682e-4329-9fb2-3f058b41fc46';
   
   const businessContext = await businessContextService.findByProjectId(projectId);
-  const websiteData = await websiteDataService.findByProjectId(projectId);
-  const pages = await pageService.getPagesByProjectId(projectId);
+  const websiteData = await websiteDataService.findByProjectId(projectId, 'CLI_OR_SCRIPT');
+  const pages = await pageService.getPagesByProjectId(projectId, 'CLI_OR_SCRIPT');
 
   const siteContent = {
     theme: websiteData?.designTokens,

@@ -13,6 +13,6 @@ export class GenerationConsumer extends BaseConsumer<SiteGenerationJobData> {
 
   protected async handleJob(job: Job<SiteGenerationJobData>): Promise<void> {
     this.logger.log(`Site generation would happen here for project ${job.data.projectId}`);
-    await this.generationService.generateProject(job.data.projectId);
+    await this.generationService.generateProject(job.data.projectId, job.data.userId, job.id!);
   }
 }

@@ -6,4 +6,7 @@ export const QUEUE_NAMES = {
   DEPLOYMENT: 'deployment',
   TEST_JOB: 'test-job',
   QUALITY_CONTROL: 'quality-control',
+  IMAGE_GENERATION: 'image-generation',
+  GITHUB_SYNC: 'github-sync',
+  DEPLOYMENT_TRACKER: 'deployment-tracker',
 } as const;

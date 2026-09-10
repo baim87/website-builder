@@ -8,9 +8,10 @@ import { ProjectsModule } from '../projects/projects.module';
 import { SeoModule } from '../seo/seo.module';
 import { DeploymentModule } from '../deployment/deployment.module';
 import { QueueModule } from '../queue/queue.module';
+import { AssetsModule } from '../assets/assets.module';
 
 @Module({
-  imports: [SkillsModule, forwardRef(() => ProjectsModule), SeoModule, DeploymentModule, forwardRef(() => QueueModule)],
+  imports: [SkillsModule, forwardRef(() => ProjectsModule), SeoModule, DeploymentModule, forwardRef(() => QueueModule), AssetsModule],
   controllers: [PublicSiteController],
   providers: [GenerationService, NextjsBuilderService, SiteContentService],
   exports: [GenerationService, NextjsBuilderService, SiteContentService],

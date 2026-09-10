@@ -11,15 +11,17 @@ export class QualityControlProducer {
     @InjectQueue(QUEUE_NAMES.QUALITY_CONTROL) private readonly qcQueue: Queue,
   ) {}
 
-  async triggerQualityControl(projectId: string, vercelUrl: string, businessType: string, retryCount: number = 0) {
+  async triggerQualityControl(projectId: string, userId: string, vercelUrl: string, businessType: string, retryCount: number = 0) {
     this.logger.log(`Dispatching QC job for project ${projectId} at ${vercelUrl} (Attempt ${retryCount + 1})`);
     
     await this.qcQueue.add('run-qc', {
       projectId,
+      userId,
       vercelUrl,
       businessType,
       retryCount,
     }, {
+      jobId: `qc-${projectId}-attempt-${retryCount}-${Date.now()}`,
       attempts: 3,
       backoff: {
         type: 'exponential',

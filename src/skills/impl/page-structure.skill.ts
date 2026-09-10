@@ -21,7 +21,7 @@ export class PageStructureSkill implements Skill {
     // HARDCODED PAGE STRUCTURES (User Dictated)
     const userDictatedStructures: Record<string, string[]> = {
       'home': [
-        'HeroSection', 'BrandsSection', 'AboutSection', 'ServicesSection', 'WhyUsSection', 
+        'AnnouncementBarSection', 'HeroSection', 'BrandsSection', 'AboutSection', 'ServicesSection', 'WhyUsSection', 
         'GallerySection', 'TimelineSection', 'TestimonialsSection', 'CallToActionSection'
       ],
       'about-us': [
@@ -67,6 +67,7 @@ You MUST respond with ONLY a JSON object in this EXACT structure (no other text)
 }
 
 SUPPORTED SECTION TYPES (You can ONLY pick from these):
+- AnnouncementBarSection: Used to display seasonal offers or urgent messages at the very top of the page.
 - HeroSection: Used for top-of-page introductions on the home page.
 - PageHeaderSection: Used for the smaller hero section at the top of detail pages (like service or location details).
 - BrandsSection: Used to display trust badges, certifications, or partner logos.
@@ -82,7 +83,7 @@ SUPPORTED SECTION TYPES (You can ONLY pick from these):
 
 Do not invent new section types. Just output the array of strings wrapped in the JSON object.`;
 
-    const response = await this.aiGateway.generateText('claude-fable-5', {
+    const response = await this.aiGateway.generateText('anthropic/claude-fable-5', {
       systemPrompt: 'You output ONLY valid JSON. No markdown fences, no explanation, no commentary. Just the raw JSON object.',
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.1,
@@ -114,7 +115,8 @@ Do not invent new section types. Just output the array of strings wrapped in the
     return {
       data: validatedData,
       hash,
-      model: 'claude-fable-5',
+      model: 'anthropic/claude-fable-5',
+      usage: (response as any).usage || response.usage,
     };
   }
 }

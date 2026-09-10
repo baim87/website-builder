@@ -13,8 +13,13 @@ export class SkillLoggerService {
     inputHash: string;
     model: string;
     tokens?: number;
+    promptTokens?: number;
+    completionTokens?: number;
+    cost?: number;
+    metadata?: any;
     latencyMs?: number;
     outputHash?: string;
+    outputData?: any;
     status: 'success' | 'failed';
     error?: string;
   }) {

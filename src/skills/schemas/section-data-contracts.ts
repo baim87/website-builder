@@ -253,4 +253,8 @@ export const SectionDataSchemaRegistry = {
       logo: ImageSchema,
     })),
   }),
+
+  AnnouncementBarSection: z.object({
+    defaultMessage: z.string().optional().describe('Fallback message if seasonality data fails to load'),
+  }),
 };

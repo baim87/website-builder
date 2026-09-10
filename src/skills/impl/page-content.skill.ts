@@ -46,7 +46,7 @@ SUPPORTED SECTION TYPES (You can ONLY use these types):
 
 Do not invent new section types. Use the supported ones to compose the page.`;
 
-    const response = await this.aiGateway.generateText('claude-fable-5', {
+    const response = await this.aiGateway.generateText('anthropic/claude-fable-5', {
       systemPrompt: 'You output ONLY valid JSON. No markdown fences, no explanation, no commentary. Just the raw JSON object.',
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.2,
@@ -90,7 +90,8 @@ Do not invent new section types. Use the supported ones to compose the page.`;
     return {
       data: validatedData,
       hash,
-      model: 'claude-fable-5',
+      model: 'anthropic/claude-fable-5',
+      usage: (response as any).usage || response.usage,
     };
   }
 }

@@ -65,8 +65,12 @@ export const envSchema = z.object({
   JWT_EXPIRY: z.string().default('15m'),
   REFRESH_TOKEN_EXPIRY: z.string().default('7d'),
 
-  THROTTLE_TTL: z.coerce.number().default(60),
+  THROTTLE_TTL: z.coerce.number().default(60000),
   THROTTLE_LIMIT: z.coerce.number().default(100),
+
+  BRANDFETCH_API_KEY: z.string().optional(),
+  LOGODEV_SECRET_KEY: z.string().optional(),
+  BROWSERLESS_WS_ENDPOINT: z.string().optional(),
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;

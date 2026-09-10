@@ -16,7 +16,7 @@ export class SeoMetadataSkill implements Skill {
   ) {}
 
   async execute(input: SkillInput): Promise<SkillOutput> {
-    const { businessContext, pageSlug, keywordTarget } = input.context;
+    const { businessContext, pageSlug, keywordTarget, projectAssets = [] } = input.context;
     
     if (!pageSlug || !keywordTarget || !keywordTarget.primaryKeyword) {
       throw new Error('SeoMetadataSkill requires pageSlug and keywordTarget with a primaryKeyword');
@@ -24,6 +24,8 @@ export class SeoMetadataSkill implements Skill {
 
     const primaryKeyword = keywordTarget.primaryKeyword.keyword;
     const secondaryKeywords = keywordTarget.secondaryKeywords?.map((k: any) => k.keyword) || [];
+
+    const availableAssets = projectAssets.map((a: any) => `ASSET:${a.id} - ${a.prompt}`).join('\n');
 
     const prompt = `Generate SEO metadata for a specific page of this contractor website.
 
@@ -36,11 +38,15 @@ TARGET KEYWORDS:
 Primary Keyword: "${primaryKeyword}" (MUST be used in Title and H1)
 Secondary Keywords: ${secondaryKeywords.join(', ')}
 
+AVAILABLE IMAGES (for JSON-LD / og:image):
+${availableAssets || 'No specific images available, use a generic placeholder.'}
+
 RULES:
 1. The title MUST be 30-60 characters and MUST contain the Primary Keyword.
 2. The description MUST be 120-160 characters.
 3. The H1 MUST contain the Primary Keyword.
 4. Make it compelling for a user searching for these services.
+5. If available images are provided, select the most relevant 'ASSET:uuid' for the 'image' field. If none are relevant, omit the image field or use a generic UNSPLASH string.
 
 You MUST respond with ONLY a JSON object in this EXACT structure (no other text):
 {
@@ -51,10 +57,11 @@ You MUST respond with ONLY a JSON object in this EXACT structure (no other text)
   "keywords": ["string (primary + secondaries)"],
   "ogTitle": "string",
   "ogDescription": "string",
-  "canonicalPath": "/${pageSlug}"
+  "canonicalPath": "/${pageSlug}",
+  "image": "string (ASSET:uuid or UNSPLASH:query)"
 }`;
 
-    const response = await this.aiGateway.generateText('claude-fable-5', {
+    const response = await this.aiGateway.generateText('anthropic/claude-fable-5', {
       systemPrompt: 'You output ONLY valid JSON. No markdown fences, no explanation, no commentary. Just the raw JSON object.',
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.3,
@@ -90,7 +97,8 @@ You MUST respond with ONLY a JSON object in this EXACT structure (no other text)
     return {
       data: validatedData,
       hash,
-      model: 'claude-fable-5',
+      model: 'anthropic/claude-fable-5',
+      usage: (response as any).usage || response.usage,
     };
   }
 }

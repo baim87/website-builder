@@ -31,7 +31,7 @@ CRITICAL RULES:
 9. IMPORTANT: When asking the user to choose between options, ALWAYS enumerate the options with numbers (1., 2., 3., etc.) so the user can simply reply with a number.
 10. When asking for 'themePreference', you MUST offer EXACTLY these choices:
 ${themeOptions}
-Extract the chosen theme's ID (e.g. "editorial-luxury", "modern-minimalist", "soft-organic", "dark-bento").
+Extract the chosen theme's ID (e.g. "editorial-luxury", "modern-minimalist", "soft-organic", "dark-bento", "awesomic", "mercury", "hyer-aviation", "superpower", "11x-editorial").
 
 Allowed field names for extraction are strictly: ${REQUIRED_FIELDS.join(', ')}
 

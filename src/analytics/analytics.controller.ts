@@ -23,13 +23,14 @@ export class AnalyticsController {
   async provision(
     @Param('projectId') projectId: string,
     @Body('domainName') domainName: string,
+    @Request() req: any,
   ) {
     if (!domainName) {
       throw new HttpException('Domain name is required to provision analytics', HttpStatus.BAD_REQUEST);
     }
     
     // Add job to BullMQ via the producer
-    await this.analyticsProducer.provisionAnalytics(projectId, domainName);
+    await this.analyticsProducer.provisionAnalytics(projectId, domainName, req.user.id);
     
     return { status: 'ACCEPTED', message: 'Analytics provisioning has been queued and will complete in the background.' };
   }

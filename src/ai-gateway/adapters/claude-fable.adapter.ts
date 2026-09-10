@@ -24,12 +24,21 @@ export class ClaudeFableAdapter implements TextAdapter {
       try {
         return await operation();
       } catch (error: any) {
-        if (
-          attempt < maxRetries &&
-          (error?.status === 429 || error?.status === 529 || error?.message?.includes('Overloaded'))
-        ) {
-          const delay = Math.min(1000 * Math.pow(2, attempt), 10000);
-          console.warn(`[Claude Adapter] API Overloaded or Rate Limited. Retrying in ${delay}ms... (Attempt ${attempt}/${maxRetries})`);
+        const isRateLimit = error?.status === 429 || error?.status === 529 || error?.message?.includes('Overloaded');
+        const isInFlightLimit = error?.status === 402 && error?.message?.includes('in-flight requests');
+        
+        if (attempt < maxRetries && (isRateLimit || isInFlightLimit)) {
+          let delay = Math.min(1000 * Math.pow(2, attempt), 10000);
+          
+          if (isInFlightLimit) {
+            // OpenRouter in-flight budget exhaustion usually requires a longer cooldown
+            // Sometimes it gives Retry-After: 120 in headers, but we'll conservatively wait 30s per attempt
+            delay = 30000 * attempt; 
+            console.warn(`[Claude Adapter] OpenRouter in-flight limit reached (402). Retrying in ${delay}ms... (Attempt ${attempt}/${maxRetries})`);
+          } else {
+            console.warn(`[Claude Adapter] API Overloaded or Rate Limited. Retrying in ${delay}ms... (Attempt ${attempt}/${maxRetries})`);
+          }
+          
           await new Promise((resolve) => setTimeout(resolve, delay));
           continue;
         }
@@ -40,7 +49,7 @@ export class ClaudeFableAdapter implements TextAdapter {
   }
 
   async *generateStream(model: string, params: GenerateTextParams): AsyncIterable<TextChunk> {
-    const openRouterModel = model === 'claude-fable-5' ? 'anthropic/claude-fable-5' : model;
+    const openRouterModel = model;
     
     const stream = await this.executeWithRetry(() => this.client.messages.create({
       model: openRouterModel,
@@ -56,16 +65,30 @@ export class ClaudeFableAdapter implements TextAdapter {
       if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
         yield { text: chunk.delta.text };
       }
+      
+      // Attempt to catch OpenRouter usage injected in the stream
+      const usageObj = (chunk as any).usage || (chunk as any).message?.usage;
+      if (usageObj && (usageObj.prompt_tokens !== undefined || usageObj.input_tokens !== undefined)) {
+        yield {
+          text: '',
+          usage: {
+            promptTokens: usageObj.prompt_tokens ?? usageObj.input_tokens ?? 0,
+            completionTokens: usageObj.completion_tokens ?? usageObj.output_tokens ?? 0,
+            cost: usageObj.cost,
+          }
+        };
+      }
     }
   }
 
   async generateText(model: string, params: GenerateTextParams) {
-    const openRouterModel = model === 'claude-fable-5' ? 'anthropic/claude-fable-5' : model;
+    const openRouterModel = model;
     
     let fullText = '';
     let currentMessages = this.mapMessages(params.messages);
     let totalPromptTokens = 0;
     let totalCompletionTokens = 0;
+    let totalCost: number | undefined = undefined;
     let keepGenerating = true;
 
     while (keepGenerating) {
@@ -113,8 +136,12 @@ export class ClaudeFableAdapter implements TextAdapter {
         }
         fullText += textChunk;
       }
-      totalPromptTokens += response.usage.input_tokens;
-      totalCompletionTokens += response.usage.output_tokens;
+      const usageObj = (response as any).usage || {};
+      totalPromptTokens += usageObj.prompt_tokens ?? response.usage.input_tokens;
+      totalCompletionTokens += usageObj.completion_tokens ?? response.usage.output_tokens;
+      if (usageObj.cost !== undefined) {
+        totalCost = (totalCost || 0) + usageObj.cost;
+      }
 
       if (response.stop_reason === 'max_tokens') {
         console.warn(`[Claude Adapter] Max tokens hit. Resuming generation...`);
@@ -130,6 +157,7 @@ export class ClaudeFableAdapter implements TextAdapter {
       usage: {
         promptTokens: totalPromptTokens,
         completionTokens: totalCompletionTokens,
+        cost: totalCost,
       },
     };
   }

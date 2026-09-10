@@ -1,6 +1,9 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { VercelClient } from '../vercel/vercel.client';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
+import { QUEUE_NAMES } from '../common/constants/queue-names.constant';
 
 @Injectable()
 export class DeploymentService {
@@ -9,6 +12,7 @@ export class DeploymentService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly vercelClient: VercelClient,
+    @InjectQueue(QUEUE_NAMES.DEPLOYMENT_TRACKER) private readonly deploymentTrackerQueue: Queue
   ) {}
 
   async deployProject(projectId: string, userId: string) {
@@ -82,47 +86,30 @@ export class DeploymentService {
       throw new NotFoundException('Project not found');
     }
 
-    // If custom domain is set, use it. Otherwise, we'll poll Vercel for the exact URL.
-    let liveUrl = project.domain?.domainName ? `https://${project.domain.domainName}` : null;
-    
-    // Poll Vercel for the latest deployment to finish and get the true URL
-    let maxRetries = 40; // Wait up to 2 minutes (3s * 40)
-    
-    while (!liveUrl && maxRetries > 0) {
-      await new Promise(res => setTimeout(res, 3000));
-      maxRetries--;
-      
-      try {
-        const deployRes = await this.vercelClient.getProjectDeployments(vercelProjectName);
-        if (deployRes && deployRes.deployments && deployRes.deployments.length > 0) {
-          const latestDeploy = deployRes.deployments[0];
-          
-          if (latestDeploy.readyState === 'READY' && latestDeploy.url) {
-            liveUrl = `https://${latestDeploy.url}`;
-            break;
-          } else if (latestDeploy.readyState === 'ERROR') {
-            throw new Error('Vercel deployment failed with ERROR state.');
-          }
-        }
-      } catch (err) {
-        this.logger.warn(`Polling Vercel API failed: ${err.message}`);
-      }
-    }
-
-    if (!liveUrl) {
-      this.logger.warn('Timed out waiting for Vercel deployment URL. Falling back to default format.');
-      liveUrl = `https://${vercelProjectName}.vercel.app`;
-    }
-
+    // Set initial status to Deploying
     const updatedProject = await this.prisma.project.update({
       where: { id: projectId },
-      data: { status: 'PUBLISHED' },
+      data: { status: 'DEPLOYING' }, // Or whatever intermediate status you use
     });
+
+    this.logger.log(`Queueing deployment tracker job for ${vercelProjectName}...`);
+    
+    await this.deploymentTrackerQueue.add('track', {
+      projectId,
+      userId,
+      vercelProjectName,
+      attempts: 0
+    }, {
+      delay: 3000 // Initial delay to give Vercel time to start the build
+    });
+
+    // If custom domain is set, use it. Otherwise, we'll give the default format.
+    let liveUrl = project.domain?.domainName ? `https://${project.domain.domainName}` : `https://${vercelProjectName}.vercel.app`;
 
     return {
       success: true,
       deploymentId: 'linked',
-      status: 'READY',
+      status: 'DEPLOYING',
       url: liveUrl,
       project: updatedProject,
     };

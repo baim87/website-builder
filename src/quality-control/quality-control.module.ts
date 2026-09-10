@@ -4,6 +4,7 @@ import { SitemapCrawlerService } from './sitemap-crawler.service';
 import { LinkIntegrityService } from './link-integrity.service';
 import { PageSpeedService } from './pagespeed.service';
 import { VisualQAService } from './visual-qa.service';
+import { BrowserlessService } from './browserless.service';
 import { AIGatewayModule } from '../ai-gateway/ai-gateway.module';
 import { PrismaModule } from '../prisma/prisma.module';
 
@@ -15,6 +16,7 @@ import { PrismaModule } from '../prisma/prisma.module';
     LinkIntegrityService,
     PageSpeedService,
     VisualQAService,
+    BrowserlessService,
   ],
   exports: [QualityControlService],
 })

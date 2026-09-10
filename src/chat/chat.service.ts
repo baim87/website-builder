@@ -13,7 +13,7 @@ export class ChatService {
     private readonly streamService: ChatStreamService,
   ) {}
 
-  async *sendMessage(projectId: string, content: string | any[], systemPrompt: string, model: string = 'claude-haiku-4-5-20251001'): AsyncIterable<SSEEvent | { event: 'internal-done'; data: { fullResponse: string } }> {
+  async *sendMessage(projectId: string, content: string | any[], systemPrompt: string, model: string = 'anthropic/claude-haiku-4.5'): AsyncIterable<SSEEvent | { event: 'internal-done'; data: { fullResponse: string } }> {
     // Extract text for DB persistence
     const textContent = Array.isArray(content) 
       ? content.find(c => c.type === 'text')?.text || '' 
@@ -53,17 +53,38 @@ export class ChatService {
     });
 
     let fullResponse = '';
+    let usage: any;
 
     try {
       for await (const chunk of stream) {
         const text = chunk.text || '';
         fullResponse += text;
-        yield this.streamService.formatTokenEvent(text);
+        if (chunk.usage) {
+          usage = chunk.usage;
+        }
+        if (text) {
+          yield this.streamService.formatTokenEvent(text);
+        }
       }
     } catch (e: any) {
       yield this.streamService.formatErrorEvent(e.message);
       return;
     }
+
+    const invocation = await this.prisma.skillInvocation.create({
+      data: {
+        projectId,
+        skillType: 'Interview',
+        model,
+        inputHash: 'stream-hash',
+        status: 'success',
+        tokens: usage?.promptTokens ? usage.promptTokens + usage.completionTokens : undefined,
+        promptTokens: usage?.promptTokens,
+        completionTokens: usage?.completionTokens,
+        cost: usage?.cost,
+        metadata: { phase: 'interview' },
+      }
+    });
 
     // 4. Persist agent response
     await this.prisma.chatMessage.create({
@@ -71,6 +92,7 @@ export class ChatService {
         projectId,
         role: 'assistant',
         content: fullResponse,
+        skillInvocationRef: invocation.id,
       },
     });
 

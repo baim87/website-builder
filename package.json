@@ -23,6 +23,7 @@
     "test:e2e": "jest --config ./test/jest-e2e.json --runInBand",
     "verify-keys": "npx ts-node scripts/verify-api-keys.ts",
     "chat": "NODE_OPTIONS=--max-old-space-size=4096 npx ts-node -T scripts/cli-chat.ts",
+    "test-analytics": "NODE_OPTIONS=--max-old-space-size=4096 npx ts-node -T scripts/test-analytics.ts",
     "redeploy": "NODE_OPTIONS=--max-old-space-size=4096 npx ts-node -T scripts/redeploy-project.ts"
   },
   "dependencies": {
@@ -53,6 +54,7 @@
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
     "passport-jwt": "^4.0.1",
+    "puppeteer-core": "^25.10.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "sharp": "^0.35.3",
@@ -72,6 +74,7 @@
     "@types/jest": "^30.0.0",
     "@types/multer": "^2.2.0",
     "@types/node": "^24.0.0",
+    "@types/node-fetch": "^2.6.13",
     "@types/nodemailer": "^8.0.1",
     "@types/passport-google-oauth20": "^2.0.17",
     "@types/passport-jwt": "^4.0.1",

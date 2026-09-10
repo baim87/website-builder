@@ -13,7 +13,8 @@ export class AnalyticsProvisioningProducer extends BaseProducer<AnalyticsProvisi
     super();
   }
 
-  async provisionAnalytics(projectId: string, domain: string) {
-    return this.addJob('provision', { projectId, domain }, { attempts: 3 });
+  async provisionAnalytics(projectId: string, domain: string, userId: string) {
+    this.logger.log(`Queueing analytics provisioning for ${domain}`);
+    return this.addJob('provision', { projectId, domain, userId }, { attempts: 3 });
   }
 }

@@ -59,4 +59,18 @@ export class Ga4Client {
 
     return { propertyId, measurementId };
   }
+
+  async grantAdminAccess(propertyId: string, emailAddress: string) {
+    if (!this.gaAdminClient) throw new Error('GA4 Admin client not initialized');
+
+    this.logger.log(`Granting GA4 Admin access to ${emailAddress} for Property ${propertyId}`);
+
+    await this.gaAdminClient.createAccessBinding({
+      parent: `properties/${propertyId}`,
+      accessBinding: {
+        user: emailAddress,
+        roles: ['predefinedRoles/admin'],
+      },
+    });
+  }
 }

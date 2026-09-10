@@ -55,11 +55,11 @@ Return ONLY valid JSON.
 { "isValid": false, "missingElements": ["The iframe for data.mapUrl is completely missing.", "data.hours is not rendered anywhere."] }
 `;
 
-    const response = await this.aiGateway.generateText('claude-fable-5', {
+    const response = await this.aiGateway.generateText('anthropic/claude-fable-5', {
       systemPrompt: 'You output ONLY valid JSON. No markdown fences. No explanations.',
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.1,
-      maxTokens: 1024,
+      maxTokens: 8192,
       responseFormat: 'json',
     });
 
@@ -72,7 +72,8 @@ Return ONLY valid JSON.
       return {
         data: parsed,
         hash: '',
-        model: 'claude-fable-5',
+        model: 'anthropic/claude-fable-5',
+      usage: (response as any).usage || response.usage,
       };
     } catch (e) {
       this.logger.error(`Validation LLM returned unparseable JSON: ${response.text}`);

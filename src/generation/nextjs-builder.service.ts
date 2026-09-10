@@ -1,8 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Page } from '@prisma/client';
 import { BusinessContextService } from '../projects/business-context.service';
 import { WebsiteDataService } from '../projects/website-data.service';
-import { PageService } from '../projects/page.service';
 import { GithubService } from '../deployment/github.service';
 import { exec } from 'child_process';
 import { promisify } from 'util';
@@ -12,6 +10,8 @@ import * as crypto from 'crypto';
 import { CodeRepairSkill } from '../skills/impl/code-repair.skill';
 import { SkillExecutorService } from '../skills/skill-executor.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { generateRepoName } from '../common/utils/repo.util';
+import { SiteContentService } from './site-content.service';
 
 const execAsync = promisify(exec);
 
@@ -22,11 +22,11 @@ export class NextjsBuilderService {
   constructor(
     private readonly businessContextService: BusinessContextService,
     private readonly websiteDataService: WebsiteDataService,
-    private readonly pageService: PageService,
     private readonly githubService: GithubService,
     private readonly codeRepair: CodeRepairSkill,
     private readonly skillExecutor: SkillExecutorService,
     private readonly prisma: PrismaService,
+    private readonly siteContentService: SiteContentService,
   ) {}
 
   async buildAndDeploy(
@@ -61,10 +61,7 @@ export class NextjsBuilderService {
       const backupDir = path.join(tempDir, 'src/components_backup');
       await execAsync(`cp -R ${componentsDir} ${backupDir}`);
 
-      const websiteData = await this.websiteDataService.findByProjectId(projectId);
-      const pages = await this.pageService.getPagesByProjectId(projectId);
-      const assets = await this.prisma.asset.findMany({ where: { projectId } });
-      const logoAsset = assets.find((a: any) => a.purpose === 'logo' || a.type === 'image');
+      const websiteData = await this.websiteDataService.findByProjectId(projectId, userId);
 
       // 2. Inject CSS Variables into globals.css
       const designTokens = websiteData?.designTokens as any;
@@ -116,6 +113,10 @@ export class NextjsBuilderService {
   --accent-foreground: ${hexToHsl(designTokens.colors.accentForeground || computeContrastColor(designTokens.colors.accent || '#f4f4f5'))};
   --surface-dark: ${hexToHsl(designTokens.colors.surfaceDark || '#1a202c')};
   --surface-dark-foreground: ${hexToHsl(computeContrastColor(designTokens.colors.surfaceDark || '#1a202c'))};
+  --header-bg: ${hexToHsl(designTokens.colors.headerBg || designTokens.colors.background || '#ffffff')};
+  --header-foreground: ${hexToHsl(computeContrastColor(designTokens.colors.headerBg || designTokens.colors.background || '#ffffff'))};
+  --footer-bg: ${hexToHsl(designTokens.colors.footerBg || designTokens.colors.surfaceDark || '#1a202c')};
+  --footer-foreground: ${hexToHsl(computeContrastColor(designTokens.colors.footerBg || designTokens.colors.surfaceDark || '#1a202c'))};
   --font-heading: "${designTokens.typography.headingFont || 'Inter'}";
   --font-body: "${designTokens.typography.bodyFont || 'Inter'}";
 }
@@ -143,28 +144,16 @@ export class NextjsBuilderService {
         await fs.writeFile(globalsPath, existingCss);
       }
       
-      const layoutPage = pages.find((p: Page) => p.slug === 'layout');
-      const headerSection = (layoutPage?.content as any[])?.find(s => s.type === 'HeaderSection');
-      const footerSection = (layoutPage?.content as any[])?.find(s => s.type === 'FooterSection');
-
-      const siteContent = {
-        designTokens: websiteData?.designTokens || {},
-        seoMetadata: websiteData?.seoMetadata || {},
-        business: {
-          name: businessContext.businessName || '',
-          phone: businessContext.phone || '',
-          email: businessContext.email || '',
-          address: businessContext.businessAddress || '',
-          tagline: '',
-          logoUrl: logoAsset?.url || ''
-        },
-        layout: {
-          header: headerSection || null,
-          footer: footerSection || null,
-        },
-        pages: pages.filter((p: Page) => p.slug !== 'layout').map((p: Page) => ({ slug: p.slug, sections: p.content }))
-      };
+      const siteContent = await this.siteContentService.getSiteContent(projectId, userId, true);
       await fs.writeFile(path.join(tempDir, 'src/data/content.json'), JSON.stringify(siteContent, null, 2));
+
+      // 3. Write seasonality.json to public directory
+      const publicDir = path.join(tempDir, 'public');
+      await fs.mkdir(publicDir, { recursive: true });
+      if (websiteData?.seasonalConfig) {
+        await fs.writeFile(path.join(publicDir, 'seasonality.json'), JSON.stringify(websiteData.seasonalConfig, null, 2));
+        this.logger.log(`Wrote seasonality.json to ${publicDir}`);
+      }
 
       // 4. Write Generated Components and Self-Healing Build Loop
       const customComponents = (websiteData?.customComponents as Record<string, string>) || {};
@@ -237,7 +226,8 @@ export class NextjsBuilderService {
             
             const repairResult = await this.skillExecutor.executeSkill(this.codeRepair, {
               projectId,
-              context: { brokenCode, errorLog, componentName: brokenCompName }
+              context: { brokenCode, errorLog, componentName: brokenCompName },
+              metadata: { phase: 'repair', componentName: brokenCompName }
             });
             
             const fixedCode = repairResult.code;
@@ -248,8 +238,8 @@ export class NextjsBuilderService {
             // Save permanently back to database
             customComponents[brokenCompName] = fixedCode;
             await this.websiteDataService.upsert(projectId, {
-               customComponents
-            });
+              customComponents
+            }, userId!);
             
             this.logger.log(`Applied fix to ${brokenCompName}. Retrying build...`);
           } else {
@@ -260,11 +250,48 @@ export class NextjsBuilderService {
         }
       }
 
+      // 4.5. Write brand-kit.md if available
+      if (businessContext?.brandIdentityInputs) {
+        const docsDir = path.join(tempDir, 'docs');
+        await fs.mkdir(docsDir, { recursive: true });
+        
+        let mdContent = `# Brand Kit\n\n`;
+        const inputs = businessContext.brandIdentityInputs as any;
+        for (const [key, value] of Object.entries(inputs)) {
+          if (typeof value === 'object') {
+            mdContent += `## ${key}\n\`\`\`json\n${JSON.stringify(value, null, 2)}\n\`\`\`\n\n`;
+          } else {
+            mdContent += `## ${key}\n${value}\n\n`;
+          }
+        }
+        await fs.writeFile(path.join(docsDir, 'brand-kit.md'), mdContent);
+      }
+
+      // 4.75. Inject Environment Variables for Deployment
+      this.logger.log(`Injecting .env file for deployment...`);
+      const envContent = `NEXT_PUBLIC_API_URL=${process.env.API_URL || 'http://localhost:3000'}
+NEXT_PUBLIC_PROJECT_ID=${projectId}
+SMTP_HOST=${process.env.SMTP_HOST || 'smtp.gmail.com'}
+SMTP_PORT=${process.env.SMTP_PORT || '465'}
+SMTP_USER=${process.env.SMTP_EMAIL || ''}
+SMTP_PASS=${process.env.SMTP_PASSWORD || ''}
+CONTACT_EMAIL=${businessContext?.email || process.env.CONTACT_EMAIL || ''}
+BUILDER_API_SECRET=${process.env.BUILDER_API_SECRET || ''}
+`;
+      await fs.writeFile(path.join(tempDir, '.env'), envContent);
+      
+      // Allow .env in git so it gets pushed to the private GitHub repo and picked up by Vercel
+      try {
+        let gitignore = await fs.readFile(path.join(tempDir, '.gitignore'), 'utf-8');
+        // Replace .env* with a comment to un-ignore it
+        gitignore = gitignore.replace(/\.env\*/g, '# .env* (Allowed for deployment)');
+        await fs.writeFile(path.join(tempDir, '.gitignore'), gitignore);
+      } catch (e: any) {
+        this.logger.warn(`Could not update .gitignore to allow .env: ${e.message}`);
+      }
+
       // 5. Create GitHub Repository and Push
-      const projectNameSlug = businessContext.businessName 
-        ? businessContext.businessName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '')
-        : `project-${projectId.substring(0, 8)}`;
-      const repoName = `${projectNameSlug}-${projectId.substring(0, 4)}`;
+      const repoName = generateRepoName(businessContext.businessName, projectId);
 
       this.logger.log(`Ensuring GitHub repository exists: ${repoName}`);
       const repo = await this.githubService.ensureRepository(repoName);
@@ -275,7 +302,7 @@ export class NextjsBuilderService {
       }
 
       this.logger.log(`Committing and pushing code to GitHub repo: ${repoName}`);
-      await this.githubService.commitAndPush(repoName, tempDir);
+      await this.githubService.commitAndPush(repoName, tempDir, projectId, userId, false);
 
       this.logger.log(`Successfully pushed codebase to GitHub: ${repo.clone_url}`);
 
@@ -283,12 +310,11 @@ export class NextjsBuilderService {
 
     } catch (error: any) {
       this.logger.error(`Failed to build and push project ${projectId}`, error.stack);
-      throw error;
-    } finally {
       this.logger.log(`Cleaning up temporary directory ${tempDir}`);
       await fs.rm(tempDir, { recursive: true, force: true }).catch(err => 
         this.logger.warn(`Failed to cleanup temp dir: ${err.message}`)
       );
+      throw error;
     }
   }
 }
