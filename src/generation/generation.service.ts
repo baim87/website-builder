@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { OrchestratorService } from '../skills/orchestrator.service';
+import { GenerationOrchestratorService } from './generation-orchestrator.service';
 import { WebsiteDataService } from '../projects/website-data.service';
 import { BusinessContextService } from '../projects/business-context.service';
 import { PageService } from '../projects/page.service';
@@ -7,16 +7,16 @@ import { SeoArtifactsService } from '../seo/seo-artifacts.service';
 import { NextjsBuilderService } from './nextjs-builder.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { DeploymentService } from '../deployment/deployment.service';
-import { QualityControlProducer } from '../queue/producers/quality-control.producer';
 import { CostAggregatorService } from '../skills/cost-aggregator.service';
 import { BrandExtractionService } from '../assets/brand-extraction.service';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 
 @Injectable()
 export class GenerationService {
   private readonly logger = new Logger(GenerationService.name);
 
   constructor(
-    private readonly orchestrator: OrchestratorService,
+    private readonly orchestrator: GenerationOrchestratorService,
     private readonly websiteDataService: WebsiteDataService,
     private readonly businessContextService: BusinessContextService,
     private readonly pageService: PageService,
@@ -24,9 +24,9 @@ export class GenerationService {
     private readonly nextjsBuilder: NextjsBuilderService,
     private readonly prisma: PrismaService,
     private readonly deploymentService: DeploymentService,
-    private readonly qualityControlProducer: QualityControlProducer,
     private readonly costAggregator: CostAggregatorService,
     private readonly brandExtractionService: BrandExtractionService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   async generateProject(projectId: string, userId: string, jobId: string) {
@@ -134,14 +134,14 @@ export class GenerationService {
       // 9. Update generation status and clear lock
       await this.websiteDataService.releaseGenerationLock(projectId, userId, 'completed');
 
-      // 10. Trigger Quality Control in the background
-      this.logger.log(`Dispatching Quality Control job for project ${projectId}...`);
-      await this.qualityControlProducer.triggerQualityControl(
+      // 10. Trigger Quality Control via event emission
+      this.logger.log(`Dispatching Quality Control event for project ${projectId}...`);
+      this.eventEmitter.emit('project.generated', {
         projectId, 
-        userId,
+        userId, 
         liveUrl, 
-        businessContext.businessName || 'service business'
-      );
+        businessName: businessContext.businessName || 'service business'
+      });
 
       this.logger.log(`Completed generation for project ${projectId}. Live at: ${liveUrl}`);
       return liveUrl;

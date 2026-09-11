@@ -19,7 +19,8 @@ import { ComponentValidationSkill } from './impl/component-validation.skill';
 import { ImagePlannerSkill } from './impl/image-planner.skill';
 import { AssetRepairSkill } from './impl/asset-repair.skill';
 import { CopywritingRepairSkill } from './impl/copywriting-repair.skill';
-import { OrchestratorService } from './orchestrator.service';
+import { ComponentEditorSkill } from './impl/component-editor.skill';
+import { GenerationOrchestratorService } from '../generation/generation-orchestrator.service';
 import { AIGatewayModule } from '../ai-gateway/ai-gateway.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { GuardrailsModule } from '../guardrails/guardrails.module';
@@ -49,11 +50,12 @@ import { AssetsModule } from '../assets/assets.module';
     ComponentValidationSkill,
     AssetRepairSkill,
     CopywritingRepairSkill,
-    OrchestratorService,
+    ComponentEditorSkill,
+    GenerationOrchestratorService,
     UnsplashService,
     CostAggregatorService,
     BrandKitGeneratorSkill,
   ],
-  exports: [SkillExecutorService, OrchestratorService, CodeRepairSkill, ComponentValidationSkill, AssetRepairSkill, CopywritingRepairSkill, CostAggregatorService, BrandKitGeneratorSkill],
+  exports: [SkillExecutorService, GenerationOrchestratorService, CodeRepairSkill, ComponentValidationSkill, AssetRepairSkill, CopywritingRepairSkill, CostAggregatorService, BrandKitGeneratorSkill, ComponentEditorSkill],
 })
 export class SkillsModule {}

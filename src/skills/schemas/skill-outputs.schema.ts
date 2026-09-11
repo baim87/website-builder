@@ -100,6 +100,7 @@ const PrimitiveTypeSchema = z.string();
 export const CopyDataSchema = z.record(z.string(), z.any());
 
 export const ASTNodeSchema: z.ZodType<any> = z.lazy(() => z.object({
+  id: z.string().optional(),
   type: PrimitiveTypeSchema,
   props: z.record(z.string(), z.any()).optional(),
   children: z.array(z.union([ASTNodeSchema, z.string()])).optional(),

@@ -218,6 +218,7 @@ model Page {
   keywordTarget Json?
   seoMeta       Json?
   status        String   @default("pending")
+  contentVersion Int      @default(1)
   project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, slug])
