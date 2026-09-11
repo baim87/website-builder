@@ -13,14 +13,15 @@ import { PortraitGenerationService } from './portrait-generation.service';
 
 import { BrandExtractionService } from './brand-extraction.service';
 import { AIGatewayModule } from '../ai-gateway/ai-gateway.module';
-import { ImagesModule } from '../images/images.module';
+
 import { AssetPathResolverService } from './asset-path-resolver.service';
 import { PartnerBrandService } from './partner-brand.service';
+import { BrandAssetIngestionService } from './brand-asset-ingestion.service';
 
 @Module({
-  imports: [ConfigModule, PrismaModule, StorageModule, forwardRef(() => QueueModule), AIGatewayModule, ImagesModule],
+  imports: [ConfigModule, PrismaModule, StorageModule, forwardRef(() => QueueModule), AIGatewayModule],
   controllers: [AssetsController, PublicProjectAssetsController],
-  providers: [AssetsService, ImageProcessorService, VideoProcessorService, LogoGenerationService, PortraitGenerationService, BrandExtractionService, AssetPathResolverService, PartnerBrandService],
-  exports: [AssetsService, ImageProcessorService, VideoProcessorService, LogoGenerationService, PortraitGenerationService, BrandExtractionService, AssetPathResolverService, PartnerBrandService],
+  providers: [AssetsService, ImageProcessorService, VideoProcessorService, LogoGenerationService, PortraitGenerationService, BrandExtractionService, AssetPathResolverService, PartnerBrandService, BrandAssetIngestionService],
+  exports: [AssetsService, ImageProcessorService, VideoProcessorService, LogoGenerationService, PortraitGenerationService, BrandExtractionService, AssetPathResolverService, PartnerBrandService, BrandAssetIngestionService],
 })
 export class AssetsModule {}

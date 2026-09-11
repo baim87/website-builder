@@ -11,7 +11,7 @@ import { CopyWriterSkill } from '../skills/impl/copy-writer.skill';
 import { UIDesignerSkill } from '../skills/impl/ui-designer.skill';
 import { ComponentGeneratorSkill } from '../skills/impl/component-generator.skill';
 import { PrismaService } from '../prisma/prisma.service';
-import { UnsplashService } from '../images/unsplash.service';
+import { UnsplashService } from '../assets/unsplash.service';
 
 import { ImagePlannerSkill } from '../skills/impl/image-planner.skill';
 import { ImageGenerationProducer } from '../queue/producers/image-generation.producer';

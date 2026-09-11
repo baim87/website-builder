@@ -5,7 +5,7 @@ import { AssetPathResolverService } from './asset-path-resolver.service';
 import axios from 'axios';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
-import { ImageOptimizationService } from '../images/image-optimization.service';
+import { ImageProcessorService } from './image-processor.service';
 
 @Injectable()
 export class PortraitGenerationService {
@@ -14,7 +14,7 @@ export class PortraitGenerationService {
   constructor(
     private readonly storageService: StorageService,
     private readonly prisma: PrismaService,
-    private readonly imageOptimization: ImageOptimizationService,
+    private readonly imageProcessor: ImageProcessorService,
     private readonly pathResolver: AssetPathResolverService,
   ) {}
 
@@ -248,7 +248,7 @@ No AI-looking artifacts.`;
     await this.storageService.upload(originalKey, generatedBuffer, 'image/jpeg');
 
     // Optimize to WebP and upload
-    const webpBuffer = await this.imageOptimization.optimizeToWebp(generatedBuffer);
+    const webpBuffer = await this.imageProcessor.convertToWebp(generatedBuffer);
     const uploadedWebpUrl = await this.storageService.upload(webpKey, webpBuffer, 'image/webp');
     
     await this.prisma.asset.create({

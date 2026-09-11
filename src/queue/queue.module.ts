@@ -28,7 +28,7 @@ import { forwardRef } from '@nestjs/common';
 
 import { ImageGenerationProducer } from './producers/image-generation.producer';
 import { ImageGenerationConsumer } from './consumers/image-generation.consumer';
-import { ImagesModule } from '../images/images.module';
+
 import { GithubSyncConsumer } from './consumers/github-sync.consumer';
 import { DeploymentTrackerConsumer } from './consumers/deployment-tracker.consumer';
 
@@ -68,7 +68,6 @@ const producers = [
     forwardRef(() => QualityControlModule),
     forwardRef(() => SkillsModule),
     AIGatewayModule,
-    ImagesModule,
     BullModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({

@@ -37,6 +37,24 @@ export class AssetPathResolverService {
   }
 
   /**
+   * Resolves the R2 folder path for brand assets (logos, favicons) preserving extensions.
+   */
+  resolveBrandAssetPath(
+    userId: string,
+    projectId: string,
+    purpose: 'logo' | 'favicon',
+    extension: string,
+    projectAssetId: string
+  ): { folderPath: string; key: string } {
+    const shortId = projectAssetId.split('-')[0];
+    const folderPath = `${userId}/projects/${projectId}/assets/images/${purpose}`;
+    // E.g., user_1/projects/proj_2/assets/images/logo/logo-a1b2c3d4.png
+    const key = `${folderPath}/${purpose}-${shortId}.${extension}`;
+    
+    return { folderPath, key };
+  }
+
+  /**
    * Resolves the global R2 path for partner brand logos (shared CDN).
    */
   resolveGlobalBrandLogoPath(domain: string, extension: string): string {

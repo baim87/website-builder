@@ -8,7 +8,7 @@ import { PrismaService } from '../src/prisma/prisma.service';
 import { GooglePlacesService } from '../src/projects/google-places.service';
 import { BUSINESS_FIELDS } from '../src/interview/constants/interview-fields.constant';
 import { BusinessContextService } from '../src/projects/business-context.service';
-import { StorageService } from '../src/storage/storage.service';
+
 import { LogoGenerationService } from '../src/assets/logo-generation.service';
 import { BrandExtractionService } from '../src/assets/brand-extraction.service';
 import { BrandKitGeneratorSkill } from '../src/skills/impl/brand-kit-generator.skill';
@@ -304,50 +304,31 @@ async function bootstrap() {
     // --- BRANCH A: Has Brand & Logo ---
     if (brandChoice.toLowerCase() === 'a') {
       const logoInput = await question("Awesome. Please provide the path or URL to your logo:");
+      let uploadedLogoBuffer: Buffer | null = null;
       if (logoInput.trim() !== '') {
         try {
           say(`Fetching and uploading logo to R2...`);
-          const storageService = app.get(StorageService);
-          let buffer: Buffer;
-          let mimeType = 'image/png';
-          
-          if (logoInput.startsWith('http://') || logoInput.startsWith('https://')) {
-            const axios = require('axios');
-            const res = await axios.get(logoInput, { 
-              responseType: 'arraybuffer',
-              headers: { 'User-Agent': 'Mozilla/5.0' }
-            });
-            buffer = Buffer.from(res.data);
-            mimeType = res.headers['content-type'] || mimeType;
-          } else {
-            buffer = require('fs').readFileSync(logoInput);
-            if (logoInput.endsWith('.jpg') || logoInput.endsWith('.jpeg')) mimeType = 'image/jpeg';
-            else if (logoInput.endsWith('.webp')) mimeType = 'image/webp';
-            else if (logoInput.endsWith('.svg')) mimeType = 'image/svg+xml';
-          }
-
-          const crypto = require('crypto');
-          const hash = crypto.createHash('md5').update(buffer).digest('hex');
-          const key = `${user.id}/projects/${project.id}/assets/images/logo/${hash}-logo`;
-          const uploadedUrl = await storageService.upload(key, buffer, mimeType);
-
-          await prisma.asset.create({
-            data: {
-              projectId: project.id,
-              url: uploadedUrl,
-              type: 'image',
-              purpose: 'logo',
-              section: 'header,footer',
-            },
-          });
+          const ingestionService = app.get(require('../src/assets/brand-asset-ingestion.service').BrandAssetIngestionService);
+          const result = await ingestionService.processAsset(project.id, user.id, 'logo', logoInput.trim());
+          uploadedLogoBuffer = result.buffer;
           ok(`Logo uploaded successfully!`);
           
           say(`Analyzing logo to extract brand colors and fonts...`);
-          extractedBrand = await brandExtractionService.extractBrandFromLogo(uploadedUrl);
+          extractedBrand = await brandExtractionService.extractBrandFromLogo(result.url);
           ok(`Extracted Primary Color: ${extractedBrand.colors.primary}, Fonts: ${extractedBrand.typography.headingFont}`);
           
+          const faviconInput = await question("Do you have a specific 32x32 Favicon? (Provide path/URL, or type 'no' to auto-generate):");
+          if (faviconInput.toLowerCase() !== 'no' && faviconInput.trim() !== '') {
+            say(`Uploading custom favicon...`);
+            await ingestionService.processAsset(project.id, user.id, 'favicon', faviconInput.trim());
+            ok(`Custom favicon uploaded successfully!`);
+          } else if (uploadedLogoBuffer) {
+            say(`Auto-generating favicon from logo...`);
+            await ingestionService.deriveFaviconFromLogo(project.id, user.id, uploadedLogoBuffer);
+            ok(`Favicon auto-generated successfully!`);
+          }
         } catch (e: any) {
-          fail(`Failed to upload logo: ${e.message}`);
+          fail(`Failed to process brand assets: ${e.message}`);
         }
       }
 

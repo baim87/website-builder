@@ -25,7 +25,7 @@ import { AIGatewayModule } from '../ai-gateway/ai-gateway.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { GuardrailsModule } from '../guardrails/guardrails.module';
 import { KeywordsModule } from '../keywords/keywords.module';
-import { UnsplashService } from '../images/unsplash.service';
+import { UnsplashService } from '../assets/unsplash.service';
 import { QueueModule } from '../queue/queue.module';
 import { AssetsModule } from '../assets/assets.module';
 

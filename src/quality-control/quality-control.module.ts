@@ -11,6 +11,7 @@ import { QCOrchestratorService } from './qc-orchestrator.service';
 import { AutoRepairModule } from '../auto-repair/auto-repair.module';
 import { DeploymentModule } from '../deployment/deployment.module';
 import { SkillsModule } from '../skills/skills.module';
+import { ImageCritiqueService } from './image-critique.service';
 
 @Module({
   imports: [AIGatewayModule, PrismaModule, forwardRef(() => AutoRepairModule), forwardRef(() => DeploymentModule), forwardRef(() => SkillsModule)],
@@ -22,7 +23,8 @@ import { SkillsModule } from '../skills/skills.module';
     VisualQAService,
     BrowserlessService,
     QCOrchestratorService,
+    ImageCritiqueService,
   ],
-  exports: [QualityControlService, QCOrchestratorService],
+  exports: [QualityControlService, QCOrchestratorService, ImageCritiqueService],
 })
 export class QualityControlModule {}

@@ -5,10 +5,10 @@ import { QUEUE_NAMES } from '../../common/constants/queue-names.constant';
 import { ImageGenerationJobData } from '../interfaces/job-data.interface';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StorageService } from '../../storage/storage.service';
-import { ImageOptimizationService } from '../../images/image-optimization.service';
+import { ImageProcessorService } from '../../assets/image-processor.service';
 import { ConfigService } from '@nestjs/config';
 import { AssetPathResolverService } from '../../assets/asset-path-resolver.service';
-import { ImageCritiqueService } from '../../images/image-critique.service';
+import { ImageCritiqueService } from '../../quality-control/image-critique.service';
 
 @Processor(QUEUE_NAMES.IMAGE_GENERATION, {
   concurrency: 2, // process 2 at a time to prevent memory/cpu exhaustion from sharp
@@ -21,7 +21,7 @@ export class ImageGenerationConsumer extends WorkerHost {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
-    private readonly imageOptimization: ImageOptimizationService,
+    private readonly imageProcessor: ImageProcessorService,
     private readonly configService: ConfigService,
     private readonly pathResolver: AssetPathResolverService,
     private readonly critiqueService: ImageCritiqueService,
@@ -132,7 +132,7 @@ export class ImageGenerationConsumer extends WorkerHost {
       // Optimize
       const originalSizeKB = (bufferToUse.length / 1024).toFixed(1);
       this.logger.log(`${progressTag} Optimizing image (${originalSizeKB} KB original)...`);
-      const webpBuffer = await this.imageOptimization.optimizeToWebp(bufferToUse);
+      const webpBuffer = await this.imageProcessor.convertToWebp(bufferToUse);
       const webpSizeKB = (webpBuffer.length / 1024).toFixed(1);
       const savings = (100 - (webpBuffer.length / bufferToUse.length) * 100).toFixed(0);
       this.logger.log(`${progressTag} ✓ Optimized: ${originalSizeKB} KB → ${webpSizeKB} KB (${savings}% savings)`);

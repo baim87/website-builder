@@ -29,13 +29,13 @@ import { LeadsModule } from './leads/leads.module';
 import { RedisModule } from './common/redis/redis.module';
 
 import { QualityControlModule } from './quality-control/quality-control.module';
-import { ImagesModule } from './images/images.module';
+
 import { AutoRepairModule } from './auto-repair/auto-repair.module';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { EditorModule } from './editor/editor.module';
 
 @Module({
-  imports: [ConfigModule, PrismaModule, AuthModule, ProjectsModule, ChatModule, InterviewModule, GbpModule, GuardrailsModule, SeoModule, GenerationModule, AssetsModule, AIGatewayModule, QueueModule, StorageModule, KeywordsModule, SkillsModule, BillingModule, HealthModule, AnalyticsModule, StripeModule, VercelModule, DeploymentModule, DomainModule, LeadsModule, RedisModule, QualityControlModule, ImagesModule, AutoRepairModule, EditorModule, EventEmitterModule.forRoot()],
+  imports: [ConfigModule, PrismaModule, AuthModule, ProjectsModule, ChatModule, InterviewModule, GbpModule, GuardrailsModule, SeoModule, GenerationModule, AssetsModule, AIGatewayModule, QueueModule, StorageModule, KeywordsModule, SkillsModule, BillingModule, HealthModule, AnalyticsModule, StripeModule, VercelModule, DeploymentModule, DomainModule, LeadsModule, RedisModule, QualityControlModule, AutoRepairModule, EditorModule, EventEmitterModule.forRoot()],
 
   controllers: [AppController],
   providers: [AppService],

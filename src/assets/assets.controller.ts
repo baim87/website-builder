@@ -2,11 +2,36 @@ import { Controller, Post, Get, Delete, Patch, Param, UseGuards, UseInterceptors
 import { FileInterceptor } from '@nestjs/platform-express';
 import { AssetsService } from './assets.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { BrandAssetIngestionService } from './brand-asset-ingestion.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('projects/:projectId/assets')
 export class AssetsController {
-  constructor(private readonly assetsService: AssetsService) {}
+  constructor(
+    private readonly assetsService: AssetsService,
+    private readonly brandAssetIngestionService: BrandAssetIngestionService,
+  ) {}
+
+  @Post(':purpose(logo|favicon)/upload')
+  @UseInterceptors(FileInterceptor('file'))
+  uploadBrandAsset(
+    @Param('projectId') projectId: string,
+    @Param('purpose') purpose: 'logo' | 'favicon',
+    @UploadedFile() file: Express.Multer.File,
+    @Request() req: any,
+  ) {
+    return this.brandAssetIngestionService.processAsset(projectId, req.user.id, purpose, file.buffer, file.mimetype);
+  }
+
+  @Post(':purpose(logo|favicon)/url')
+  uploadBrandAssetUrl(
+    @Param('projectId') projectId: string,
+    @Param('purpose') purpose: 'logo' | 'favicon',
+    @Body('url') url: string,
+    @Request() req: any,
+  ) {
+    return this.brandAssetIngestionService.processAsset(projectId, req.user.id, purpose, url);
+  }
 
   @Post()
   @UseInterceptors(FileInterceptor('file'))

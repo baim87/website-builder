@@ -3,7 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AIGatewayService } from '../ai-gateway/ai-gateway.service';
 import { StorageService } from '../storage/storage.service';
 import { AssetPathResolverService } from './asset-path-resolver.service';
-import { ImageOptimizationService } from '../images/image-optimization.service';
+import { ImageProcessorService } from './image-processor.service';
 import axios from 'axios';
 import { z } from 'zod';
 import { zodToJsonSchema } from '@alcyone-labs/zod-to-json-schema';
@@ -24,7 +24,7 @@ export class PartnerBrandService {
     private readonly aiGateway: AIGatewayService,
     private readonly storageService: StorageService,
     private readonly pathResolver: AssetPathResolverService,
-    private readonly imageOptimization: ImageOptimizationService,
+    private readonly imageProcessor: ImageProcessorService,
   ) { }
 
   /**
@@ -125,8 +125,9 @@ CRITICAL CONSTRAINTS:
       }
 
       if (buffer) {
+        const originalBuffer = buffer;
         // Optimize to WebP
-        const webpBuffer = await this.imageOptimization.optimizeToWebp(buffer);
+        const webpBuffer = await this.imageProcessor.convertToWebp(originalBuffer);
         globalUrl = await this.storageService.upload(globalPath, webpBuffer, contentType);
         this.logger.log(`Successfully cached ${domain} logo to global R2: ${globalUrl}`);
       } else {
