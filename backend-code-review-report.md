@@ -3,11 +3,11 @@
 ## Executive Summary
 This report summarizes the findings from a deep, multi-dimensional code review of the "Local Empire" SaaS backend. The codebase implements an ambitious, multi-phase AI generation pipeline using NestJS, Prisma, and BullMQ. Overall, the architectural concepts are solid, but there are multiple severe security vulnerabilities and reliability issues that must be addressed before entering alpha testing.
 
-A total of 19 distinct issues were identified:
+A total of 18 distinct issues were identified:
 - **Critical Issues:** 3
 - **High Priority:** 6
 - **Medium Priority:** 6
-- **Low Priority / Suggestions:** 4
+- **Low Priority / Suggestions:** 3
 
 The most pressing concerns are related to security (HTML Injection / XSS in emails, Command Injection via `execAsync`, and sensitive credentials pushed to Git) and reliability (infinite loop risks in polling systems and queue retries).
 
@@ -55,11 +55,11 @@ The most pressing concerns are related to security (HTML Injection / XSS in emai
 - **Impact:** Over time, the server's disk space will fill up with orphaned `/tmp` Next.js template directories, eventually leading to a complete system outage (No Space Left on Device).
 - **Suggested Fix:** Implement a cron-like cleanup job (e.g. using NestJS `@Cron` scheduler) that periodically deletes `/tmp/builder-*` directories older than a few hours.
 
-### 7. Circular Dependency (`forwardRef`) Risks
+### 7. Circular Dependency (`forwardRef`) Risks [Accepted Tech Debt]
 - **File:** Multiple modules (e.g., `src/generation/generation.module.ts`, `src/assets/assets.module.ts`, `src/projects/projects.module.ts`)
 - **Description:** The project relies heavily on NestJS `forwardRef` to resolve circular dependencies between core modules.
-- **Impact:** Circular dependencies are a significant code smell. They make the application prone to runtime initialization errors, difficult to test, and tightly coupled.
-- **Suggested Fix:** Refactor the architecture by extracting shared logic into independent, lower-level modules (e.g., a dedicated Database / Repositories module or an Orchestrator service) to break the circular chains.
+- **Impact:** While circular dependencies are generally a code smell that can make testing and decoupling harder, NestJS `forwardRef` is explicitly designed to handle them safely at runtime.
+- **Suggested Fix:** This is acceptable technical debt for the alpha launch to maintain velocity. For future refactoring post-launch, consider utilizing the already installed `@nestjs/event-emitter` to decouple cross-module communication (e.g., triggering generation jobs or asset events) rather than injecting the services directly.
 
 ### 8. `TenantMiddleware` and Authentication Timing
 - **File:** `src/common/middleware/tenant.middleware.ts`
@@ -117,21 +117,16 @@ The most pressing concerns are related to security (HTML Injection / XSS in emai
 
 ## Low Priority / Suggestions
 
-### 16. Incorrect CSS Variable Formatting
-- **File:** `src/generation/nextjs-builder.service.ts` (`hexToHsl`)
-- **Description:** The custom `hexToHsl` regex replaces `#` correctly but returns space-separated HSL values (e.g., `0 0% 0%`). Depending on the Tailwind version (v3 vs v4) and how Next.js parses globals, this may require commas (`0, 0%, 0%`) for `hsl(var(--primary))` to work correctly in legacy setups, though Tailwind v4 syntax natively supports space separation.
-- **Suggestion:** Verify the exact Tailwind v4 output requirements, and consider using a reliable library like `culori` or `color-convert` instead of a custom hex parsing regex to handle edge cases gracefully.
-
-### 17. `first-letter:` Mobile Breakpoint Regex
+### 16. `first-letter:` Mobile Breakpoint Regex
 - **File:** `src/skills/impl/component-generator.skill.ts`
 - **Description:** The regex replacing `first-letter:` with `sm:first-letter:` to avoid giant drop-caps on mobile screens might accidentally match invalid CSS or other selectors.
 - **Suggestion:** A safer approach is strictly enforcing this via the AI system prompt (which is currently attempted) and using PostCSS or an AST parser (like `swc` or `babel`) to transform the Tailwind classes rather than string regex replacements.
 
-### 18. Suboptimal Database Queries (N+1)
+### 17. Suboptimal Database Queries (N+1)
 - **Description:** While reviewing the Prisma schema interactions, numerous `findUnique` calls are chained individually rather than utilizing `include` or parallel `Promise.all` aggregations.
 - **Suggestion:** Audit data-fetching in the generation orchestrator and optimize by fetching the whole `Project` with all relationships populated up-front.
 
-### 19. Dummy Domain Usage in SEO Artifacts
+### 18. Dummy Domain Usage in SEO Artifacts
 - **File:** `src/generation/generation.service.ts` (Line 83)
 - **Description:** The `sitemap.xml` and `robots.txt` are generated using a placeholder domain `${projectId}.builder.local`.
 - **Suggestion:** If the domain is unknown until Vercel deploys it, Next.js should generate the sitemap dynamically at runtime via `sitemap.ts` rather than the backend hardcoding a `.local` domain at build time.
