@@ -40,28 +40,39 @@ export class AssetConversionConsumer extends BaseConsumer<AssetConversionJobData
     let convertedBuffer: Buffer;
     let newMimeType: string;
     let newExtension: string;
+    let updateData: any = {};
+
+    const baseOriginal = originalKey.substring(0, originalKey.lastIndexOf('.'));
 
     if (asset.type === 'video') {
       convertedBuffer = await this.videoProcessor.convertToWebm(originalBuffer);
       newMimeType = 'video/webm';
       newExtension = '.webm';
+      const convertedKey = baseOriginal.replace('-original', '') + newExtension;
+      const convertedUrl = await this.storageService.upload(convertedKey, convertedBuffer, newMimeType);
+      updateData = { convertedUrl };
     } else {
-      convertedBuffer = await this.imageProcessor.convertToWebp(originalBuffer);
-      newMimeType = 'image/webp';
-      newExtension = '.webp';
+      if (asset.mimeType === 'image/webp') {
+        convertedBuffer = await this.imageProcessor.convertToPng(originalBuffer);
+        newMimeType = 'image/png';
+        newExtension = '.png';
+        const fallbackKey = baseOriginal.replace('-original', '-fallback') + newExtension;
+        const fallbackUrl = await this.storageService.upload(fallbackKey, convertedBuffer, newMimeType);
+        updateData = { fallbackUrl, convertedUrl: asset.url };
+      } else {
+        convertedBuffer = await this.imageProcessor.convertToWebp(originalBuffer);
+        newMimeType = 'image/webp';
+        newExtension = '.webp';
+        const convertedKey = baseOriginal.replace('-original', '') + newExtension;
+        const convertedUrl = await this.storageService.upload(convertedKey, convertedBuffer, newMimeType);
+        updateData = { convertedUrl };
+      }
     }
-    
-    // Upload converted file
-    const convertedKey = originalKey.replace('-original', newExtension);
-    const convertedUrl = await this.storageService.upload(convertedKey, convertedBuffer, newMimeType);
     
     // Update Database
     await this.prisma.asset.update({
       where: { id: assetId },
-      data: {
-        convertedUrl,
-        mimeType: newMimeType,
-      },
+      data: updateData,
     });
 
     this.logger.log(`Completed conversion for asset ${assetId}`);

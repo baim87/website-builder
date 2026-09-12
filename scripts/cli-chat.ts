@@ -264,7 +264,8 @@ async function bootstrap() {
     }
 
     process.stdout.write(`${AI_LABEL}  `);
-    const stream = interviewService.processMessage(project.id, userInput, status.missingFields);
+    const step: any = { id: 'cli', frontendLabel: 'CLI', phase: 'identity', fields: BUSINESS_FIELDS.map(key => ({ key, question: `What is your ${key}?` })), systemPrompt: 'CLI testing' };
+    const stream = interviewService.processMessage(project.id, userInput, status.missingFields, step);
 
     for await (const event of stream) {
       if (event.event === 'token') {

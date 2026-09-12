@@ -10,6 +10,7 @@ import { DeploymentService } from '../deployment/deployment.service';
 import { CostAggregatorService } from '../skills/cost-aggregator.service';
 import { BrandExtractionService } from '../assets/brand-extraction.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { Job } from 'bullmq';
 
 @Injectable()
 export class GenerationService {
@@ -29,7 +30,7 @@ export class GenerationService {
     private readonly eventEmitter: EventEmitter2,
   ) {}
 
-  async generateProject(projectId: string, userId: string, jobId: string) {
+  async generateProject(projectId: string, userId: string, jobId: string, job?: Job) {
     const generationStartTimeMs = Date.now();
     this.logger.log(`Starting full generation for project ${projectId} (job: ${jobId})`);
     
@@ -74,7 +75,8 @@ export class GenerationService {
               status: pageContent.status
             }, userId);
           }
-        }
+        },
+        job
       );
 
       const pagesArray = results.pages;

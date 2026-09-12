@@ -24,7 +24,8 @@
     "verify-keys": "npx ts-node scripts/verify-api-keys.ts",
     "chat": "NODE_OPTIONS=--max-old-space-size=4096 npx ts-node -T scripts/cli-chat.ts",
     "test-analytics": "NODE_OPTIONS=--max-old-space-size=4096 npx ts-node -T scripts/test-analytics.ts",
-    "redeploy": "NODE_OPTIONS=--max-old-space-size=4096 npx ts-node -T scripts/redeploy-project.ts"
+    "redeploy": "NODE_OPTIONS=--max-old-space-size=4096 npx ts-node -T scripts/redeploy-project.ts",
+    "db:reset": "npx ts-node -T scripts/reset-db.ts"
   },
   "dependencies": {
     "@alcyone-labs/zod-to-json-schema": "^4.0.10",

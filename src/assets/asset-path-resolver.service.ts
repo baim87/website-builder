@@ -20,13 +20,13 @@ export class AssetPathResolverService {
     let fileNameBase = '';
     
     if (assetType === 'BEFORE' || assetType === 'AFTER') {
-      folderPath = `${userId}/projects/${projectId}/assets/images/before-after/${serviceName}`;
+      folderPath = `users/${userId}/projects/${projectId}/assets/images/before-after/${serviceName}`;
       fileNameBase = `${assetType.toLowerCase()}-${serviceName}-${dateStr}-${shortId}`;
     } else if (assetType === 'GALLERY') {
-      folderPath = `${userId}/projects/${projectId}/assets/images/galleries/${serviceName}`;
+      folderPath = `users/${userId}/projects/${projectId}/assets/images/galleries/${serviceName}`;
       fileNameBase = `${dateStr}-${shortId}`;
     } else {
-      folderPath = `${userId}/projects/${projectId}/assets/images/${assetType.toLowerCase().replace('_', '-')}`;
+      folderPath = `users/${userId}/projects/${projectId}/assets/images/${assetType.toLowerCase().replace('_', '-')}`;
       fileNameBase = `${dateStr}-${shortId}`;
     }
 
@@ -47,8 +47,8 @@ export class AssetPathResolverService {
     projectAssetId: string
   ): { folderPath: string; key: string } {
     const shortId = projectAssetId.split('-')[0];
-    const folderPath = `${userId}/projects/${projectId}/assets/images/${purpose}`;
-    // E.g., user_1/projects/proj_2/assets/images/logo/logo-a1b2c3d4.png
+    const folderPath = `users/${userId}/projects/${projectId}/assets/images/${purpose}`;
+    // E.g., users/user_1/projects/proj_2/assets/images/logo/logo-a1b2c3d4.png
     const key = `${folderPath}/${purpose}-${shortId}.${extension}`;
     
     return { folderPath, key };

@@ -2,13 +2,15 @@ import { Injectable, NotFoundException, Inject, forwardRef } from '@nestjs/commo
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { AssetConversionProducer } from '../queue/producers/asset-conversion.producer';
-import * as crypto from 'crypto';
+import { AssetPathResolverService } from './asset-path-resolver.service';
+import { randomUUID } from 'crypto';
 
 @Injectable()
 export class AssetsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
+    private readonly pathResolver: AssetPathResolverService,
     @Inject(forwardRef(() => AssetConversionProducer)) private readonly conversionProducer: AssetConversionProducer,
   ) {}
 
@@ -18,22 +20,25 @@ export class AssetsService {
     let mimeType = file.mimetype;
     let url = '';
 
-    const fileHash = crypto.createHash('md5').update(file.buffer).digest('hex');
-    const baseKey = `projects/${projectId}/assets/${fileHash}`;
-
-    // Upload original
-    const originalKey = `${baseKey}-original`;
+    const assetId = randomUUID();
+    const assetType = purpose ? purpose.toUpperCase() : 'GENERAL';
+    const serviceName = section ? section.toLowerCase().replace(/[^a-z0-9]+/g, '-') : 'general';
+    
+    const paths = this.pathResolver.resolveStoragePath(userId, projectId, assetType, serviceName, assetId);
+    const extension = file.originalname?.split('.').pop() || mimeType.split('/')[1] || 'bin';
+    const originalKey = `${paths.folderPath}/${paths.fileNameBase}-original.${extension}`;
     url = await this.storage.upload(originalKey, file.buffer, mimeType);
 
-    let assetType = 'document';
-    if (isImage) assetType = 'image';
-    if (isVideo) assetType = 'video';
+    let dbAssetType = 'document';
+    if (isImage) dbAssetType = 'image';
+    if (isVideo) dbAssetType = 'video';
 
     const asset = await this.prisma.asset.create({
       data: {
+        id: assetId,
         projectId,
         url,
-        type: assetType,
+        type: dbAssetType,
         mimeType,
         purpose,
         source: 'upload',
@@ -41,14 +46,14 @@ export class AssetsService {
       },
     });
 
-    const isRasterImageToConvert = isImage && !['image/webp', 'image/svg+xml', 'image/gif'].includes(mimeType);
+    const isRasterImageToConvert = isImage && !['image/svg+xml', 'image/gif'].includes(mimeType);
     const isVideoToConvert = isVideo && mimeType !== 'video/webm';
 
     if (isRasterImageToConvert || isVideoToConvert) {
-      // Async convert to WebP or WebM
+      // Async convert to WebP/PNG or WebM
       await this.conversionProducer.convertAsset(projectId, asset.id, url, userId);
-    } else if (mimeType === 'image/webp' || mimeType === 'video/webm') {
-      // If it's already a WebP/WebM, just set convertedUrl to be the same as url
+    } else if (mimeType === 'video/webm') {
+      // If it's already a WebM, just set convertedUrl to be the same as url
       await this.prisma.asset.update({
         where: { id: asset.id },
         data: { convertedUrl: url },

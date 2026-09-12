@@ -123,5 +123,106 @@ export class GoogleAdsClient {
     
     return [];
   }
+
+  async fetchKeywordsBatch(services: string[], location: string): Promise<KeywordResult[]> {
+    this.logger.log(`Fetching batch keywords from Google Ads REST API for ${services.length} services in ${location}`);
+    
+    if (services.length === 0) return [];
+    
+    const clientId = this.configService.get<string>('GOOGLE_ADS_CLIENT_ID');
+    const clientSecret = this.configService.get<string>('GOOGLE_ADS_CLIENT_SECRET');
+    const developerToken = this.configService.get<string>('GOOGLE_ADS_DEVELOPER_TOKEN');
+    const refreshToken = this.configService.get<string>('GOOGLE_ADS_REFRESH_TOKEN');
+    const customerId = this.configService.get<string>('GOOGLE_ADS_CUSTOMER_ID');
+
+    if (!clientId || !clientSecret || !developerToken || !refreshToken || !customerId) {
+      throw new Error('Google Ads API credentials or Customer ID are missing from environment.');
+    }
+
+    const maxRetries = 3;
+    let attempt = 0;
+
+    // Google Ads allows max 20 seeds
+    const seeds = services.map(s => `${s} ${location}`).slice(0, 20);
+
+    while (attempt < maxRetries) {
+      try {
+        const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            client_id: clientId,
+            client_secret: clientSecret,
+            refresh_token: refreshToken,
+            grant_type: 'refresh_token',
+          }),
+        });
+
+        if (!tokenResponse.ok) {
+          throw new Error(`Failed to refresh access token: ${await tokenResponse.text()}`);
+        }
+
+        const accessToken = (await tokenResponse.json()).access_token;
+
+        const requestBody = {
+          keywordSeed: { keywords: seeds },
+          language: 'languageConstants/1000', // English
+          geoTargetConstants: ['geoTargetConstants/2840'], // United States
+          keywordPlanNetwork: 'GOOGLE_SEARCH',
+          pageSize: 200, // Fetch more since we have multiple seeds
+        };
+
+        const apiResponse = await fetch(
+          `https://googleads.googleapis.com/v25/customers/${customerId}:generateKeywordIdeas`,
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'developer-token': developerToken,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestBody),
+          }
+        );
+
+        if (!apiResponse.ok) {
+          if (apiResponse.status === 429) {
+            this.logger.warn(`Google Ads API Rate Limit (429) hit. Waiting 5s...`);
+            await new Promise(resolve => setTimeout(resolve, 5000));
+            attempt++;
+            continue;
+          }
+          throw new Error(`API returned ${apiResponse.status}: ${await apiResponse.text()}`);
+        }
+
+        const apiData = await apiResponse.json();
+        const results = apiData.results || [];
+
+        this.logger.log(`Google Ads API Batch Results: retrieved ${results.length} keyword ideas`);
+
+        return results.map((idea: any) => ({
+          keyword: idea.text || '',
+          searchVolume: idea.keywordIdeaMetrics?.avgMonthlySearches ? Number(idea.keywordIdeaMetrics.avgMonthlySearches) : 0,
+          monthlySearchVolumes: (idea.keywordIdeaMetrics?.monthlySearchVolumes || []).map((m: any) => ({
+            month: m.month,
+            year: m.year,
+            monthlySearches: Number(m.monthlySearches || 0),
+          })),
+          competition: idea.keywordIdeaMetrics?.competition || undefined,
+          cpc: idea.keywordIdeaMetrics?.averageCpcMicros ? Number(idea.keywordIdeaMetrics.averageCpcMicros) / 1_000_000 : undefined,
+          source: 'google',
+        }));
+      } catch (error: any) {
+        if (attempt >= maxRetries - 1) {
+          this.logger.error(`Failed to generate batch keyword ideas after ${maxRetries} attempts: ${error.message}`);
+          return []; // fallback gracefully
+        }
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        attempt++;
+      }
+    }
+    
+    return [];
+  }
 }
 

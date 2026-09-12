@@ -137,7 +137,32 @@ export class ServiceRankingService {
         schemaName: 'ServiceRanking'
       });
 
-      return JSON.parse(response.text) as string[];
+      let parsed: any;
+      try {
+        parsed = JSON.parse(response.text);
+      } catch (e) {
+        // Handle markdown JSON blocks
+        const match = response.text.match(/\[[\s\S]*\]/);
+        if (match) {
+          parsed = JSON.parse(match[0]);
+        } else {
+          throw new Error('Failed to parse JSON');
+        }
+      }
+
+      if (Array.isArray(parsed)) {
+        return parsed as string[];
+      }
+      
+      // Some adapters/models wrap arrays in objects
+      if (parsed && typeof parsed === 'object') {
+        const potentialArray = Object.values(parsed).find(v => Array.isArray(v));
+        if (potentialArray) {
+          return potentialArray as string[];
+        }
+      }
+
+      throw new Error('No array found in AI response');
     } catch (e: any) {
       this.logger.error(`AI Fallback failed: ${e.message}`);
       // Return original order as absolute worst-case fallback

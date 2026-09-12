@@ -50,13 +50,21 @@ export class GooglePlacesService {
         return [];
       }
 
+      // Helper to find a specific trade type, ignoring generic ones
+      const getSpecificTrade = (types: string[]): string | undefined => {
+        if (!types) return undefined;
+        const genericTypes = new Set(['point_of_interest', 'establishment', 'store', 'premise', 'health', 'place_of_worship']);
+        const specific = types.find(t => !genericTypes.has(t));
+        return specific ? specific.replace(/_/g, ' ') : undefined;
+      };
+
       // 2. Map Place details to our internal schema
       return places.map((place: any) => ({
         businessName: place.displayName?.text,
         businessAddress: place.formattedAddress,
         phone: place.nationalPhoneNumber,
         gbpData: { website: place.websiteUri, mapUrl: place.googleMapsUri },
-        trade: place.types && place.types.length > 0 ? place.types[0].replace(/_/g, ' ') : undefined,
+        trade: getSpecificTrade(place.types),
         hours: place.regularOpeningHours?.weekdayDescriptions,
       }));
     } catch (error: any) {

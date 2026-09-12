@@ -59,7 +59,7 @@ export class ChatController {
             subscriber.next({ type: 'done', data: {} } as MessageEvent);
           } else {
             // Onboarding Flow
-            const stream = this.chatFlowEngine.processMessage(projectId, dto.content);
+            const stream = this.chatFlowEngine.processMessage(projectId, dto.content, dto.displayText);
             for await (const event of stream) {
               if (event.event === 'internal-done') {
                 subscriber.next({ type: 'done', data: {} } as MessageEvent);

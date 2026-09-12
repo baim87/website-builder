@@ -3,7 +3,7 @@ import { InterviewExtractorService } from './interview-extractor.service';
 import { InterviewPromptBuilder } from './interview-prompt.builder';
 import { BusinessContextService } from '../projects/business-context.service';
 import { GooglePlacesService } from '../projects/google-places.service';
-import { REQUIRED_FIELDS } from './constants/interview-fields.constant';
+import { OnboardingStep, getFieldKeys, getFieldQuestion } from './constants/onboarding-flow.config';
 import { ChatService } from '../chat/chat.service';
 import { PrismaService } from '../prisma/prisma.service';
 import * as fs from 'fs';
@@ -19,7 +19,7 @@ export class InterviewService {
     private readonly prisma: PrismaService,
   ) {}
 
-  async checkCompleteness(projectId: string, fieldsToCheck: readonly string[] = REQUIRED_FIELDS) {
+  async checkCompleteness(projectId: string, fieldsToCheck: readonly string[]) {
     const context = await this.businessContextService.findByProjectId(projectId);
     const missingFields = [];
 
@@ -40,9 +40,9 @@ export class InterviewService {
     };
   }
   
-  async *processMessage(projectId: string, content: string, missingFields: string[]) {
+  async *processMessage(projectId: string, content: string, missingFields: string[], step: OnboardingStep) {
     const context = await this.businessContextService.findByProjectId(projectId);
-    const systemPrompt = this.promptBuilder.buildPrompt(context, missingFields);
+    const systemPrompt = this.promptBuilder.buildPrompt(context, missingFields, step);
     
     // Check for logo
     const logoAsset = await this.prisma.asset.findFirst({
@@ -92,41 +92,73 @@ export class InterviewService {
           if (finalContext.location && finalContext.radius) {
             const hasServiceAreas = finalContext.serviceAreas && Array.isArray(finalContext.serviceAreas) && finalContext.serviceAreas.length > 0;
             if (!hasServiceAreas) {
+              console.log(`[InterviewService] Fetching cities in a ${finalContext.radius} mile radius from ${finalContext.location}...`);
               const cities = await this.googlePlacesService.getCitiesInRadius(finalContext.location, finalContext.radius);
+              console.log(`[InterviewService] Found ${cities.length} cities: ${cities.join(', ')}`);
               if (cities.length > 0) {
                 await this.prisma.businessContext.update({
                   where: { projectId },
                   data: { serviceAreas: cities }
                 });
                 yield { event: 'field-update', data: { field: 'serviceAreas', value: cities } };
+                
+                const appendedText = `\n\nI've automatically mapped your service area to include: ${cities.join(', ')}.`;
+                yield { event: 'token', data: { token: appendedText } };
+
+                // Find the latest assistant message and append this text to persist it cleanly
+                const latestMsg = await this.prisma.chatMessage.findFirst({
+                  where: { projectId, role: 'assistant' },
+                  orderBy: { createdAt: 'desc' }
+                });
+                if (latestMsg) {
+                  // We remove the EXTRACT block from the saved message to keep the DB clean, 
+                  // and we place the appended text after the clean response.
+                  const cleanResponse = latestMsg.content.replace(/<!-- EXTRACT:.*?-->/gs, '').trim();
+                  await this.prisma.chatMessage.update({
+                    where: { id: latestMsg.id },
+                    data: { content: cleanResponse + appendedText }
+                  });
+                }
               }
             }
           }
         }
 
-        // Failsafe: if the AI outputted absolutely nothing (or just the extract block), ask manually
+        // Failsafe 1: empty response
         const cleanResponse = fullResponse.replace(/<!-- EXTRACT:.*?-->/gs, '').trim();
-        if (cleanResponse === '' && missingFields.length > 0) {
-           const fallbackMsg = `Could you please tell me about your ${missingFields[0]}?`;
-           yield { event: 'token', data: { token: fallbackMsg } };
+        
+        // Re-evaluate completeness after updates
+        const finalStatus = await this.checkCompleteness(projectId, getFieldKeys(step));
+        
+        if (finalStatus.missingFields.length > 0) {
+           let fallbackMsg = '';
            
-           // IMPORTANT: We must save this fallback message to the database, otherwise the AI has no idea what the user's next answer means!
-           try {
-             await this.prisma.chatMessage.create({
-               data: {
-                 projectId,
-                 role: 'assistant',
-                 content: fallbackMsg,
-               }
-             });
-           } catch (dbError) {
-             console.error(`Failed to save fallback chat message: ${dbError.message}`);
+           if (cleanResponse === '') {
+             const fallbackQ = getFieldQuestion(step, finalStatus.missingFields[0]) || `Could you please tell me about your ${finalStatus.missingFields[0]}?`;
+             fallbackMsg = fallbackQ;
+           } else if (!cleanResponse.includes('?')) {
+             const fallbackQ = getFieldQuestion(step, finalStatus.missingFields[0]) || `Could you also tell me about your ${finalStatus.missingFields[0]}?`;
+             fallbackMsg = `\n\n${fallbackQ}`;
+           }
+
+           if (fallbackMsg) {
+             yield { event: 'token', data: { token: fallbackMsg } };
+             
+             try {
+               await this.prisma.chatMessage.create({
+                 data: {
+                   projectId,
+                   role: 'assistant',
+                   content: fallbackMsg,
+                 }
+               });
+             } catch (dbError: any) {
+               console.error(`Failed to save fallback chat message: ${dbError.message}`);
+             }
            }
         }
         
-        // Re-evaluate completeness after updates
-        const finalStatus = await this.checkCompleteness(projectId);
-        yield { event: 'progress', data: finalStatus };
+        yield { event: 'progress', data: { ...finalStatus, stepComplete: finalStatus.complete } };
         
         yield { event: 'done', data: {} };
       } else {

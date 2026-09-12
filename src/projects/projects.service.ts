@@ -30,6 +30,26 @@ export class ProjectsService {
     });
   }
 
+  async findLatestStatus(userId: string) {
+    const project = await this.prisma.project.findFirst({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        websiteData: true,
+      },
+    });
+
+    if (!project) {
+      return { status: 'no_project' };
+    }
+
+    return {
+      id: project.id,
+      status: project.status, // e.g. 'draft', 'onboarding', 'generating', 'completed'
+      generationStatus: project.websiteData?.generationStatus,
+    };
+  }
+
   async findOne(id: string, userId?: string) {
     const whereClause: any = { id };
     if (userId) {

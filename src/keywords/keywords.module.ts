@@ -5,6 +5,8 @@ import { GoogleAdsClient } from './clients/google-ads.client';
 
 import { ServiceRankingService } from './service-ranking.service';
 import { SeasonalityService } from './seasonality.service';
+import { ServiceSuggestionService } from './service-suggestion.service';
+import { SecondaryKeywordWorker } from './secondary-keyword.worker';
 import { AIGatewayModule } from '../ai-gateway/ai-gateway.module';
 import { PrismaModule } from '../prisma/prisma.module';
 
@@ -16,7 +18,9 @@ import { PrismaModule } from '../prisma/prisma.module';
     GoogleAdsClient,
     ServiceRankingService,
     SeasonalityService,
+    ServiceSuggestionService,
+    SecondaryKeywordWorker,
   ],
-  exports: [KeywordsService, GoogleAdsClient, ServiceRankingService, SeasonalityService],
+  exports: [KeywordsService, GoogleAdsClient, ServiceRankingService, SeasonalityService, ServiceSuggestionService, SecondaryKeywordWorker],
 })
 export class KeywordsModule {}

@@ -112,6 +112,7 @@ model Asset {
   type         String
   purpose      String?
   convertedUrl String?
+  fallbackUrl  String?
   mimeType     String?
   source       String   @default("upload")
   sortOrder    Int      @default(0)
@@ -246,6 +247,28 @@ model LocationKeywordMetrics {
   project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, city, service])
+}
+
+model GlobalKeywordCache {
+  id               String   @id @default(uuid())
+  city             String
+  state            String?
+  trade            String?  // Optional: The broad trade category (e.g. "Decking")
+  service          String   // The specific service (e.g. "Deck Building")
+  keyword          String   // The actual search query (e.g. "deck building omaha")
+  
+  // Google Ads Metrics
+  searchVolume     Int
+  monthlyVolumes   Json?    
+  competition      String?  
+  cpc              Float?
+  geoScope         String   @default("national_proxy")
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // A city and a specific service should be globally unique
+  @@unique([city, service]) 
 }
 
 model ServiceKeywordMetrics {

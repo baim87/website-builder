@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Job } from 'bullmq';
 import { SkillExecutorService } from '../skills/skill-executor.service';
 import { BrandVoiceSkill } from '../skills/impl/brand-voice.skill';
 import { BrandIdentitySkill } from '../skills/impl/brand-identity.skill';
@@ -77,18 +78,27 @@ export class GenerationOrchestratorService {
   async generateWebsite(
     projectId: string, 
     businessContext: any, 
-    onPageGenerated?: (page: any) => Promise<void>
+    onPageGenerated?: (page: any) => Promise<void>,
+    job?: Job
   ) {
     this.logger.log(`Starting 6-phase generation pipeline for project ${projectId}`);
 
     const ctx = await this.initializeContext(projectId, businessContext);
     
+    if (job) await job.updateProgress({ phase: 'Analyzing Market Data', status: 'in_progress' });
     await this.executePhase0Intelligence(ctx);
+    
+    if (job) await job.updateProgress({ phase: 'Applying Brand Styles', status: 'in_progress' });
     await this.executePhase1BrandDesign(ctx);
+    
+    if (job) await job.updateProgress({ phase: 'Generating SEO Content', status: 'in_progress' });
     await this.executePhase2KeywordStrategy(ctx);
     await this.executePhase2_5ImagePlanning(ctx);
     
+    if (job) await job.updateProgress({ phase: 'Optimizing Performance', status: 'in_progress' });
     const successfulPages = await this.executePhase3To5PageLoop(ctx, onPageGenerated);
+    
+    if (job) await job.updateProgress({ phase: 'Optimizing Performance', status: 'completed' });
 
     return {
       designTokens: ctx.designSystemResult,

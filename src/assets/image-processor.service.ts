@@ -16,6 +16,17 @@ export class ImageProcessorService {
     }
   }
 
+  async convertToPng(buffer: Buffer): Promise<Buffer> {
+    try {
+      return await sharp(buffer)
+        .png({ compressionLevel: 8 })
+        .toBuffer();
+    } catch (e: any) {
+      this.logger.error('Failed to convert image to PNG', e.stack);
+      throw e;
+    }
+  }
+
   async extractMetadata(buffer: Buffer) {
     try {
       const metadata = await sharp(buffer).metadata();
