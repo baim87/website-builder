@@ -1,10 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Skill, SkillInput, SkillOutput } from '../interfaces/skill.interface';
 import { AIGatewayService } from '../../ai-gateway/ai-gateway.service';
+import { AIModel } from '../../common/constants/ai-models.constant';
+import { AISkill } from '../../common/constants/ai-skills.constant';
 
 @Injectable()
 export class AssetRepairSkill implements Skill {
-  readonly name = 'AssetRepair';
+  readonly name = AISkill.ASSET_REPAIR;
   private readonly logger = new Logger(AssetRepairSkill.name);
 
   constructor(private readonly aiGateway: AIGatewayService) {}
@@ -30,7 +32,7 @@ Provide ONLY the updated, improved prompt.
 Ensure the new prompt explicitly avoids the issues mentioned in the critique.
 Do not wrap it in quotes or markdown. Just the raw text of the new prompt.`;
 
-    const response = await this.aiGateway.generateText('anthropic/claude-fable-5', {
+    const response = await this.aiGateway.generateText(AIModel.CLAUDE_FABLE_5, {
       systemPrompt,
       messages: [{ role: 'user', content: 'Rewrite the prompt to fix the issues.' }],
       temperature: 0.7,
@@ -42,7 +44,7 @@ Do not wrap it in quotes or markdown. Just the raw text of the new prompt.`;
 
     return {
       hash: 'asset-repair-' + Date.now(),
-      model: 'anthropic/claude-fable-5',
+      model: AIModel.CLAUDE_FABLE_5,
       usage: response.usage,
       data: { fixedPrompt }
     };

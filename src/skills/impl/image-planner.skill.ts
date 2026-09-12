@@ -6,6 +6,8 @@ import * as crypto from 'crypto';
 import { z } from 'zod';
 import { zodToJsonSchema } from '@alcyone-labs/zod-to-json-schema';
 import { buildImagePlannerPrompt } from '../prompts/builders/image-planner.prompt';
+import { AIModel } from '../../common/constants/ai-models.constant';
+import { AISkill } from '../../common/constants/ai-skills.constant';
 
 const ImagePlanSchema = z.object({
   images: z.array(z.object({
@@ -18,7 +20,7 @@ const ImagePlanSchema = z.object({
 
 @Injectable()
 export class ImagePlannerSkill implements Skill {
-  readonly name = 'ImagePlanner';
+  readonly name = AISkill.IMAGE_PLANNER;
   private readonly logger = new Logger(ImagePlannerSkill.name);
 
   constructor(
@@ -40,7 +42,7 @@ export class ImagePlannerSkill implements Skill {
     const prompt = buildImagePlannerPrompt(businessContext, pagesToGenerate);
     this.logger.log(`Planning image generation strategy...`);
 
-    const response = await this.aiGateway.generateText('anthropic/claude-fable-5', {
+    const response = await this.aiGateway.generateText(AIModel.CLAUDE_FABLE_5, {
       systemPrompt: 'You are an expert Photography Director. Output strictly matching the requested JSON schema via the provided tool.',
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.8, // Slightly higher for diverse angles
@@ -136,7 +138,7 @@ export class ImagePlannerSkill implements Skill {
     return {
       data: { assets: plannedAssets },
       hash,
-      model: 'anthropic/claude-fable-5',
+      model: AIModel.CLAUDE_FABLE_5,
       usage: (response as any).usage || response.usage,
     };
   }

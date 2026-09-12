@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AIGatewayService } from '../ai-gateway/ai-gateway.service';
+import { AIModel } from '../common/constants/ai-models.constant';
 
 @Injectable()
 export class ImageCritiqueService {
@@ -28,7 +29,7 @@ Return JSON EXACTLY in this format:
 }`;
 
     try {
-      const response = await this.aiGateway.generateText('anthropic/claude-fable-5', {
+      const response = await this.aiGateway.generateText(AIModel.CLAUDE_FABLE_5, {
         systemPrompt: 'You output ONLY valid JSON.',
         messages: [{ 
           role: 'user', 

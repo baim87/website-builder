@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { GoogleAdsClient } from './clients/google-ads.client';
 import { AIGatewayService } from '../ai-gateway/ai-gateway.service';
 import { KeywordResult } from './interfaces/keyword-data.interface';
+import { AIModel } from '../common/constants/ai-models.constant';
 
 @Injectable()
 export class ServiceRankingService {
@@ -126,7 +127,7 @@ export class ServiceRankingService {
     `;
 
     try {
-      const response = await this.aiGateway.generateText('anthropic/claude-fable-5', {
+      const response = await this.aiGateway.generateText(AIModel.CLAUDE_FABLE_5, {
         systemPrompt: 'You are a helpful SEO assistant. Always output clean JSON.',
         messages: [{ role: 'user', content: prompt }],
         schema: {

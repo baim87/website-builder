@@ -4,10 +4,12 @@ import { AIGatewayService } from '../../ai-gateway/ai-gateway.service';
 import { OutputValidatorService } from '../../guardrails/output-validator.service';
 import { ASTNodeSchema } from '../schemas/skill-outputs.schema';
 import * as crypto from 'crypto';
+import { AIModel } from '../../common/constants/ai-models.constant';
+import { AISkill } from '../../common/constants/ai-skills.constant';
 
 @Injectable()
 export class ComponentEditorSkill implements Skill {
-  readonly name = 'component_editor';
+  readonly name = AISkill.COMPONENT_EDITOR;
   private readonly logger = new Logger(ComponentEditorSkill.name);
 
   constructor(
@@ -36,7 +38,7 @@ Rules:
 3. If the user asks to change the text, update the relevant string in props.data or children.
 4. Output valid JSON only, representing the single ASTNode object.`;
 
-    const result = await this.aiGateway.generateText('anthropic/claude-3.5-sonnet', {
+    const result = await this.aiGateway.generateText(AIModel.CLAUDE_SONNET_3_5, {
       systemPrompt: 'You are an AI website component editor. Return ONLY valid JSON representing the updated ASTNode.',
       messages: [{ role: 'user', content: prompt }],
       maxTokens: 4096,
@@ -69,7 +71,7 @@ Rules:
     return {
       data: validatedData,
       hash,
-      model: 'anthropic/claude-3.5-sonnet',
+      model: AIModel.CLAUDE_SONNET_3_5,
     };
   }
 }

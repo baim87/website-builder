@@ -6,10 +6,12 @@ import { DesignSystemSchema } from '../schemas/skill-outputs.schema';
 import { getThemeById } from '../constants/theme-definitions.constant';
 import { zodToJsonSchema } from '@alcyone-labs/zod-to-json-schema';
 import * as crypto from 'crypto';
+import { AIModel } from '../../common/constants/ai-models.constant';
+import { AISkill } from '../../common/constants/ai-skills.constant';
 
 @Injectable()
 export class DesignSystemSkill implements Skill {
-  readonly name = 'DesignSystem';
+  readonly name = AISkill.DESIGN_SYSTEM;
   private readonly logger = new Logger(DesignSystemSkill.name);
 
   constructor(
@@ -56,7 +58,7 @@ FIELD GUIDANCE (for the tool output):
 
 Output the design system via the provided tool.`;
 
-    const response = await this.aiGateway.generateText('anthropic/claude-fable-5', {
+    const response = await this.aiGateway.generateText(AIModel.CLAUDE_FABLE_5, {
       systemPrompt: 'You are a design system expert. Output structured data via the provided tool.',
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.1,
@@ -97,7 +99,7 @@ Output the design system via the provided tool.`;
     return {
       data: validatedData,
       hash,
-      model: 'anthropic/claude-fable-5',
+      model: AIModel.CLAUDE_FABLE_5,
       usage: (response as any).usage || response.usage,
     };
   }

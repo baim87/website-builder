@@ -7,6 +7,8 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import { ImageProcessorService } from './image-processor.service';
 import { SkillLoggerService } from '../skills/skill-logger.service';
+import { AIModel } from '../common/constants/ai-models.constant';
+import { AISkill } from '../common/constants/ai-skills.constant';
 
 @Injectable()
 export class PortraitGenerationService {
@@ -185,7 +187,7 @@ No excessive symmetry.
 No generic stock-photo appearance.
 No AI-looking artifacts.`;
     
-    this.logger.log(`Calling OpenRouter for portrait generation using bytedance-seed/seedream-4.5...`);
+    this.logger.log(`Calling OpenRouter for portrait generation using ${AIModel.SEEDREAM_4_5}...`);
     
     const contentBlocks: any[] = [
       { type: "text", text: prompt },
@@ -202,7 +204,7 @@ No AI-looking artifacts.`;
     const openRouterResponse = await axios.post(
       'https://openrouter.ai/api/v1/chat/completions',
       {
-        model: 'bytedance-seed/seedream-4.5',
+        model: AIModel.SEEDREAM_4_5,
         messages
       },
       {
@@ -266,8 +268,8 @@ No AI-looking artifacts.`;
     if (cost > 0) {
       await this.skillLogger.logInvocation({
         projectId,
-        skillType: 'Portrait Generation',
-        model: 'bytedance-seed/seedream-4.5',
+        skillType: AISkill.PORTRAIT_GENERATION,
+        model: AIModel.SEEDREAM_4_5,
         inputHash: 'portrait-gen',
         status: 'success',
         cost: cost,

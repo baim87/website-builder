@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { AIModel } from '../common/constants/ai-models.constant';
 
 export const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -39,7 +40,7 @@ export const envSchema = z.object({
 
 
   OPENROUTER_API_KEY: z.string().min(1),
-  OPENROUTER_MODEL: z.string().default('anthropic/claude-fable-5'),
+  OPENROUTER_MODEL: z.string().default(AIModel.CLAUDE_FABLE_5),
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_REALTIME_MODEL: z.string().optional(),
   GEMINI_API_KEY: z.string().optional(),

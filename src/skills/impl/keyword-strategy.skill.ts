@@ -8,10 +8,12 @@ import { KeywordStrategySchema } from '../schemas/skill-outputs.schema';
 import * as crypto from 'crypto';
 import { buildKeywordStrategyPrompt } from '../prompts/builders/keyword-strategy.prompt';
 import { ServiceRankingService } from '../../keywords/service-ranking.service';
+import { AIModel } from '../../common/constants/ai-models.constant';
+import { AISkill } from '../../common/constants/ai-skills.constant';
 
 @Injectable()
 export class KeywordStrategySkill implements Skill {
-  readonly name = 'KeywordStrategy';
+  readonly name = AISkill.KEYWORD_STRATEGY;
   private readonly logger = new Logger(KeywordStrategySkill.name);
 
   constructor(
@@ -85,7 +87,7 @@ export class KeywordStrategySkill implements Skill {
 
     this.logger.log('Generating keyword strategy with AI...');
 
-    const response = await this.aiGateway.generateText('anthropic/claude-fable-5', {
+    const response = await this.aiGateway.generateText(AIModel.CLAUDE_FABLE_5, {
       systemPrompt: 'You output ONLY valid JSON. No markdown fences, no explanation, no commentary. Just the raw JSON object.',
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.2,
@@ -115,7 +117,7 @@ export class KeywordStrategySkill implements Skill {
     return {
       data: validatedData,
       hash,
-      model: 'anthropic/claude-fable-5',
+      model: AIModel.CLAUDE_FABLE_5,
       usage: (response as any).usage || response.usage,
     };
   }

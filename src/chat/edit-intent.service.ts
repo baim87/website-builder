@@ -3,6 +3,7 @@ import { AIGatewayService } from '../ai-gateway/ai-gateway.service';
 import { EditExecutorService } from './edit-executor.service';
 import { OutputValidatorService } from '../guardrails/output-validator.service';
 import { z } from 'zod';
+import { AIModel } from '../common/constants/ai-models.constant';
 
 const EditIntentSchema = z.object({
   isEdit: z.boolean(),
@@ -47,7 +48,7 @@ If it's just a general question or unrelated, return {"isEdit": false}
 Output ONLY valid JSON matching the schema.`;
 
     try {
-      const response = await this.aiGateway.generateText('anthropic/claude-fable-5', {
+      const response = await this.aiGateway.generateText(AIModel.CLAUDE_FABLE_5, {
         systemPrompt: 'You extract edit intents in JSON format.',
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.1,

@@ -4,10 +4,12 @@ import { AIGatewayService } from '../../ai-gateway/ai-gateway.service';
 import { OutputValidatorService } from '../../guardrails/output-validator.service';
 import { PageSeoSchema } from '../schemas/skill-outputs.schema';
 import * as crypto from 'crypto';
+import { AIModel } from '../../common/constants/ai-models.constant';
+import { AISkill } from '../../common/constants/ai-skills.constant';
 
 @Injectable()
 export class SeoMetadataSkill implements Skill {
-  readonly name = 'SeoMetadata';
+  readonly name = AISkill.SEO_METADATA;
   private readonly logger = new Logger(SeoMetadataSkill.name);
 
   constructor(
@@ -61,7 +63,7 @@ You MUST respond with ONLY a JSON object in this EXACT structure (no other text)
   "image": "string (ASSET:uuid or UNSPLASH:query)"
 }`;
 
-    const response = await this.aiGateway.generateText('anthropic/claude-fable-5', {
+    const response = await this.aiGateway.generateText(AIModel.CLAUDE_FABLE_5, {
       systemPrompt: 'You output ONLY valid JSON. No markdown fences, no explanation, no commentary. Just the raw JSON object.',
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.3,
@@ -97,7 +99,7 @@ You MUST respond with ONLY a JSON object in this EXACT structure (no other text)
     return {
       data: validatedData,
       hash,
-      model: 'anthropic/claude-fable-5',
+      model: AIModel.CLAUDE_FABLE_5,
       usage: (response as any).usage || response.usage,
     };
   }

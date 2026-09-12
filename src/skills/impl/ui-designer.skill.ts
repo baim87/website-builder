@@ -4,9 +4,11 @@ import { OutputValidatorService } from '../../guardrails/output-validator.servic
 import { SectionSchema } from '../schemas/skill-outputs.schema';
 import * as crypto from 'crypto';
 
+import { AISkill } from '../../common/constants/ai-skills.constant';
+
 @Injectable()
 export class UIDesignerSkill implements Skill {
-  readonly name = 'UIDesigner';
+  readonly name = AISkill.UI_DESIGNER;
   private readonly logger = new Logger(UIDesignerSkill.name);
 
   constructor(

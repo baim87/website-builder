@@ -4,10 +4,12 @@ import { AIGatewayService } from '../../ai-gateway/ai-gateway.service';
 import { OutputValidatorService } from '../../guardrails/output-validator.service';
 import { SectionSchema } from '../schemas/skill-outputs.schema';
 import * as crypto from 'crypto';
+import { AIModel } from '../../common/constants/ai-models.constant';
+import { AISkill } from '../../common/constants/ai-skills.constant';
 
 @Injectable()
 export class SectionContentSkill implements Skill {
-  readonly name = 'SectionContent';
+  readonly name = AISkill.SECTION_CONTENT;
   private readonly logger = new Logger(SectionContentSkill.name);
 
   constructor(
@@ -48,7 +50,7 @@ You MUST respond with ONLY a JSON object exactly matching this structure (no mar
 - CallToActionSection: { heading: string, subheading: string, buttonText: string, backgroundImage: string }
 `;
 
-    const response = await this.aiGateway.generateText('anthropic/claude-fable-5', {
+    const response = await this.aiGateway.generateText(AIModel.CLAUDE_FABLE_5, {
       systemPrompt: 'You output ONLY valid JSON. No markdown fences, no explanation, no commentary. Just the raw JSON object.',
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.2,
@@ -85,7 +87,7 @@ You MUST respond with ONLY a JSON object exactly matching this structure (no mar
     return {
       data: validatedData,
       hash,
-      model: 'anthropic/claude-fable-5',
+      model: AIModel.CLAUDE_FABLE_5,
       usage: (response as any).usage || response.usage,
     };
   }

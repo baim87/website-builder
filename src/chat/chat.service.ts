@@ -5,6 +5,8 @@ import { ChatStreamService } from './chat-stream.service';
 import { Message } from '../ai-gateway/interfaces/ai-gateway.types';
 import { SSEEvent } from './interfaces/chat.types';
 import { SkillLoggerService } from '../skills/skill-logger.service';
+import { AIModel } from '../common/constants/ai-models.constant';
+import { AISkill } from '../common/constants/ai-skills.constant';
 
 @Injectable()
 export class ChatService {
@@ -15,7 +17,7 @@ export class ChatService {
     private readonly skillLogger: SkillLoggerService,
   ) {}
 
-  async *sendMessage(projectId: string, content: string | any[], systemPrompt: string, model: string = 'anthropic/claude-haiku-4.5'): AsyncIterable<SSEEvent | { event: 'internal-done'; data: { fullResponse: string } }> {
+  async *sendMessage(projectId: string, content: string | any[], systemPrompt: string, model: string = AIModel.CLAUDE_HAIKU_4_5): AsyncIterable<SSEEvent | { event: 'internal-done'; data: { fullResponse: string } }> {
     // Extract text for DB persistence
     const textContent = Array.isArray(content) 
       ? content.find(c => c.type === 'text')?.text || '' 
@@ -75,7 +77,7 @@ export class ChatService {
 
     const invocation = await this.skillLogger.logInvocation({
       projectId,
-      skillType: 'Interview',
+      skillType: AISkill.INTERVIEW,
       model,
       inputHash: 'stream-hash',
       status: 'success',

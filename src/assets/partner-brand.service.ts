@@ -7,6 +7,7 @@ import { ImageProcessorService } from './image-processor.service';
 import axios from 'axios';
 import { z } from 'zod';
 import { zodToJsonSchema } from '@alcyone-labs/zod-to-json-schema';
+import { AIModel } from '../common/constants/ai-models.constant';
 
 const BrandsSchema = z.object({
   brands: z.array(z.object({
@@ -67,7 +68,7 @@ CRITICAL CONSTRAINTS:
 - Provide their exact official domain (e.g. trex.com).
 `;
 
-    const response = await this.aiGateway.generateText('anthropic/claude-fable-5', {
+    const response = await this.aiGateway.generateText(AIModel.CLAUDE_FABLE_5, {
       systemPrompt: 'You are an industry expert in construction and contractor materials. Respond ONLY with valid JSON using the provided schema tool.',
       messages: [{ role: 'user', content: prompt }],
       maxTokens: 1024,
@@ -163,7 +164,7 @@ CRITICAL CONSTRAINTS:
 Please provide the exact official domain for this brand (e.g. ${brandName.toLowerCase().replace(/\s+/g, '')}.com).
 If you are unsure, make your best educated guess.`;
 
-    const response = await this.aiGateway.generateText('anthropic/claude-fable-5', {
+    const response = await this.aiGateway.generateText(AIModel.CLAUDE_FABLE_5, {
       systemPrompt: 'You are an industry expert in construction and contractor materials in United States. Respond ONLY with valid JSON using the provided schema tool.',
       messages: [{ role: 'user', content: prompt }],
       maxTokens: 1024,

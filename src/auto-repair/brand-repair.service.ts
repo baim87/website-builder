@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PartnerBrandService } from '../assets/partner-brand.service';
 import { AIGatewayService } from '../ai-gateway/ai-gateway.service';
 import { QCReport } from '../quality-control/quality-control.service';
+import { AIModel } from '../common/constants/ai-models.constant';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 
@@ -120,7 +121,7 @@ Do NOT change the JSON structure or remove/add keys. Keep the exact same shape.
 Return the completely fixed JSON object.
 `;
 
-    const response = await this.aiService.generateText('anthropic/claude-fable-5', {
+    const response = await this.aiService.generateText(AIModel.CLAUDE_FABLE_5, {
       systemPrompt: 'You output ONLY valid JSON. No markdown fences. Just the raw JSON object that exactly matches the input structure.',
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.1,

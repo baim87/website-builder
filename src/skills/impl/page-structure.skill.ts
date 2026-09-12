@@ -4,10 +4,12 @@ import { AIGatewayService } from '../../ai-gateway/ai-gateway.service';
 import { OutputValidatorService } from '../../guardrails/output-validator.service';
 import { PageStructureSchema } from '../schemas/skill-outputs.schema';
 import * as crypto from 'crypto';
+import { AIModel } from '../../common/constants/ai-models.constant';
+import { AISkill } from '../../common/constants/ai-skills.constant';
 
 @Injectable()
 export class PageStructureSkill implements Skill {
-  readonly name = 'PageStructure';
+  readonly name = AISkill.PAGE_STRUCTURE;
   private readonly logger = new Logger(PageStructureSkill.name);
 
   constructor(
@@ -83,7 +85,7 @@ SUPPORTED SECTION TYPES (You can ONLY pick from these):
 
 Do not invent new section types. Just output the array of strings wrapped in the JSON object.`;
 
-    const response = await this.aiGateway.generateText('anthropic/claude-fable-5', {
+    const response = await this.aiGateway.generateText(AIModel.CLAUDE_FABLE_5, {
       systemPrompt: 'You output ONLY valid JSON. No markdown fences, no explanation, no commentary. Just the raw JSON object.',
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.1,
@@ -115,7 +117,7 @@ Do not invent new section types. Just output the array of strings wrapped in the
     return {
       data: validatedData,
       hash,
-      model: 'anthropic/claude-fable-5',
+      model: AIModel.CLAUDE_FABLE_5,
       usage: (response as any).usage || response.usage,
     };
   }

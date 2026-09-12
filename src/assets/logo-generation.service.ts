@@ -5,6 +5,8 @@ import axios from 'axios';
 import * as crypto from 'crypto';
 import sharp from 'sharp';
 import { SkillLoggerService } from '../skills/skill-logger.service';
+import { AIModel } from '../common/constants/ai-models.constant';
+import { AISkill } from '../common/constants/ai-skills.constant';
 
 @Injectable()
 export class LogoGenerationService {
@@ -27,7 +29,7 @@ The background MUST be transparent (no background).`;
     const openRouterResponse = await axios.post(
       'https://openrouter.ai/api/v1/chat/completions',
       {
-        model: 'recraft/recraft-v4.1-vector',
+        model: AIModel.RECRAFT_VECTOR,
         messages: [{ role: 'user', content: prompt }]
       },
       {
@@ -68,8 +70,8 @@ The background MUST be transparent (no background).`;
     if (cost > 0) {
       await this.skillLogger.logInvocation({
         projectId,
-        skillType: 'Logo Generation',
-        model: 'recraft/recraft-v4.1-vector',
+        skillType: AISkill.LOGO_GENERATION,
+        model: AIModel.RECRAFT_VECTOR,
         inputHash: 'logo-gen',
         status: 'success',
         cost: cost,

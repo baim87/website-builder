@@ -3,6 +3,8 @@ import { Skill, SkillInput, SkillOutput } from '../interfaces/skill.interface';
 import { AIGatewayService } from '../../ai-gateway/ai-gateway.service';
 import { SectionDataSchemaRegistry } from '../schemas/section-data-contracts';
 import { zodToJsonSchema } from '@alcyone-labs/zod-to-json-schema';
+import { AIModel } from '../../common/constants/ai-models.constant';
+import { AISkill } from '../../common/constants/ai-skills.constant';
 
 export interface ValidationCritique {
   isValid: boolean;
@@ -11,7 +13,7 @@ export interface ValidationCritique {
 
 @Injectable()
 export class ComponentValidationSkill implements Skill {
-  readonly name = 'ComponentValidation';
+  readonly name = AISkill.COMPONENT_VALIDATION;
   private readonly logger = new Logger(ComponentValidationSkill.name);
 
   constructor(private readonly aiGateway: AIGatewayService) {}
@@ -55,7 +57,7 @@ Return ONLY valid JSON.
 { "isValid": false, "missingElements": ["The iframe for data.mapUrl is completely missing.", "data.hours is not rendered anywhere."] }
 `;
 
-    const response = await this.aiGateway.generateText('anthropic/claude-fable-5', {
+    const response = await this.aiGateway.generateText(AIModel.CLAUDE_FABLE_5, {
       systemPrompt: 'You output ONLY valid JSON. No markdown fences. No explanations.',
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.1,
@@ -72,7 +74,7 @@ Return ONLY valid JSON.
       return {
         data: parsed,
         hash: '',
-        model: 'anthropic/claude-fable-5',
+        model: AIModel.CLAUDE_FABLE_5,
       usage: (response as any).usage || response.usage,
       };
     } catch (e) {

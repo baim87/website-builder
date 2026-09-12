@@ -5,10 +5,12 @@ import { SectionDataSchemaRegistry } from '../schemas/section-data-contracts';
 import { zodToJsonSchema } from '@alcyone-labs/zod-to-json-schema';
 import { getThemeById } from '../constants/theme-definitions.constant';
 import * as crypto from 'crypto';
+import { AIModel } from '../../common/constants/ai-models.constant';
+import { AISkill } from '../../common/constants/ai-skills.constant';
 
 @Injectable()
 export class CodeRepairSkill implements Skill {
-  readonly name = 'CodeRepair';
+  readonly name = AISkill.CODE_REPAIR;
   private readonly logger = new Logger(CodeRepairSkill.name);
 
   constructor(private readonly aiGateway: AIGatewayService) {}
@@ -69,7 +71,7 @@ Fix the component so it satisfies all constraints and issues raised.
 
     this.logger.log(`Running CodeRepairSkill for ${targetComponent}`);
 
-    const response = await this.aiGateway.generateText('anthropic/claude-fable-5', {
+    const response = await this.aiGateway.generateText(AIModel.CLAUDE_FABLE_5, {
       systemPrompt: 'You output ONLY raw React .tsx code. No markdown formatting, no explanations.',
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.1,
@@ -90,7 +92,7 @@ Fix the component so it satisfies all constraints and issues raised.
     return {
       data: { code }, // Match original return shape for compiler repair compatibility
       hash,
-      model: 'anthropic/claude-fable-5',
+      model: AIModel.CLAUDE_FABLE_5,
       usage: (response as any).usage || response.usage,
     };
   }

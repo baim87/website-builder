@@ -6,10 +6,12 @@ import { BrandIdentitySchema } from '../schemas/skill-outputs.schema';
 import { getThemeById } from '../constants/theme-definitions.constant';
 import { zodToJsonSchema } from '@alcyone-labs/zod-to-json-schema';
 import * as crypto from 'crypto';
+import { AIModel } from '../../common/constants/ai-models.constant';
+import { AISkill } from '../../common/constants/ai-skills.constant';
 
 @Injectable()
 export class BrandIdentitySkill implements Skill {
-  readonly name = 'brand_identity';
+  readonly name = AISkill.BRAND_IDENTITY;
   private readonly logger = new Logger(BrandIdentitySkill.name);
 
   constructor(
@@ -47,7 +49,7 @@ CRITICAL RULE: If the Business Context explicitly contains 'extractedBrand' with
 
 Output the brand identity via the provided tool.`;
 
-    const result = await this.aiGateway.generateText('anthropic/claude-fable-5', {
+    const result = await this.aiGateway.generateText(AIModel.CLAUDE_FABLE_5, {
       systemPrompt: 'You are a brand identity expert. Output structured data via the provided tool.',
       messages: [
         { role: 'user' as const, content: prompt }
@@ -99,7 +101,7 @@ Output the brand identity via the provided tool.`;
     return {
       data: validatedData,
       hash,
-      model: 'anthropic/claude-fable-5',
+      model: AIModel.CLAUDE_FABLE_5,
       usage: (result as any).usage || result.usage,
     };
   }

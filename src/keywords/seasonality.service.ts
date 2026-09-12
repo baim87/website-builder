@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AIGatewayService } from '../ai-gateway/ai-gateway.service';
+import { AIModel } from '../common/constants/ai-models.constant';
 
 @Injectable()
 export class SeasonalityService {
@@ -68,7 +69,7 @@ export class SeasonalityService {
     `;
 
     try {
-      const response = await this.aiGateway.generateText('anthropic/claude-fable-5', {
+      const response = await this.aiGateway.generateText(AIModel.CLAUDE_FABLE_5, {
         systemPrompt: 'You are a helpful assistant. Always output a clean JSON array of numbers.',
         messages: [{ role: 'user', content: prompt }],
         schema: {
@@ -95,7 +96,7 @@ export class SeasonalityService {
     `;
 
     try {
-      const response = await this.aiGateway.generateText('anthropic/claude-fable-5', {
+      const response = await this.aiGateway.generateText(AIModel.CLAUDE_FABLE_5, {
         systemPrompt: 'You are an expert copywriter.',
         messages: [{ role: 'user', content: prompt }],
       });

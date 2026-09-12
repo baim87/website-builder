@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AIGatewayService } from '../ai-gateway/ai-gateway.service';
+import { AIModel } from '../common/constants/ai-models.constant';
 
 export interface VisualCritiqueIssue {
   description: string;
@@ -121,7 +122,7 @@ Ensure every component in the componentsOnPage list is evaluated in the componen
 `;
 
     // Assuming aiService has generateText with multimodal support for base64 image strings
-    const response = await this.aiService.generateText('anthropic/claude-fable-5', {
+    const response = await this.aiService.generateText(AIModel.CLAUDE_FABLE_5, {
       systemPrompt: 'You output ONLY valid JSON. No markdown fences, no explanation, no commentary. Just the raw JSON object.',
       messages: [{ 
         role: 'user', 

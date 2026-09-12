@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ClaudeFableAdapter } from '../adapters/claude-fable.adapter';
 // import { OllamaCloudAdapter } from '../adapters/ollama-cloud.adapter';
 import { TextAdapter } from '../interfaces/text-adapter.interface';
+import { AIModel } from '../../common/constants/ai-models.constant';
 
 @Injectable()
 export class ModelRegistry {
@@ -11,10 +12,10 @@ export class ModelRegistry {
     private readonly claudeAdapter: ClaudeFableAdapter,
     // private readonly ollamaAdapter: OllamaCloudAdapter,
   ) {
-    this.registry.set('anthropic/claude-fable-5', this.claudeAdapter);
-    this.registry.set('bytedance-seed/seedream-4.5', this.claudeAdapter);
-    this.registry.set('bytedance-seed/seedream-5-0-pro', this.claudeAdapter);
-    this.registry.set('anthropic/claude-haiku-4.5', this.claudeAdapter);
+    this.registry.set(AIModel.CLAUDE_FABLE_5, this.claudeAdapter);
+    this.registry.set(AIModel.SEEDREAM_4_5, this.claudeAdapter);
+    this.registry.set(AIModel.SEEDREAM_5_0_PRO, this.claudeAdapter);
+    this.registry.set(AIModel.CLAUDE_HAIKU_4_5, this.claudeAdapter);
     // this.registry.set('kimi-k2.6:cloud', this.ollamaAdapter);
   }
 

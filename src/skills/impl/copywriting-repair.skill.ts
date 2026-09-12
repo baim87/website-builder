@@ -1,10 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Skill, SkillInput, SkillOutput } from '../interfaces/skill.interface';
 import { AIGatewayService } from '../../ai-gateway/ai-gateway.service';
+import { AIModel } from '../../common/constants/ai-models.constant';
+import { AISkill } from '../../common/constants/ai-skills.constant';
 
 @Injectable()
 export class CopywritingRepairSkill implements Skill {
-  readonly name = 'CopywritingRepair';
+  readonly name = AISkill.COPYWRITING_REPAIR;
   private readonly logger = new Logger(CopywritingRepairSkill.name);
 
   constructor(
@@ -36,7 +38,7 @@ Return the completely fixed JSON object.
 `;
 
 
-    const response = await this.aiService.generateText('anthropic/claude-fable-5', {
+    const response = await this.aiService.generateText(AIModel.CLAUDE_FABLE_5, {
       systemPrompt: 'You output ONLY valid JSON. No markdown fences. Just the raw JSON object that exactly matches the input structure.',
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.3,
@@ -63,7 +65,7 @@ Return the completely fixed JSON object.
           promptTokens: 0,
           completionTokens: 0,
         },
-        model: 'anthropic/claude-fable-5',
+        model: AIModel.CLAUDE_FABLE_5,
         hash: 'placeholder',
       };
     } catch (e: any) {

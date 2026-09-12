@@ -4,10 +4,12 @@ import { AIGatewayService } from '../../ai-gateway/ai-gateway.service';
 import { OutputValidatorService } from '../../guardrails/output-validator.service';
 import { getThemeById } from '../constants/theme-definitions.constant';
 import * as crypto from 'crypto';
+import { AIModel } from '../../common/constants/ai-models.constant';
+import { AISkill } from '../../common/constants/ai-skills.constant';
 
 @Injectable()
 export class CSSStyleSkill implements Skill {
-  readonly name = 'CSSStyle';
+  readonly name = AISkill.CSS_STYLE;
   private readonly logger = new Logger(CSSStyleSkill.name);
 
   constructor(
@@ -61,7 +63,7 @@ Return ONLY the raw CSS code. No explanations.`;
 
     this.logger.log(`Generating global CSS configuration...`);
 
-    const response = await this.aiGateway.generateText('anthropic/claude-fable-5', {
+    const response = await this.aiGateway.generateText(AIModel.CLAUDE_FABLE_5, {
       systemPrompt: 'You output ONLY raw CSS code. Do not wrap in markdown fences. Do not explain anything.',
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.2,
@@ -88,7 +90,7 @@ Return ONLY the raw CSS code. No explanations.`;
     return {
       data: css,
       hash,
-      model: 'anthropic/claude-fable-5',
+      model: AIModel.CLAUDE_FABLE_5,
       usage: (response as any).usage || response.usage,
     };
   }

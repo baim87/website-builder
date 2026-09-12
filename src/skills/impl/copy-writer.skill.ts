@@ -7,9 +7,11 @@ import * as crypto from 'crypto';
 import { zodToJsonSchema } from '@alcyone-labs/zod-to-json-schema';
 import { SectionDataSchemaRegistry } from '../schemas/section-data-contracts';
 import { buildCopyWriterPrompt } from '../prompts/builders/copy-writer.prompt';
+import { AIModel } from '../../common/constants/ai-models.constant';
+import { AISkill } from '../../common/constants/ai-skills.constant';
 @Injectable()
 export class CopyWriterSkill implements Skill {
-  readonly name = 'CopyWriter';
+  readonly name = AISkill.COPY_WRITER;
   private readonly logger = new Logger(CopyWriterSkill.name);
 
   constructor(
@@ -47,7 +49,7 @@ export class CopyWriterSkill implements Skill {
 
     this.logger.log(`Generating copy for ${sectionType}...`);
 
-    const response = await this.aiGateway.generateText('anthropic/claude-fable-5', {
+    const response = await this.aiGateway.generateText(AIModel.CLAUDE_FABLE_5, {
       systemPrompt: 'You are an expert copywriter. Output strictly matching the requested JSON schema via the provided tool.',
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.7,
@@ -91,7 +93,7 @@ export class CopyWriterSkill implements Skill {
     return {
       data: validatedData,
       hash,
-      model: 'anthropic/claude-fable-5',
+      model: AIModel.CLAUDE_FABLE_5,
       usage: (response as any).usage || response.usage,
     };
   }

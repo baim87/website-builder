@@ -5,10 +5,12 @@ import { OutputValidatorService } from '../../guardrails/output-validator.servic
 import { BrandKitSchema } from '../schemas/skill-outputs.schema';
 import { zodToJsonSchema } from '@alcyone-labs/zod-to-json-schema';
 import * as crypto from 'crypto';
+import { AIModel } from '../../common/constants/ai-models.constant';
+import { AISkill } from '../../common/constants/ai-skills.constant';
 
 @Injectable()
 export class BrandKitGeneratorSkill implements Skill {
-  readonly name = 'brand_kit_generator';
+  readonly name = AISkill.BRAND_KIT_GENERATOR;
   private readonly logger = new Logger(BrandKitGeneratorSkill.name);
 
   constructor(
@@ -37,7 +39,7 @@ Generate a highly professional, 13-point Brand Kit that will be used as the foun
 The brand should feel premium, trustworthy, and tailored to their specific trade and target audience. 
 Return your output using the provided structured tool.`;
 
-    const result = await this.aiGateway.generateText('anthropic/claude-fable-5', {
+    const result = await this.aiGateway.generateText(AIModel.CLAUDE_FABLE_5, {
       systemPrompt: 'You are an elite brand identity expert. Output structured data via the provided tool.',
       messages: [
         { role: 'user', content: prompt }
@@ -72,7 +74,7 @@ Return your output using the provided structured tool.`;
     return { 
       data: validatedData, 
       hash,
-      model: 'anthropic/claude-fable-5',
+      model: AIModel.CLAUDE_FABLE_5,
       usage: (result as any).usage || result.usage,
     };
   }

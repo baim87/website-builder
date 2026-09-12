@@ -9,6 +9,8 @@ import { ImageProcessorService } from '../../assets/image-processor.service';
 import { ConfigService } from '@nestjs/config';
 import { AssetPathResolverService } from '../../assets/asset-path-resolver.service';
 import { ImageCritiqueService } from '../../quality-control/image-critique.service';
+import { AIModel } from '../../common/constants/ai-models.constant';
+import { AISkill } from '../../common/constants/ai-skills.constant';
 
 @Processor(QUEUE_NAMES.IMAGE_GENERATION, {
   concurrency: 2, // process 2 at a time to prevent memory/cpu exhaustion from sharp
@@ -169,9 +171,9 @@ export class ImageGenerationConsumer extends WorkerHost {
       await this.prisma.skillInvocation.create({
         data: {
           projectId,
-          skillType: 'ImageGeneration',
+          skillType: AISkill.IMAGE_GENERATION,
           inputHash: projectAssetId,
-          model: 'bytedance-seed/seedream-4.5',
+          model: AIModel.SEEDREAM_4_5,
           cost: totalCost,
           status: 'success',
           metadata: { projectAssetId, type: asset.type }
@@ -191,9 +193,9 @@ export class ImageGenerationConsumer extends WorkerHost {
       await this.prisma.skillInvocation.create({
         data: {
           projectId,
-          skillType: 'ImageGeneration',
+          skillType: AISkill.IMAGE_GENERATION,
           inputHash: projectAssetId,
-          model: 'bytedance-seed/seedream-4.5',
+          model: AIModel.SEEDREAM_4_5,
           status: 'failed',
           error: error.message,
           metadata: { projectAssetId }
@@ -232,7 +234,7 @@ export class ImageGenerationConsumer extends WorkerHost {
             "X-Title": "Contractor Website Builder"
         },
         body: JSON.stringify({
-            model: "bytedance-seed/seedream-4.5",
+            model: AIModel.SEEDREAM_4_5,
             messages
         })
     });

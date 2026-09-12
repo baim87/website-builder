@@ -4,6 +4,7 @@ import axios from 'axios';
 import * as fs from 'fs';
 import { z } from 'zod';
 import { zodToJsonSchema } from '@alcyone-labs/zod-to-json-schema';
+import { AIModel } from '../common/constants/ai-models.constant';
 
 export const BrandExtractionSchema = z.object({
   colors: z.object({
@@ -55,7 +56,7 @@ export class BrandExtractionService {
 
     const prompt = `Analyze this logo and extract the exact brand color palette (primary, secondary, accent) in HEX format. Then, suggest suitable Google Fonts for headings and body text that match the logo's aesthetic. Output the data using the provided tool.`;
 
-    const result = await this.aiGateway.generateText('anthropic/claude-fable-5', {
+    const result = await this.aiGateway.generateText(AIModel.CLAUDE_FABLE_5, {
       systemPrompt: 'You are a brand extraction expert. Analyze the image and extract accurate HEX colors and matching typography.',
       messages: [
         { 
