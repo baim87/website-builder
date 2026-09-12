@@ -37,7 +37,7 @@ export class AuthController {
     });
 
     const frontendUrl = this.configService.get('FRONTEND_URL');
-    return res.redirect(`${frontendUrl}/dashboard?token=${accessToken}`);
+    return res.redirect(`${frontendUrl}/login?token=${accessToken}`);
   }
 
   @Public()

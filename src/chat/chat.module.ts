@@ -12,11 +12,14 @@ import { QueueModule } from '../queue/queue.module';
 import { ProjectsModule } from '../projects/projects.module';
 
 import { GuardrailsModule } from '../guardrails/guardrails.module';
+import { ChatFlowEngine } from './chat-flow.engine';
+import { SkillsModule } from '../skills/skills.module';
+import { AssetsModule } from '../assets/assets.module';
 
 @Module({
-  imports: [PrismaModule, AIGatewayModule, forwardRef(() => InterviewModule), QueueModule, ProjectsModule, GuardrailsModule],
+  imports: [PrismaModule, AIGatewayModule, forwardRef(() => InterviewModule), QueueModule, ProjectsModule, GuardrailsModule, SkillsModule, AssetsModule],
   controllers: [ChatController],
-  providers: [ChatService, ChatStreamService, EditIntentService, EditExecutorService],
-  exports: [ChatService, ChatStreamService, EditIntentService, EditExecutorService],
+  providers: [ChatService, ChatStreamService, EditIntentService, EditExecutorService, ChatFlowEngine],
+  exports: [ChatService, ChatStreamService, EditIntentService, EditExecutorService, ChatFlowEngine],
 })
 export class ChatModule {}

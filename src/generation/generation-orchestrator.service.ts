@@ -288,7 +288,19 @@ export class GenerationOrchestratorService {
     this.logger.log('Phase 2.75: Waiting for all planned images to finish generating before proceeding...');
     let allImagesCompleted = false;
     let waitLoopCount = 0;
+    const MAX_WAIT_LOOPS = 120; // 10 minutes timeout (120 * 5s)
+
     while (!allImagesCompleted) {
+      if (waitLoopCount >= MAX_WAIT_LOOPS) {
+        this.logger.warn(`Image generation polling timed out after 10 minutes. Proceeding with remaining completed images.`);
+        // Fail any remaining pending images
+        await this.prisma.projectAsset.updateMany({
+          where: { projectId: ctx.projectId, status: { in: ['pending', 'generating'] } },
+          data: { status: 'failed' },
+        });
+        break;
+      }
+
       const [pendingAssets, completedAssets, failedAssets, totalAssets] = await Promise.all([
         this.prisma.projectAsset.count({ where: { projectId: ctx.projectId, status: { in: ['pending', 'generating'] } } }),
         this.prisma.projectAsset.count({ where: { projectId: ctx.projectId, status: 'completed' } }),
@@ -312,6 +324,30 @@ export class GenerationOrchestratorService {
   private async executePhase3To5PageLoop(ctx: GenerationContext, onPageGenerated?: (page: any) => Promise<void>) {
     const successfulPages: any[] = [];
 
+    // Pre-fetch assets to avoid N+1 queries inside the loop
+    const projectAssets = await this.prisma.projectAsset.findMany({
+      where: { projectId: ctx.projectId },
+      select: { id: true, type: true, prompt: true }
+    });
+
+    const partnerBrandAssets = await this.prisma.asset.findMany({
+      where: { projectId: ctx.projectId, purpose: 'partner_brand' },
+      select: { id: true, url: true }
+    });
+
+    const combinedAssets = [
+      ...projectAssets,
+      ...partnerBrandAssets.map(a => {
+        const match = a.url.match(/global\/brands\/([^\/]+)\/logo/);
+        const brandName = match ? match[1].split('.')[0] : 'Unknown';
+        return {
+          id: a.id,
+          type: 'PARTNER_BRAND',
+          prompt: `Logo for partner brand: ${brandName}`
+        };
+      })
+    ];
+
     for (const pageSlug of ctx.pagesToGenerate) {
       try {
         const existingPage = await this.prisma.page.findUnique({
@@ -333,29 +369,6 @@ export class GenerationOrchestratorService {
         this.logger.log(`\n[${pageSlug}] Starting Generation Loop`);
 
         const keywordTarget = ctx.keywordStrategyResult.pages.find((p: any) => p.slug === pageSlug);
-
-        const projectAssets = await this.prisma.projectAsset.findMany({
-          where: { projectId: ctx.projectId },
-          select: { id: true, type: true, prompt: true }
-        });
-
-        const partnerBrandAssets = await this.prisma.asset.findMany({
-          where: { projectId: ctx.projectId, purpose: 'partner_brand' },
-          select: { id: true, url: true }
-        });
-
-        const combinedAssets = [
-          ...projectAssets,
-          ...partnerBrandAssets.map(a => {
-            const match = a.url.match(/global\/brands\/([^\/]+)\/logo/);
-            const brandName = match ? match[1].split('.')[0] : 'Unknown';
-            return {
-              id: a.id,
-              type: 'PARTNER_BRAND',
-              prompt: `Logo for partner brand: ${brandName}`
-            };
-          })
-        ];
 
         let seoResult = null;
         if (pageSlug !== 'layout') {
@@ -446,7 +459,7 @@ export class GenerationOrchestratorService {
           }
 
           if (!sectionCopy) {
-            sectionCopy = this.getFallbackSection(sectionType);
+            sectionCopy = this.getFallbackSection(sectionType, ctx.businessContext);
           }
 
           if (sectionCopy) {
@@ -491,16 +504,20 @@ export class GenerationOrchestratorService {
     return successfulPages;
   }
 
-  private getFallbackSection(sectionType: string): any {
+  private getFallbackSection(sectionType: string, businessContext: any): any {
     const id = `fallback-${sectionType.toLowerCase()}-${Date.now()}`;
     const base = { id, type: sectionType };
+    const name = businessContext?.businessName || 'Local Pro';
+    const email = businessContext?.email || 'contact@example.com';
+    const phone = businessContext?.phone || '555-0100';
+    const address = businessContext?.address || '123 Main St';
 
     switch (sectionType) {
-      case 'HeroSection': return { ...base, content: { headline: "Welcome", subheadline: "Professional services.", eyebrow: "Top Rated", primaryCtaText: "Contact Us", primaryCtaLink: "/contact", backgroundImage: "https://images.unsplash.com/photo-1541888081622-17b587b1c459" } };
+      case 'HeroSection': return { ...base, content: { headline: `Welcome to ${name}`, subheadline: "Professional services.", eyebrow: "Top Rated", primaryCtaText: "Contact Us", primaryCtaLink: "/contact", backgroundImage: "https://images.unsplash.com/photo-1541888081622-17b587b1c459" } };
       case 'PageHeaderSection': return { ...base, content: { headline: "Page Content", backgroundImage: "https://images.unsplash.com/photo-1541888081622-17b587b1c459" } };
       case 'BrandsSection': return { ...base, content: { brands: [{ name: "Certified Pro", logo: "https://images.unsplash.com/photo-1541888081622-17b587b1c459" }] } };
       case 'ServicesSection': return { ...base, content: { sectionTitle: "Our Services", sectionDescription: "Professional services built to last.", services: [{ title: "General Contracting", description: "Expert craftsmanship", link: "/services" }] } };
-      case 'AboutSection': return { ...base, content: { sectionTitle: "Your Local Experts", content: "Led by John Doe, we are professionals.", image: "https://images.unsplash.com/photo-1541888053-ce2073fb1155" } };
+      case 'AboutSection': return { ...base, content: { sectionTitle: "Your Local Experts", content: `Led by professionals at ${name}.`, image: "https://images.unsplash.com/photo-1541888053-ce2073fb1155" } };
       case 'WhyUsSection': return { ...base, content: { sectionTitle: "Experience the difference", items: [{ title: "Experience", description: "Years of experience.", icon: "CheckCircle" }] } };
       case 'BeforeAfterSection': return { ...base, content: { sectionTitle: "Amazing Transformation", comparisons: [{ beforeImage: "https://images.unsplash.com/photo-1541888053-ce2073fb1155", afterImage: "https://images.unsplash.com/photo-1541888081622-17b587b1c459", title: "Kitchen Remodel" }] } };
       case 'TimelineSection': return { ...base, content: { sectionTitle: "Our Process", steps: [{ title: "Consultation", description: "Initial meeting." }] } };
@@ -511,17 +528,19 @@ export class GenerationOrchestratorService {
       case 'LeadFormSection': return { ...base, content: { sectionTitle: "Request a Quote", fields: [{ name: "name", type: "text", label: "Name", required: true }], submitText: "Submit" } };
       case 'GallerySection': return { ...base, content: { sectionTitle: "Our Work", images: [{ image: "https://images.unsplash.com/photo-1541888081622-17b587b1c459", caption: "Work 1" }] } };
       case 'FaqSection': return { ...base, content: { sectionTitle: "Frequently Asked Questions", faqs: [{ question: "What is your process?", answer: "We start with a consultation." }] } };
-      case 'FindUsSection': return { ...base, content: { sectionTitle: "Find Us", address: "123 Main St", phone: "555-0100", email: "info@example.com", hours: "Mon-Fri 9-5" } };
+      case 'FindUsSection': return { ...base, content: { sectionTitle: "Find Us", address, phone, email, hours: "Mon-Fri 9-5" } };
       case 'PortfolioSection': return { ...base, content: { sectionTitle: "Our Recent Work", projects: [{ title: "Project 1", description: "A great project", image: "https://images.unsplash.com/photo-1541888081622-17b587b1c459" }] } };
-      case 'HeaderSection': return { ...base, content: { logoText: "Logo", phone: "555-0100", navLinks: [{ label: "Home", href: "/" }], ctaText: "Contact", ctaLink: "/contact" } };
-      case 'FooterSection': return { ...base, content: { companyName: "Company", description: "Professional services.", phone: "555-0100", email: "info@example.com", address: "123 Main St", quickLinks: [{ label: "Home", href: "/" }], copyright: "2026" } };
+      case 'HeaderSection': return { ...base, content: { logoText: name, phone, navLinks: [{ label: "Home", href: "/" }], ctaText: "Contact", ctaLink: "/contact" } };
+      case 'FooterSection': return { ...base, content: { companyName: name, description: "Professional services.", phone, email, address, quickLinks: [{ label: "Home", href: "/" }], copyright: new Date().getFullYear().toString() } };
       case 'ContentSection': return { ...base, content: { title: "Content", content: "<p>Rich content here.</p>" } };
       default: return { ...base, content: {} };
     }
   }
 
-  private async resolveImages(obj: any): Promise<void> {
+  private async resolveImages(obj: any, seen = new Set<any>()): Promise<void> {
     if (!obj || typeof obj !== 'object') return;
+    if (seen.has(obj)) return;
+    seen.add(obj);
 
     for (const key of Object.keys(obj)) {
       const val = obj[key];
@@ -531,6 +550,9 @@ export class GenerationOrchestratorService {
           const url = await this.unsplash.searchImage(query);
           if (url) {
             obj[key] = url;
+          } else {
+            // Transparent 1x1 pixel to prevent broken image icons
+            obj[key] = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
           }
         } else if (val.startsWith('ASSET:')) {
           const assetId = val.replace('ASSET:', '').trim();
@@ -542,7 +564,7 @@ export class GenerationOrchestratorService {
           }
         }
       } else if (typeof val === 'object') {
-        await this.resolveImages(val);
+        await this.resolveImages(val, seen);
       }
     }
   }

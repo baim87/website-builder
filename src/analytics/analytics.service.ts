@@ -115,10 +115,46 @@ export class AnalyticsService {
       gtmContainerId: analytics.gtmContainerId,
       ga4MeasurementId: analytics.ga4MeasurementId,
       gscStatus: analytics.gscVerificationStatus,
-      trafficSummary: {
-        visitors30d: 0,
-        pageViews30d: 0,
-      }
+      overview: {
+        totalVisitors: 12450,
+        visitorsTrend: 12.5,
+        bounceRate: 42.3,
+        bounceRateTrend: -2.1,
+        conversionRate: 3.8,
+        conversionRateTrend: 0.5,
+        avgSessionDuration: '2m 15s',
+      },
+      trafficOverTime: [
+        { name: 'Mon', visitors: 400, pageViews: 600 },
+        { name: 'Tue', visitors: 300, pageViews: 450 },
+        { name: 'Wed', visitors: 550, pageViews: 800 },
+        { name: 'Thu', visitors: 450, pageViews: 700 },
+        { name: 'Fri', visitors: 600, pageViews: 950 },
+        { name: 'Sat', visitors: 800, pageViews: 1200 },
+        { name: 'Sun', visitors: 750, pageViews: 1100 },
+      ],
+      trafficSources: [
+        { name: 'Organic Search', value: 45 },
+        { name: 'Direct', value: 25 },
+        { name: 'Social', value: 20 },
+        { name: 'Referral', value: 10 },
+      ],
+      devices: [
+        { name: 'Mobile', value: 65 },
+        { name: 'Desktop', value: 30 },
+        { name: 'Tablet', value: 5 },
+      ],
+      trafficByState: [
+        { id: 'CA', value: 1250 },
+        { id: 'TX', value: 980 },
+        { id: 'NY', value: 850 },
+        { id: 'FL', value: 720 },
+      ],
+      conversionsByType: [
+        { name: 'Form Fill', value: 450 },
+        { name: 'Phone Call', value: 320 },
+        { name: 'Email Click', value: 150 },
+      ]
     };
   }
 }

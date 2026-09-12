@@ -142,6 +142,7 @@ model ChatMessage {
   projectId          String
   role               String
   content            String
+  metadata           Json?
   voiceTranscript    Boolean  @default(false)
   skillInvocationRef String?
   createdAt          DateTime @default(now())

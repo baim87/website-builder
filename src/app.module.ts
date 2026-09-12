@@ -1,10 +1,11 @@
-import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ConfigModule } from './config/config.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
-import { TenantMiddleware } from './common/middleware/tenant.middleware';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { TenantInterceptor } from './common/interceptors/tenant.interceptor';
 import { AIGatewayModule } from './ai-gateway/ai-gateway.module';
 import { QueueModule } from './queue/queue.module';
 import { StorageModule } from './storage/storage.module';
@@ -38,10 +39,12 @@ import { EditorModule } from './editor/editor.module';
   imports: [ConfigModule, PrismaModule, AuthModule, ProjectsModule, ChatModule, InterviewModule, GbpModule, GuardrailsModule, SeoModule, GenerationModule, AssetsModule, AIGatewayModule, QueueModule, StorageModule, KeywordsModule, SkillsModule, BillingModule, HealthModule, AnalyticsModule, StripeModule, VercelModule, DeploymentModule, DomainModule, LeadsModule, RedisModule, QualityControlModule, AutoRepairModule, EditorModule, EventEmitterModule.forRoot()],
 
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: TenantInterceptor,
+    },
+  ],
 })
-export class AppModule implements NestModule {
-  configure(consumer: MiddlewareConsumer) {
-    consumer.apply(TenantMiddleware).forRoutes('*');
-  }
-}
+export class AppModule {}

@@ -76,6 +76,10 @@ export class DeploymentService {
     return result;
   }
 
+  async setEnvironmentVariables(vercelProjectName: string, envVars: any[]) {
+    return this.vercelClient.setEnvironmentVariables(vercelProjectName, envVars);
+  }
+
   async waitForDeployment(projectId: string, userId: string, vercelProjectName: string) {
     const project = await this.prisma.project.findUnique({
       where: { id: projectId, userId },

@@ -8,12 +8,17 @@ import { SkillsModule } from '../skills/skills.module';
 import { AssetsModule } from '../assets/assets.module';
 import { AIGatewayModule } from '../ai-gateway/ai-gateway.module';
 
+import { BullModule } from '@nestjs/bullmq';
+
 @Module({
   imports: [
     PrismaModule,
     SkillsModule,
     AssetsModule,
     AIGatewayModule,
+    BullModule.registerQueue({
+      name: 'image-generation',
+    }),
   ],
   providers: [
     ComponentRepairService,

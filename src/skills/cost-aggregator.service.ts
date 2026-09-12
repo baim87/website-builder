@@ -13,9 +13,12 @@ export class CostAggregatorService {
     });
 
     if (invocations.length === 0) {
-      this.logger.log(`[Cost Report] No successful invocations found for project ${projectId}.`);
-      return;
+      this.logger.log(`[Cost Report] No successful skill invocations found for project ${projectId}.`);
     }
+
+    const imageAssets = await this.prisma.projectAsset.findMany({
+      where: { projectId, cost: { not: null } },
+    });
 
     let totalCost = 0;
     let totalPromptTokens = 0;
@@ -25,6 +28,10 @@ export class CostAggregatorService {
     let repairCost = 0;
     let repairPromptTokens = 0;
     let repairCompletionTokens = 0;
+    
+    let interviewCost = 0;
+    let interviewPromptTokens = 0;
+    let interviewCompletionTokens = 0;
     
     const pageCosts: Record<string, number> = {};
     const componentCosts: Record<string, number> = {};
@@ -44,6 +51,12 @@ export class CostAggregatorService {
         repairCompletionTokens += inv.completionTokens || 0;
       }
 
+      if (meta.phase === 'interview') {
+        interviewCost += cost;
+        interviewPromptTokens += inv.promptTokens || 0;
+        interviewCompletionTokens += inv.completionTokens || 0;
+      }
+
       if (meta.pageSlug) {
         pageCosts[meta.pageSlug] = (pageCosts[meta.pageSlug] || 0) + cost;
       }
@@ -52,6 +65,16 @@ export class CostAggregatorService {
         componentCosts[meta.componentName] = (componentCosts[meta.componentName] || 0) + cost;
       }
     }
+
+    let imageCost = 0;
+    let imageCount = 0;
+    for (const asset of imageAssets) {
+      if (asset.cost) {
+        imageCost += asset.cost;
+        imageCount++;
+      }
+    }
+    totalCost += imageCost;
 
     this.logger.log(`\n================ COST REPORT: ${projectId} (${phase.toUpperCase()}) ================`);
     this.logger.log(`Total Cost: $${totalCost.toFixed(5)}`);
@@ -67,6 +90,18 @@ export class CostAggregatorService {
       this.logger.log(`\n--- Repair Phase ---`);
       this.logger.log(`Repair Cost: $${repairCost.toFixed(5)}`);
       this.logger.log(`Repair Tokens: (In: ${repairPromptTokens.toLocaleString()}, Out: ${repairCompletionTokens.toLocaleString()})`);
+    }
+
+    if (interviewCost > 0) {
+      this.logger.log(`\n--- Chat & Interview Phase ---`);
+      this.logger.log(`Interview Cost: $${interviewCost.toFixed(5)}`);
+      this.logger.log(`Interview Tokens: (In: ${interviewPromptTokens.toLocaleString()}, Out: ${interviewCompletionTokens.toLocaleString()})`);
+    }
+
+    if (imageCost > 0) {
+      this.logger.log(`\n--- Image Generation Phase ---`);
+      this.logger.log(`Image Cost: $${imageCost.toFixed(5)}`);
+      this.logger.log(`Images Generated: ${imageCount}`);
     }
 
     this.logger.log(`\n--- Cost By Page ---`);

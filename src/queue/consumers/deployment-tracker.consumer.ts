@@ -74,8 +74,9 @@ export class DeploymentTrackerConsumer extends WorkerHost {
       this.logger.warn(`[${projectId}] Polling Vercel API failed: ${err.message}`);
     }
 
-    // If we've tried 40 times (approx 2 minutes at 3s intervals), give up
-    if (attempts >= 40) {
+    const MAX_ATTEMPTS = 20;
+    // If we've tried too many times, give up
+    if (attempts >= MAX_ATTEMPTS) {
       this.logger.warn(`[${projectId}] Timed out waiting for Vercel deployment.`);
       await this.prisma.project.update({
         where: { id: projectId },
@@ -85,12 +86,14 @@ export class DeploymentTrackerConsumer extends WorkerHost {
     }
 
     // Re-queue the job with a delay
-    // In BullMQ v5, throwing DelayedError reschedules the job without counting as a failed attempt
-    // Wait wait, I should increment attempts in the job data before throwing if I want to track it
     await job.updateData({ ...job.data, attempts: attempts + 1 });
     
-    // Delay for 3 seconds before next try
-    await job.moveToDelayed(Date.now() + 3000, job.token!);
+    // Exponential backoff: start at 3s, max at 30s
+    const baseDelay = 3000;
+    const delay = Math.min(baseDelay * Math.pow(1.5, attempts), 30000);
+    
+    this.logger.log(`[${projectId}] Delaying next check by ${Math.round(delay/1000)}s...`);
+    await job.moveToDelayed(Date.now() + delay, job.token!);
     throw new DelayedError();
   }
 }

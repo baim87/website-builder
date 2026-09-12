@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import axios from 'axios';
 import * as crypto from 'crypto';
 import sharp from 'sharp';
+import { SkillLoggerService } from '../skills/skill-logger.service';
 
 @Injectable()
 export class LogoGenerationService {
@@ -12,6 +13,7 @@ export class LogoGenerationService {
   constructor(
     private readonly storageService: StorageService,
     private readonly prisma: PrismaService,
+    private readonly skillLogger: SkillLoggerService,
   ) {}
 
   async generateLogoAndFavicon(projectId: string, bName: string, trade: string, brandHints: string) {
@@ -61,6 +63,20 @@ The background MUST be transparent (no background).`;
     const imgRes = await axios.get(imageUrl, { responseType: 'arraybuffer' });
     const buffer = Buffer.from(imgRes.data);
     
+    // Extract cost and save to SkillInvocation for CostAggregator
+    const cost = openRouterResponse.data.usage?.cost || 0;
+    if (cost > 0) {
+      await this.skillLogger.logInvocation({
+        projectId,
+        skillType: 'Logo Generation',
+        model: 'recraft/recraft-v4.1-vector',
+        inputHash: 'logo-gen',
+        status: 'success',
+        cost: cost,
+        metadata: { phase: 'generation', componentName: 'Logo' }
+      });
+    }
+
     const project = await this.prisma.project.findUnique({ where: { id: projectId } });
     const userId = project ? project.userId : 'unknown-user';
 

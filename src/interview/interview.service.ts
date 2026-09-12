@@ -111,14 +111,22 @@ export class InterviewService {
            yield { event: 'token', data: { token: fallbackMsg } };
            
            // IMPORTANT: We must save this fallback message to the database, otherwise the AI has no idea what the user's next answer means!
-           await this.prisma.chatMessage.create({
-             data: {
-               projectId,
-               role: 'assistant',
-               content: fallbackMsg,
-             }
-           });
+           try {
+             await this.prisma.chatMessage.create({
+               data: {
+                 projectId,
+                 role: 'assistant',
+                 content: fallbackMsg,
+               }
+             });
+           } catch (dbError) {
+             console.error(`Failed to save fallback chat message: ${dbError.message}`);
+           }
         }
+        
+        // Re-evaluate completeness after updates
+        const finalStatus = await this.checkCompleteness(projectId);
+        yield { event: 'progress', data: finalStatus };
         
         yield { event: 'done', data: {} };
       } else {

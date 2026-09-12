@@ -12,6 +12,7 @@ export const envSchema = z.object({
   GOOGLE_CLIENT_ID: z.string().min(1),
   GOOGLE_CLIENT_SECRET: z.string().min(1),
   GOOGLE_CALLBACK_URL: z.string().url(),
+  ALLOWED_AUTH_DOMAINS: z.string().optional(),
   GOOGLE_SERVICE_ACCOUNT_EMAIL: z.string().email().optional(),
   GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: z.string().optional(),
 
@@ -62,7 +63,7 @@ export const envSchema = z.object({
   VERCEL_PROJECT_ID: z.string().optional(),
 
   JWT_SECRET: z.string().min(10),
-  JWT_EXPIRY: z.string().default('15m'),
+  JWT_EXPIRY: z.string().default('7d'),
   REFRESH_TOKEN_EXPIRY: z.string().default('7d'),
 
   THROTTLE_TTL: z.coerce.number().default(60000),

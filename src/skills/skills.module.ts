@@ -56,6 +56,6 @@ import { AssetsModule } from '../assets/assets.module';
     CostAggregatorService,
     BrandKitGeneratorSkill,
   ],
-  exports: [SkillExecutorService, GenerationOrchestratorService, CodeRepairSkill, ComponentValidationSkill, AssetRepairSkill, CopywritingRepairSkill, CostAggregatorService, BrandKitGeneratorSkill, ComponentEditorSkill],
+  exports: [SkillExecutorService, GenerationOrchestratorService, CodeRepairSkill, ComponentValidationSkill, AssetRepairSkill, CopywritingRepairSkill, CostAggregatorService, BrandKitGeneratorSkill, ComponentEditorSkill, SkillLoggerService],
 })
 export class SkillsModule {}

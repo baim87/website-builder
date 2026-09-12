@@ -50,15 +50,31 @@ export class LeadsService {
     const contractorEmail = project.user.email;
     const { name, email, phone, service, message } = leadData;
 
+    const escapeHtml = (unsafe: string) => {
+      if (!unsafe) return 'N/A';
+      return String(unsafe)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    };
+
+    const safeName = escapeHtml(name);
+    const safeEmail = escapeHtml(email);
+    const safePhone = escapeHtml(phone);
+    const safeService = escapeHtml(service);
+    const safeMessage = escapeHtml(message);
+
     const htmlContent = `
       <h2>New Lead from your Website!</h2>
-      <p><strong>Name:</strong> ${name || 'N/A'}</p>
-      <p><strong>Email:</strong> ${email || 'N/A'}</p>
-      <p><strong>Phone:</strong> ${phone || 'N/A'}</p>
-      <p><strong>Service Requested:</strong> ${service || 'N/A'}</p>
+      <p><strong>Name:</strong> ${safeName}</p>
+      <p><strong>Email:</strong> ${safeEmail}</p>
+      <p><strong>Phone:</strong> ${safePhone}</p>
+      <p><strong>Service Requested:</strong> ${safeService}</p>
       <br/>
       <p><strong>Message:</strong></p>
-      <p>${message || 'No message provided.'}</p>
+      <p>${safeMessage === 'N/A' ? 'No message provided.' : safeMessage}</p>
     `;
 
     try {

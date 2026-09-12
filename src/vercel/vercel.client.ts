@@ -217,4 +217,27 @@ export class VercelClient {
 
     return response.json();
   }
+
+  async setEnvironmentVariables(vercelProjectId: string, envVars: Array<{ key: string, value: string, target: string[], type: string }>): Promise<any> {
+    this.logger.log(`Setting environment variables for Vercel project ${vercelProjectId}`);
+
+    if (!this.apiToken) return { status: 'mocked' };
+
+    const url = new URL(`${this.baseUrl}/v10/projects/${vercelProjectId}/env`);
+    this.appendTeamId(url);
+
+    const response = await fetch(url.toString(), {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(envVars),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      this.logger.error(`Vercel environment variables set failed: ${error.message || response.statusText}`);
+      throw new HttpException(`Vercel env variables failed: ${error.message || response.statusText}`, response.status);
+    }
+
+    return response.json();
+  }
 }

@@ -6,6 +6,7 @@ import axios from 'axios';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import { ImageProcessorService } from './image-processor.service';
+import { SkillLoggerService } from '../skills/skill-logger.service';
 
 @Injectable()
 export class PortraitGenerationService {
@@ -16,6 +17,7 @@ export class PortraitGenerationService {
     private readonly prisma: PrismaService,
     private readonly imageProcessor: ImageProcessorService,
     private readonly pathResolver: AssetPathResolverService,
+    private readonly skillLogger: SkillLoggerService,
   ) {}
 
   async generatePortrait(projectId: string, trade: string, localImagePath: string) {
@@ -261,6 +263,18 @@ No AI-looking artifacts.`;
       },
     });
     
+    if (cost > 0) {
+      await this.skillLogger.logInvocation({
+        projectId,
+        skillType: 'Portrait Generation',
+        model: 'bytedance-seed/seedream-4.5',
+        inputHash: 'portrait-gen',
+        status: 'success',
+        cost: cost,
+        metadata: { phase: 'generation', componentName: 'Portrait' }
+      });
+    }
+
     this.logger.log(`Portrait saved to DB: ${uploadedWebpUrl}, Cost: $${cost}`);
 
     return uploadedWebpUrl;

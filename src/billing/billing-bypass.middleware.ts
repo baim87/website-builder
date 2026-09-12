@@ -8,7 +8,7 @@ export class BillingBypassMiddleware implements NestMiddleware {
 
   use(req: Request, _res: Response, next: NextFunction) {
     const bypass = this.configService.get<boolean>('BYPASS_BILLING');
-    if (bypass) {
+    if (bypass && process.env.NODE_ENV !== 'production') {
        (req as any).billingBypassed = true;
     }
     next();

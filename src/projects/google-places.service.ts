@@ -20,8 +20,12 @@ export class GooglePlacesService {
       // 1. Text Search to find the Place
       // If the user pastes a URL, it might contain the business name, or we can just pass the URL string as a text search query, which often works.
       const searchUrl = 'https://places.googleapis.com/v1/places:searchText';
+      const isUrl = queryOrUrl.startsWith('http');
+      const textQuery = isUrl ? queryOrUrl : `${queryOrUrl} in United States`;
+      
       const searchBody = {
-        textQuery: queryOrUrl,
+        textQuery,
+        regionCode: 'US', // Bias results to the US
       };
 
       const searchResponse = await fetch(searchUrl, {

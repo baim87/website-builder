@@ -4,12 +4,12 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { QUEUE_NAMES } from '../../common/constants/queue-names.constant';
 import { Octokit } from '@octokit/rest';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { promises as fs } from 'fs';
 import { DeploymentService } from '../../deployment/deployment.service';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 export interface GithubSyncJobData {
   projectId: string;
@@ -47,20 +47,20 @@ export class GithubSyncConsumer extends WorkerHost {
     try {
       // Init git, add remote, commit, and push
       try {
-        await execAsync(`git rev-parse --is-inside-work-tree`, { cwd: directory });
+        await execFileAsync('git', ['rev-parse', '--is-inside-work-tree'], { cwd: directory });
       } catch {
-        await execAsync(`git init`, { cwd: directory });
+        await execFileAsync('git', ['init'], { cwd: directory });
       }
       
       const commitEmail = process.env.GITHUB_AUTHOR_EMAIL || user.email || 'ads@contractingempire.com';
       const commitName = process.env.GITHUB_AUTHOR_NAME || user.login || 'ads-baim';
-      await execAsync(`git config user.name "${commitName}"`, { cwd: directory });
-      await execAsync(`git config user.email "${commitEmail}"`, { cwd: directory });
+      await execFileAsync('git', ['config', 'user.name', commitName], { cwd: directory });
+      await execFileAsync('git', ['config', 'user.email', commitEmail], { cwd: directory });
       
-      await execAsync(`git add .`, { cwd: directory });
+      await execFileAsync('git', ['add', '.'], { cwd: directory });
       
       try {
-          await execAsync(`git commit -m "${commitMessage}"`, { cwd: directory });
+          await execFileAsync('git', ['commit', '-m', commitMessage], { cwd: directory });
       } catch (commitErr: any) {
           if (commitErr.message.includes('nothing to commit')) {
               this.logger.log(`[${projectId}] No changes to commit for ${repoName}`);
@@ -69,11 +69,11 @@ export class GithubSyncConsumer extends WorkerHost {
           throw commitErr;
       }
       
-      await execAsync(`git branch -M main`, { cwd: directory });
-      await execAsync(`git remote add origin ${remoteUrl}`, { cwd: directory }).catch(() => {
-          return execAsync(`git remote set-url origin ${remoteUrl}`, { cwd: directory });
+      await execFileAsync('git', ['branch', '-M', 'main'], { cwd: directory });
+      await execFileAsync('git', ['remote', 'add', 'origin', remoteUrl], { cwd: directory }).catch(() => {
+          return execFileAsync('git', ['remote', 'set-url', 'origin', remoteUrl], { cwd: directory });
       });
-      await execAsync(`git push -u origin main --force`, { cwd: directory });
+      await execFileAsync('git', ['push', '-u', 'origin', 'main', '--force'], { cwd: directory });
       
       this.logger.log(`[${projectId}] Successfully pushed to GitHub repository ${repoName}`);
 

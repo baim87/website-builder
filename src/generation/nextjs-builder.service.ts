@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { BusinessContextService } from '../projects/business-context.service';
 import { WebsiteDataService } from '../projects/website-data.service';
 import { GithubService } from '../deployment/github.service';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs/promises';
 import * as path from 'path';
@@ -13,7 +13,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { generateRepoName } from '../common/utils/repo.util';
 import { SiteContentService } from './site-content.service';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 @Injectable()
 export class NextjsBuilderService {
@@ -32,7 +32,7 @@ export class NextjsBuilderService {
   async buildAndDeploy(
     projectId: string, 
     userId?: string, 
-    beforePushCallback?: (repoOwner: string, repoName: string) => Promise<void>
+    beforePushCallback?: (repoOwner: string, repoName: string, envVars?: any[]) => Promise<void>
   ): Promise<any> {
     this.logger.log(`Starting Next.js build and deploy for project ${projectId}`);
     
@@ -48,18 +48,18 @@ export class NextjsBuilderService {
       }
       
       this.logger.log(`Cloning template from ${templateRepoUrl} to ${tempDir}`);
-      await execAsync(`git clone ${templateRepoUrl} ${tempDir}`);
+      await execFileAsync('git', ['clone', templateRepoUrl, tempDir]);
       
       // Remove the .git folder from the cloned template so it's fresh for the new project
-      await execAsync(`rm -rf ${tempDir}/.git`);
+      await execFileAsync('rm', ['-rf', `${tempDir}/.git`]);
 
       this.logger.log(`Installing dependencies in ${tempDir}...`);
-      await execAsync(`npm install --no-audit --no-fund`, { cwd: tempDir });
+      await execFileAsync('npm', ['install', '--no-audit', '--no-fund'], { cwd: tempDir });
 
       // 1. Backup original hardcoded components for fallback
       const componentsDir = path.join(tempDir, 'src/components');
       const backupDir = path.join(tempDir, 'src/components_backup');
-      await execAsync(`cp -R ${componentsDir} ${backupDir}`);
+      await execFileAsync('cp', ['-R', componentsDir, backupDir]);
 
       const websiteData = await this.websiteDataService.findByProjectId(projectId, userId);
 
@@ -175,7 +175,7 @@ export class NextjsBuilderService {
 
       while (!buildSuccess && retries <= MAX_RETRIES) {
         try {
-          await execAsync(`npm run build`, { 
+          await execFileAsync('npm', ['run', 'build'], { 
             cwd: tempDir, 
             env: { ...process.env, NODE_ENV: 'production' } 
           });
@@ -267,28 +267,18 @@ export class NextjsBuilderService {
         await fs.writeFile(path.join(docsDir, 'brand-kit.md'), mdContent);
       }
 
-      // 4.75. Inject Environment Variables for Deployment
-      this.logger.log(`Injecting .env file for deployment...`);
-      const envContent = `NEXT_PUBLIC_API_URL=${process.env.API_URL || 'http://localhost:3000'}
-NEXT_PUBLIC_PROJECT_ID=${projectId}
-SMTP_HOST=${process.env.SMTP_HOST || 'smtp.gmail.com'}
-SMTP_PORT=${process.env.SMTP_PORT || '465'}
-SMTP_USER=${process.env.SMTP_EMAIL || ''}
-SMTP_PASS=${process.env.SMTP_PASSWORD || ''}
-CONTACT_EMAIL=${businessContext?.email || process.env.CONTACT_EMAIL || ''}
-BUILDER_API_SECRET=${process.env.BUILDER_API_SECRET || ''}
-`;
-      await fs.writeFile(path.join(tempDir, '.env'), envContent);
-      
-      // Allow .env in git so it gets pushed to the private GitHub repo and picked up by Vercel
-      try {
-        let gitignore = await fs.readFile(path.join(tempDir, '.gitignore'), 'utf-8');
-        // Replace .env* with a comment to un-ignore it
-        gitignore = gitignore.replace(/\.env\*/g, '# .env* (Allowed for deployment)');
-        await fs.writeFile(path.join(tempDir, '.gitignore'), gitignore);
-      } catch (e: any) {
-        this.logger.warn(`Could not update .gitignore to allow .env: ${e.message}`);
-      }
+      // 4.75. Prepare Environment Variables for Deployment
+      this.logger.log(`Preparing environment variables for deployment...`);
+      const envVars = [
+        { key: 'NEXT_PUBLIC_API_URL', value: process.env.API_URL || 'http://localhost:3000', target: ['production', 'preview', 'development'], type: 'plain' },
+        { key: 'NEXT_PUBLIC_PROJECT_ID', value: projectId, target: ['production', 'preview', 'development'], type: 'plain' },
+        { key: 'SMTP_HOST', value: process.env.SMTP_HOST || 'smtp.gmail.com', target: ['production', 'preview', 'development'], type: 'plain' },
+        { key: 'SMTP_PORT', value: process.env.SMTP_PORT || '465', target: ['production', 'preview', 'development'], type: 'plain' },
+        { key: 'SMTP_USER', value: process.env.SMTP_EMAIL || '', target: ['production', 'preview', 'development'], type: 'plain' },
+        { key: 'SMTP_PASS', value: process.env.SMTP_PASSWORD || '', target: ['production', 'preview', 'development'], type: 'plain' },
+        { key: 'CONTACT_EMAIL', value: businessContext?.email || process.env.CONTACT_EMAIL || '', target: ['production', 'preview', 'development'], type: 'plain' },
+        { key: 'BUILDER_API_SECRET', value: process.env.BUILDER_API_SECRET || '', target: ['production', 'preview', 'development'], type: 'plain' }
+      ];
 
       // 5. Create GitHub Repository and Push
       const repoName = generateRepoName(businessContext.businessName, projectId);
@@ -298,7 +288,7 @@ BUILDER_API_SECRET=${process.env.BUILDER_API_SECRET || ''}
 
       if (beforePushCallback) {
         this.logger.log(`Executing before-push callback for Vercel linking...`);
-        await beforePushCallback(repo.owner, repo.name);
+        await beforePushCallback(repo.owner, repo.name, envVars);
       }
 
       this.logger.log(`Committing and pushing code to GitHub repo: ${repoName}`);

@@ -4,6 +4,7 @@ import { AIGatewayService } from '../ai-gateway/ai-gateway.service';
 import { ChatStreamService } from './chat-stream.service';
 import { Message } from '../ai-gateway/interfaces/ai-gateway.types';
 import { SSEEvent } from './interfaces/chat.types';
+import { SkillLoggerService } from '../skills/skill-logger.service';
 
 @Injectable()
 export class ChatService {
@@ -11,6 +12,7 @@ export class ChatService {
     private readonly prisma: PrismaService,
     private readonly aiGateway: AIGatewayService,
     private readonly streamService: ChatStreamService,
+    private readonly skillLogger: SkillLoggerService,
   ) {}
 
   async *sendMessage(projectId: string, content: string | any[], systemPrompt: string, model: string = 'anthropic/claude-haiku-4.5'): AsyncIterable<SSEEvent | { event: 'internal-done'; data: { fullResponse: string } }> {
@@ -71,19 +73,17 @@ export class ChatService {
       return;
     }
 
-    const invocation = await this.prisma.skillInvocation.create({
-      data: {
-        projectId,
-        skillType: 'Interview',
-        model,
-        inputHash: 'stream-hash',
-        status: 'success',
-        tokens: usage?.promptTokens ? usage.promptTokens + usage.completionTokens : undefined,
-        promptTokens: usage?.promptTokens,
-        completionTokens: usage?.completionTokens,
-        cost: usage?.cost,
-        metadata: { phase: 'interview' },
-      }
+    const invocation = await this.skillLogger.logInvocation({
+      projectId,
+      skillType: 'Interview',
+      model,
+      inputHash: 'stream-hash',
+      status: 'success',
+      tokens: usage?.promptTokens ? usage.promptTokens + usage.completionTokens : undefined,
+      promptTokens: usage?.promptTokens,
+      completionTokens: usage?.completionTokens,
+      cost: usage?.cost,
+      metadata: { phase: 'interview' },
     });
 
     // 4. Persist agent response

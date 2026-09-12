@@ -181,12 +181,20 @@ Return the raw code now.
     );
 
     // Ensure first-letter modifiers are responsive (sm: breakpoint minimum)
-    code = code.replace(/(?<![smxl234]:)\b([a-z0-9-]+:)?first-letter:[^\s"']+/g, (match) => {
-      // If it already has a breakpoint prefix like sm: or md:, leave it alone
-      if (match.match(/^(sm|md|lg|xl|2xl):/)) {
-        return match;
-      }
-      return `sm:${match}`;
+    // Restricted to className attributes to avoid breaking text nodes or other properties
+    code = code.replace(/className=(?:"([^"]*)"|'([^']*)'|\{([^}]*)\})/g, (match, doubleQ, singleQ, braces) => {
+      const classContent = doubleQ ?? singleQ ?? braces ?? "";
+      const wrapperStart = match.startsWith('className={') ? '{' : match.startsWith("className='") ? "'" : '"';
+      const wrapperEnd = match.startsWith('className={') ? '}' : match.startsWith("className='") ? "'" : '"';
+
+      const replacedContent = classContent.replace(/(?<![smxl234]:)\b([a-z0-9-]+:)?first-letter:[^\s"'`]+/g, (innerMatch: string) => {
+        if (innerMatch.match(/^(sm|md|lg|xl|2xl):/)) {
+          return innerMatch;
+        }
+        return `sm:${innerMatch}`;
+      });
+
+      return `className=${wrapperStart}${replacedContent}${wrapperEnd}`;
     });
 
     const hash = crypto.createHash('sha256').update(code).digest('hex');

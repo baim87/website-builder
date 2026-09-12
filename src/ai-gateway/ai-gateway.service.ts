@@ -8,7 +8,7 @@ export class AIGatewayService {
   constructor(
     private readonly registry: ModelRegistry,
     private readonly logger: AIGatewayLogger,
-  ) {}
+  ) { }
 
   async generateText(model: string, params: GenerateTextParams) {
     const adapter = this.registry.getAdapter(model);
@@ -27,15 +27,28 @@ export class AIGatewayService {
   async *generateStream(model: string, params: GenerateTextParams): AsyncIterable<TextChunk> {
     const adapter = this.registry.getAdapter(model);
     const start = Date.now();
+    let totalPromptTokens = 0;
+    let totalCompletionTokens = 0;
+    let totalCost: number | undefined = undefined;
+
     try {
       const stream = adapter.generateStream(model, params);
       for await (const chunk of stream) {
+        if (chunk.usage) {
+          totalPromptTokens = chunk.usage.promptTokens || totalPromptTokens;
+          totalCompletionTokens = chunk.usage.completionTokens || totalCompletionTokens;
+          if (chunk.usage.cost !== undefined) {
+            totalCost = chunk.usage.cost;
+          }
+        }
         yield chunk;
       }
       const latency = Date.now() - start;
-      // Note: Streaming tokens usage is tricky to capture synchronously depending on the SDK.
-      // Assuming a rough estimate or handled separately in real implementation.
-      this.logger.logCall(model, latency, { promptTokens: 0, completionTokens: 0 });
+      this.logger.logCall(model, latency, { 
+        promptTokens: totalPromptTokens, 
+        completionTokens: totalCompletionTokens,
+        cost: totalCost 
+      });
     } catch (e: any) {
       this.logger.logError(model, e);
       throw e;

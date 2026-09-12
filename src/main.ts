@@ -27,7 +27,7 @@ async function bootstrap() {
     console.log('Worker initialized (no HTTP server)');
   } else {
     const port = process.env.PORT ?? 3000;
-    await app.listen(port);
+    await app.listen(port, '0.0.0.0');
     console.log(`API server listening on port ${port}`);
   }
 }

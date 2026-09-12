@@ -108,9 +108,13 @@ export class GenerationService {
       const pushResult = await this.nextjsBuilder.buildAndDeploy(
         projectId, 
         userId,
-        async (repoOwner: string, repoName: string) => {
+        async (repoOwner: string, repoName: string, envVars?: any[]) => {
           this.logger.log(`Connecting GitHub to Vercel before push...`);
           await this.deploymentService.linkProjectToGithub(projectId, userId, repoOwner, repoName);
+          if (envVars && envVars.length > 0) {
+            this.logger.log(`Setting environment variables in Vercel project...`);
+            await this.deploymentService.setEnvironmentVariables(repoName, envVars);
+          }
         }
       );
       
