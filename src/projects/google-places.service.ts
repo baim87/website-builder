@@ -34,7 +34,7 @@ export class GooglePlacesService {
           'Content-Type': 'application/json',
           'X-Goog-Api-Key': this.apiKey,
           // We want these specific fields returned
-          'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.nationalPhoneNumber,places.websiteUri,places.regularOpeningHours,places.types,places.googleMapsUri',
+          'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.addressComponents,places.nationalPhoneNumber,places.websiteUri,places.regularOpeningHours,places.types,places.googleMapsUri',
         },
         body: JSON.stringify(searchBody),
       });
@@ -59,14 +59,25 @@ export class GooglePlacesService {
       };
 
       // 2. Map Place details to our internal schema
-      return places.map((place: any) => ({
-        businessName: place.displayName?.text,
-        businessAddress: place.formattedAddress,
-        phone: place.nationalPhoneNumber,
-        gbpData: { website: place.websiteUri, mapUrl: place.googleMapsUri },
-        trade: getSpecificTrade(place.types),
-        hours: place.regularOpeningHours?.weekdayDescriptions,
-      }));
+      return places.map((place: any) => {
+        let inferredLocation = null;
+        if (place.addressComponents) {
+          const city = place.addressComponents.find((c: any) => c.types.includes('locality'))?.longText;
+          const state = place.addressComponents.find((c: any) => c.types.includes('administrative_area_level_1'))?.shortText;
+          if (city && state) inferredLocation = `${city}, ${state}`;
+          else if (city) inferredLocation = city;
+        }
+
+        return {
+          businessName: place.displayName?.text,
+          businessAddress: place.formattedAddress,
+          phone: place.nationalPhoneNumber,
+          gbpData: { website: place.websiteUri, mapUrl: place.googleMapsUri, inferredLocation },
+          trade: getSpecificTrade(place.types),
+          location: null,
+          hours: place.regularOpeningHours?.weekdayDescriptions,
+        };
+      });
     } catch (error: any) {
       this.logger.error(`Failed to scrape GBP for query: ${queryOrUrl}`, error.stack);
       return null;

@@ -8,6 +8,7 @@ import { BrandExtractionService } from '../assets/brand-extraction.service';
 import { LogoGenerationService } from '../assets/logo-generation.service';
 import { PortraitGenerationService } from '../assets/portrait-generation.service';
 import { ServiceSuggestionService } from '../keywords/service-suggestion.service';
+import { LocationMetricsService } from '../seo/location-metrics.service';
 import { SecondaryKeywordWorker } from '../keywords/secondary-keyword.worker';
 import { GenerationProducer } from '../queue/producers/generation.producer';
 import { SkillExecutorService } from '../skills/skill-executor.service';
@@ -18,6 +19,9 @@ import { BrandVoiceSkill } from '../skills/impl/brand-voice.skill';
 import { BrandVisualSkill } from '../skills/impl/brand-visual.skill';
 import { BrandMessagingSkill } from '../skills/impl/brand-messaging.skill';
 import { BrandStorySkill } from '../skills/impl/brand-story.skill';
+
+import { parseRadiusToMiles } from '../utils/parse-radius.util';
+
 
 @Injectable()
 export class ChatFlowEngine {
@@ -32,6 +36,7 @@ export class ChatFlowEngine {
     private readonly logoGeneration: LogoGenerationService,
     private readonly portraitGeneration: PortraitGenerationService,
     private readonly serviceSuggestionService: ServiceSuggestionService,
+    private readonly locationMetricsService: LocationMetricsService,
     private readonly secondaryKeywordWorker: SecondaryKeywordWorker,
     private readonly generationProducer: GenerationProducer,
     private readonly executor: SkillExecutorService,
@@ -133,11 +138,10 @@ export class ChatFlowEngine {
     }
 
     const lastAskedField = meta[`${currentStep.id}_lastAskedField`];
-    const fieldsToAsk = lastAskedField
-      ? status.missingFields.filter((f: string) => f !== lastAskedField)
-      : status.missingFields;
+    const graceUsedFor = meta[`${currentStep.id}_graceUsedFor`];
+    const usedGraceFilter = lastAskedField && status.missingFields.includes(lastAskedField) && lastAskedField !== graceUsedFor;
 
-    const stream = this.interviewService.processMessage(projectId, content, fieldsToAsk, currentStep, state === 'editing');
+    const stream = this.interviewService.processMessage(projectId, content, status.missingFields, currentStep, state === 'editing', lastAskedField, graceUsedFor);
     let latestMissingFields = status.missingFields;
     for await (const event of stream) {
       if (event.event === 'progress') {
@@ -146,7 +150,10 @@ export class ChatFlowEngine {
       yield event;
     }
 
-    await this.updateMeta(projectId, { [`${currentStep.id}_lastAskedField`]: latestMissingFields[0] ?? null });
+    await this.updateMeta(projectId, { 
+      [`${currentStep.id}_lastAskedField`]: latestMissingFields[0] ?? null,
+      [`${currentStep.id}_graceUsedFor`]: usedGraceFilter ? lastAskedField : null,
+    });
 
     const finalStatus = await this.interviewService.checkCompleteness(projectId, getFieldKeys(currentStep));
     // Intercept when the next missing field is 'services' to suggest options
@@ -203,6 +210,21 @@ export class ChatFlowEngine {
         yield* this.advanceToNextStep(projectId, stepIndex);
       } else {
         // We just completed everything, show summary
+        
+        // Trigger background keyword metrics fetch for all surrounding cities (Fire 2)
+        // This is done here so it includes any custom services the user might have just typed.
+        if (currentStep.id === 'business') {
+          const ctx = await this.businessContext.findByProjectId(projectId);
+          if (ctx.location && Array.isArray(ctx.services) && ctx.services.length > 0) {
+            this.locationMetricsService.processProjectMetrics(
+              projectId,
+              ctx.location,
+              parseRadiusToMiles(ctx.radius),
+              ctx.services as string[]
+            ).catch(e => this.logger.error(`Failed to process background location metrics for project ${projectId}`, e.stack));
+          }
+        }
+        
         yield* this.showConfirmationSummary(projectId, currentStep);
       }
     } else if (state === 'editing') {
@@ -410,6 +432,32 @@ export class ChatFlowEngine {
   }
 
   public async *handleBrandInterview(projectId: string, content: string, meta: any, step: any, stepIndex: number): AsyncGenerator<any, void, unknown> {
+    const state = meta[`${step.id}_state`] || 'interviewing';
+    
+    if (state === 'selecting_portrait') {
+      if (content === 'upload_new') {
+        await this.updateMeta(projectId, { [`${step.id}_state`]: 'uploading_final_portrait' });
+        const text = "Please upload your final portrait photo (I'll use it exactly as is, without any AI enhancement):";
+        await this.saveAssistantMsg(projectId, text, undefined, { type: 'image', purpose: 'portrait' });
+        yield { event: 'token', data: { token: text } };
+        yield { event: 'ui-upload', data: { type: 'image', purpose: 'portrait' } };
+      } else if (content.startsWith('http')) {
+        await this.updateMeta(projectId, { portraitStatus: 'AI Generated', finalPortraitUrl: content, [`${step.id}_state`]: 'done' });
+        yield* this.advanceToNextStep(projectId, stepIndex);
+      } else {
+        yield { event: 'token', data: { token: "Please select one of the options or upload your own." } };
+      }
+      return;
+    } else if (state === 'uploading_final_portrait') {
+      if (content.startsWith('http')) {
+        await this.updateMeta(projectId, { portraitStatus: 'Uploaded Direct', finalPortraitUrl: content, [`${step.id}_state`]: 'done' });
+        yield* this.advanceToNextStep(projectId, stepIndex);
+      } else {
+        yield { event: 'token', data: { token: "Please upload an image." } };
+      }
+      return;
+    }
+
     let qIndex = meta[`${step.id}_qIndex`] || 0;
     let answers = meta.brandAnswers || {};
     const questions = step.interviewQuestions || [];
@@ -419,12 +467,14 @@ export class ChatFlowEngine {
       const currentQ = questions[qIndex];
       let finalContent = content;
       
-      // Enforce maxSelections on the backend
-      if (currentQ.type === 'multi-select' && currentQ.maxSelections) {
-        const parts = finalContent.split(',').map((s: string) => s.trim()).filter(Boolean);
-        if (parts.length > currentQ.maxSelections) {
-          finalContent = parts.slice(0, currentQ.maxSelections).join(', ');
+      // Enforce maxSelections on the backend and convert to array
+      if (currentQ.type === 'multi-select') {
+        const parts = String(finalContent).split(',').map((s: string) => s.trim()).filter(Boolean);
+        if (currentQ.maxSelections && parts.length > currentQ.maxSelections) {
+          finalContent = parts.slice(0, currentQ.maxSelections) as any;
           this.logger.warn(`Truncated multi-select answer for ${currentQ.fieldKey} to ${currentQ.maxSelections} items.`);
+        } else {
+          finalContent = parts as any;
         }
       }
       
@@ -454,12 +504,26 @@ export class ChatFlowEngine {
       
       const text = q.question;
       await this.updateMeta(projectId, { [`${step.id}_asked`]: true });
-      await this.saveAssistantMsg(projectId, text, q.options, q.uploadConfig);
+      
+      let options = undefined;
+      let multiSelect = undefined;
+
+      if (q.type === 'multi-select' && q.options) {
+        multiSelect = {
+          options: q.options,
+          allowCustom: q.allowCustomInput,
+          customPlaceholder: q.placeholder,
+        };
+      } else if (q.options) {
+        options = q.options;
+      }
+
+      await this.saveAssistantMsg(projectId, text, options, q.uploadConfig, multiSelect);
       
       yield { event: 'token', data: { token: text } };
-      if (q.options) yield { event: 'ui-options', data: { options: q.options } };
+      if (options) yield { event: 'ui-options', data: { options } };
+      if (multiSelect) yield { event: 'ui-multi-select', data: multiSelect };
       if (q.uploadConfig) yield { event: 'ui-upload', data: q.uploadConfig };
-      // Also potentially send multi-select info if needed, but ui-options handles it via the frontend
     } else {
       await this.updateMeta(projectId, { [`${step.id}_asked`]: false });
       
@@ -513,21 +577,35 @@ export class ChatFlowEngine {
           brandIdentityInputs: { ...answers, themePreference: recommendedTheme }
         });
         
-        // 5. Generate logo (if Branch B or Scratch — no existing logo)
-        const hasExistingLogo = meta.brandStrategySelection === 'has-logo';
-        if (!hasExistingLogo) {
-          yield { event: 'thinking', data: { message: "Generating brand logo..." } };
-          await this.logoGeneration.generateLogoAndFavicon(projectId, fullContext.businessName || 'business', fullContext.trade || 'contractor', visual.data);
-        }
+        // 5. Generate logo - MOVED to handleBrandRecap confirming state!
         
-        // 6. Generate portrait (if user uploaded a photo in Q14)
+        // 6. Generate portrait variants (if user uploaded a photo in Q14)
         const portraitImageUrl = answers['ownerPortrait'];
         if (portraitImageUrl && portraitImageUrl !== 'skip') {
-          yield { event: 'thinking', data: { message: "Generating professional portrait..." } };
-          const generatedUrl = await this.portraitGeneration.generatePortrait(projectId, fullContext.trade || 'contractor', portraitImageUrl, visual.data);
-          await this.updateMeta(projectId, { finalPortraitUrl: generatedUrl });
+          yield { event: 'thinking', data: { message: "Generating 3 professional portrait options..." } };
+          try {
+            const variants = await this.portraitGeneration.generatePortraitVariants(projectId, fullContext.trade || 'contractor', portraitImageUrl, visual.data);
+            
+            await this.updateMeta(projectId, { [`${step.id}_state`]: 'selecting_portrait', generatedPortraits: variants });
+            
+            const text = `I've generated 3 professional portrait options based on your photo. Which one do you prefer?`;
+            const options: any[] = variants.map((url, i) => ({
+              id: url,
+              label: `Option ${i + 1}`,
+              description: `![Option ${i + 1}](${url})`
+            }));
+            options.push({ id: 'upload_new', label: 'Upload my own photo instead', icon: 'upload' });
+
+            await this.saveAssistantMsg(projectId, text, options);
+            yield { event: 'token', data: { token: text } };
+            yield { event: 'ui-options', data: { options } };
+            return; // Pause interview flow to wait for selection
+          } catch (e: any) {
+            yield { event: 'token', data: { token: `Portrait generation failed: ${e.message}\n` } };
+          }
         }
         
+        await this.updateMeta(projectId, { [`${step.id}_state`]: 'done' });
         yield* this.advanceToNextStep(projectId, stepIndex);
       } catch (e: any) {
         yield { event: 'token', data: { token: `Error generating brand kit: ${e.message}\n` } };
@@ -538,12 +616,29 @@ export class ChatFlowEngine {
   public async *handleBrandRecap(projectId: string, content: string, meta: any, step: any, stepIndex: number): AsyncGenerator<any, void, unknown> {
     const state = meta[`${step.id}_state`] || 'initial';
     const ctx = await this.businessContext.findByProjectId(projectId);
+    const self = this;
+
+    const triggerLogoGen = async function*() {
+        const hasExistingLogo = meta.brandStrategySelection === 'has-logo';
+        if (!hasExistingLogo) {
+          yield { event: 'token', data: { token: "Generating AI logo...\n" } };
+          try {
+            // Re-fetch visual.md data for logo hints since it was saved to R2
+            const visualMd = await self.brandKnowledge.getBrandFile(projectId, 'brand-visual.md');
+            await self.logoGeneration.generateLogoAndFavicon(projectId, ctx.businessName || 'business', ctx.trade || 'contractor', visualMd || '');
+            yield { event: 'token', data: { token: "Logo generated successfully!\n\n" } };
+          } catch (e: any) {
+            yield { event: 'token', data: { token: `Logo generation failed: ${e.message}\n\n` } };
+          }
+        }
+    };
 
     if (state === 'initial') {
       await this.updateMeta(projectId, { [`${step.id}_state`]: 'confirming' });
       yield* this.renderBrandRecap(projectId, meta, ctx);
     } else if (state === 'confirming') {
       if (content === 'yes') {
+        yield* triggerLogoGen();
         yield* this.advanceToNextStep(projectId, stepIndex);
       } else if (content === 'edit') {
         await this.updateMeta(projectId, { [`${step.id}_state`]: 'editing' });
@@ -558,6 +653,7 @@ export class ChatFlowEngine {
       answers['user_revisions'] = content;
       await this.prisma.businessContext.update({ where: { projectId }, data: { brandIdentityInputs: answers } });
       yield { event: 'token', data: { token: "Got it, I've noted those changes down!\n\n" } };
+      yield* triggerLogoGen();
       yield* this.advanceToNextStep(projectId, stepIndex);
     }
   }
@@ -616,9 +712,9 @@ export class ChatFlowEngine {
     return newMeta;
   }
 
-  private async saveAssistantMsg(projectId: string, content: string, uiOptions?: any, uiUpload?: any) {
+  private async saveAssistantMsg(projectId: string, content: string, uiOptions?: any, uiUpload?: any, uiMultiSelect?: any) {
     await this.prisma.chatMessage.create({
-      data: { projectId, role: 'assistant', content, metadata: { uiOptions, uiUpload } }
+      data: { projectId, role: 'assistant', content, metadata: { uiOptions, uiUpload, uiMultiSelect } }
     });
   }
 
@@ -640,10 +736,21 @@ export class ChatFlowEngine {
 
     const answers = meta.brandAnswers || {};
     const themePref = ctx.brandIdentityInputs?.themePreference || 'Not Set';
+    // Iterate over brand-interview questions to render what they answered
+    const brandInterviewStep = ONBOARDING_FLOW_CONFIG.find(s => s.id === 'brand-interview');
+    if (brandInterviewStep && brandInterviewStep.interviewQuestions) {
+      for (const q of brandInterviewStep.interviewQuestions) {
+        if (q.fieldKey === 'ownerPortrait') continue; // Handled separately
+        const rawAnswer = answers[q.fieldKey];
+        if (rawAnswer) {
+          const sanitizedVal = Array.isArray(rawAnswer) ? rawAnswer.join(', ') : String(rawAnswer).replace(/\n/g, '<br/>');
+          let shortQ = q.question.split('?')[0] || q.question; // take just the first part for brevity
+          if (shortQ.length > 50) shortQ = shortQ.substring(0, 47) + '...';
+          summaryText += `| ${shortQ} | **${sanitizedVal}** |\n`;
+        }
+      }
+    }
     
-    // Show some key inputs that were collected
-    summaryText += `| Core Promise | **${answers.corePromise || 'N/A'}** |\n`;
-    summaryText += `| Brand Personality | **${Array.isArray(answers.brandPersonality) ? answers.brandPersonality.join(', ') : (answers.brandPersonality || 'N/A')}** |\n`;
     summaryText += `| Recommended Theme | **${themePref}** |\n`;
 
     if (meta.extractedBrand) {

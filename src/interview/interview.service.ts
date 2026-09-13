@@ -7,6 +7,7 @@ import { OnboardingStep, getFieldKeys, getFieldQuestion } from './constants/onbo
 import { ChatService } from '../chat/chat.service';
 import { PrismaService } from '../prisma/prisma.service';
 import * as fs from 'fs';
+import { parseRadiusToMiles } from '../utils/parse-radius.util';
 
 export type InterviewEvent =
   | { event: 'field-update'; data: { field: string; value: any } }
@@ -46,9 +47,9 @@ export class InterviewService {
     };
   }
 
-  async *processMessage(projectId: string, content: string, missingFields: string[], step: OnboardingStep, isEditing: boolean = false): AsyncGenerator<InterviewEvent, void, unknown> {
+  async *processMessage(projectId: string, content: string, missingFields: string[], step: OnboardingStep, isEditing: boolean = false, lastAskedField?: string, graceAlreadyUsedFor?: string): AsyncGenerator<InterviewEvent, void, unknown> {
     const context = await this.businessContextService.findByProjectId(projectId);
-    const systemPrompt = this.promptBuilder.buildPrompt(context, missingFields, step);
+    const systemPrompt = this.promptBuilder.buildPrompt(context, missingFields, step, lastAskedField, graceAlreadyUsedFor);
 
     // Check for logo
     const logoAsset = await this.prisma.asset.findFirst({
@@ -87,7 +88,7 @@ export class InterviewService {
       if (event.event === 'internal-done') {
         const fullResponse = event.data.fullResponse;
         const { extractedFields } = this.extractor.extract(fullResponse);
-        let cleanResponse = fullResponse.replace(/<!-- EXTRACT:.*?-->/gs, '').trim();
+        let cleanResponse = fullResponse.replace(/<!--\s*EXTRACT:\s*(?:```json)?\s*({.*?})\s*(?:```)?\s*-->/gs, '').trim();
 
         console.log(`\n======================================================\n` +
           `[AI Output]: ${cleanResponse}\n` +
@@ -111,7 +112,7 @@ export class InterviewService {
           if (Object.keys(extractedFields).length === 0) {
             // All fields were filtered out, nothing to update
             // Failsafe 1: empty response
-            cleanResponse = fullResponse.replace(/<!-- EXTRACT:.*?-->/gs, '').trim();
+            cleanResponse = fullResponse.replace(/<!--\s*EXTRACT:\s*(?:```json)?\s*({.*?})\s*(?:```)?\s*-->/gs, '').trim();
 
             // Re-evaluate completeness after updates
             const finalStatus = await this.checkCompleteness(projectId, getFieldKeys(step));
@@ -158,8 +159,9 @@ export class InterviewService {
           if (finalContext.location && finalContext.radius) {
             const hasServiceAreas = finalContext.serviceAreas && Array.isArray(finalContext.serviceAreas) && finalContext.serviceAreas.length > 0;
             if (!hasServiceAreas) {
-              console.log(`[InterviewService] Fetching cities in a ${finalContext.radius} mile radius from ${finalContext.location}...`);
-              const cities = await this.googlePlacesService.getCitiesInRadius(finalContext.location, finalContext.radius);
+              const parsedRadius = parseRadiusToMiles(finalContext.radius);
+              console.log(`[InterviewService] Fetching cities in a ${parsedRadius} mile radius from ${finalContext.location}...`);
+              const cities = await this.googlePlacesService.getCitiesInRadius(finalContext.location, parsedRadius);
               console.log(`[InterviewService] Found ${cities.length} cities: ${cities.join(', ')}`);
               if (cities.length > 0) {
                 await this.prisma.businessContext.update({
