@@ -19,7 +19,7 @@ export class SeoMetadataSkill implements Skill {
   ) {}
 
   async execute(input: SkillInput): Promise<SkillOutput> {
-    const { businessContext, pageSlug, keywordTarget, projectAssets = [] } = input.context;
+    const { businessContext, pageSlug, keywordTarget, projectAssets = [], brandPositioning, brandMessaging } = input.context;
     
     if (!pageSlug || !keywordTarget || !keywordTarget.primaryKeyword) {
       throw new Error('SeoMetadataSkill requires pageSlug and keywordTarget with a primaryKeyword');
@@ -35,6 +35,10 @@ export class SeoMetadataSkill implements Skill {
 BUSINESS CONTEXT:
 ${JSON.stringify(businessContext)}
 
+BRAND POSITIONING & MESSAGING:
+${brandPositioning || 'Not provided'}
+${brandMessaging || 'Not provided'}
+
 PAGE SLUG: /${pageSlug}
 
 TARGET KEYWORDS:
@@ -48,7 +52,7 @@ RULES:
 1. The title MUST be 30-60 characters and MUST contain the Primary Keyword.
 2. The description MUST be 120-160 characters.
 3. The H1 MUST contain the Primary Keyword.
-4. Make it compelling for a user searching for these services.
+4. Make it compelling for a user searching for these services, leveraging the Brand Positioning and Messaging.
 5. If available images are provided, select the most relevant 'ASSET:uuid' for the 'image' field. If none are relevant, omit the image field or use a generic UNSPLASH string.
 
 You MUST respond with ONLY a JSON object in this EXACT structure (no other text):
