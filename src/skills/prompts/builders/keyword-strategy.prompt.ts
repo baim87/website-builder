@@ -5,7 +5,9 @@ export function buildKeywordStrategyPrompt(
   keywords: any[],
   serviceKeywords: any[],
   locationMetrics: any[],
-  pages: any[]
+  pages: any[],
+  brandStrategy?: string,
+  brandPositioning?: string
 ): string {
   return `You are an SEO strategist. Assign target keywords to the pages for a contractor website.
 
@@ -25,12 +27,17 @@ ${JSON.stringify(locationMetrics)}
 PAGES TO ASSIGN:
 ${JSON.stringify(pages)}
 
+BRAND STRATEGY & POSITIONING:
+${brandStrategy || 'Not provided'}
+${brandPositioning || 'Not provided'}
+
 RULES:
 - Each page gets exactly 1 primary keyword (highest volume, most relevant to the page's intent)
 - Each page gets 2-4 secondary keywords
 - DO NOT assign the same primary keyword to multiple pages (no keyword cannibalization)
 - Match search intent: "home" = broad commercial, "services/x" = specific service, "service-areas/x" = local
 - Prioritize keywords with higher search volume, but make sure they are highly relevant to the specific page.
+- Choose keywords that best align with the Brand Strategy & Positioning (e.g., if the brand is luxury/high-end, avoid "cheap" or "affordable" modifiers).
 
 ${SEO_RULES}
 

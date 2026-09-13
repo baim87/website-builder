@@ -3,13 +3,19 @@ import { Skill, SkillInput, SkillOutput } from '../interfaces/skill.interface';
 import { AISkill } from '../../common/constants/ai-skills.constant';
 import { AIGatewayService } from '../../ai-gateway/ai-gateway.service';
 import { AIModel } from '../../common/constants/ai-models.constant';
+import { OutputValidatorService } from '../../guardrails/output-validator.service';
+import { BrandVisualOutputSchema } from '../schemas/skill-outputs.schema';
+import { zodToJsonSchema } from '@alcyone-labs/zod-to-json-schema';
 
 @Injectable()
 export class BrandVisualSkill implements Skill {
   readonly name = AISkill.BRAND_VISUAL;
   private readonly logger = new Logger(BrandVisualSkill.name);
 
-  constructor(private readonly aiGateway: AIGatewayService) {}
+  constructor(
+    private readonly aiGateway: AIGatewayService,
+    private readonly validator: OutputValidatorService,
+  ) {}
 
   async execute(input: SkillInput): Promise<SkillOutput> {
     const { context } = input;
@@ -57,11 +63,19 @@ Return ONLY the raw JSON object without any code blocks or wrapper JSON.`;
 
     this.logger.log(`Generating brand visual markdown and theme using ${AIModel.CLAUDE_FABLE_5}`);
 
+    const fullJsonSchema = zodToJsonSchema(BrandVisualOutputSchema, 'BrandVisualOutput');
+    const bareJsonSchema = fullJsonSchema.definitions
+      ? fullJsonSchema.definitions['BrandVisualOutput']
+      : fullJsonSchema;
+    if ((bareJsonSchema as any).$schema) delete (bareJsonSchema as any).$schema;
+
     const result = await this.aiGateway.generateText(AIModel.CLAUDE_FABLE_5, {
-      systemPrompt: 'You are an elite brand identity expert. Output ONLY valid JSON.',
+      systemPrompt: 'You are an elite brand identity expert. Output structured data via the provided tool.',
       messages: [{ role: 'user', content: prompt }],
       maxTokens: 8192,
       temperature: 0.7,
+      schema: bareJsonSchema,
+      schemaName: 'BrandVisualOutput',
     });
 
     let raw = result.text.trim();
@@ -73,15 +87,25 @@ Return ONLY the raw JSON object without any code blocks or wrapper JSON.`;
     
     let parsed: any;
     try {
+      let raw = result.text.trim();
+      const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+      if (fenceMatch) raw = fenceMatch[1].trim();
+      if (!raw.startsWith('{') && raw.includes('{')) {
+        const start = raw.indexOf('{');
+        const end = raw.lastIndexOf('}');
+        if (start !== -1 && end > start) raw = raw.substring(start, end + 1);
+      }
       parsed = JSON.parse(raw);
     } catch (e) {
       this.logger.error('Failed to parse Brand Visual output');
       throw new Error('Invalid JSON from Brand Visual Skill');
     }
 
+    const validatedData = this.validator.validate(parsed, BrandVisualOutputSchema);
+
     return {
-      data: parsed.markdown,
-      metadata: { recommendedTheme: parsed.recommendedTheme },
+      data: validatedData.markdown,
+      metadata: { recommendedTheme: validatedData.recommendedTheme },
       hash: 'brand-visual-' + Date.now(),
       model: AIModel.CLAUDE_FABLE_5,
       usage: result.usage,

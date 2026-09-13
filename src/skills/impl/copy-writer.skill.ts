@@ -18,7 +18,7 @@ export class CopyWriterSkill implements Skill {
     private readonly aiGateway: AIGatewayService,
     private readonly validator: OutputValidatorService,
     private readonly prisma: PrismaService,
-  ) {}
+  ) { }
 
   async execute(input: SkillInput): Promise<SkillOutput> {
     const { sectionType, businessContext, pageSlug } = input.context;
@@ -50,7 +50,7 @@ export class CopyWriterSkill implements Skill {
     this.logger.log(`Generating copy for ${sectionType}...`);
 
     const response = await this.aiGateway.generateText(AIModel.CLAUDE_FABLE_5, {
-      systemPrompt: 'You are an expert copywriter. Output strictly matching the requested JSON schema via the provided tool.',
+      systemPrompt: 'You are an expert United States brand strategist and copywriter specializing in local contractor and home-service businesses in the United States.Use natural, professional United States English and US terminology, spelling, tone, and conventions. Output strictly matching the requested JSON schema via the provided tool.',
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.7,
       maxTokens: 8192,
@@ -62,11 +62,11 @@ export class CopyWriterSkill implements Skill {
     try {
       let raw = response.text.trim();
       if (!raw) {
-         this.logger.warn(`[CopyWriter] Raw text was empty! Fallback parsing will result in empty object.`);
+        this.logger.warn(`[CopyWriter] Raw text was empty! Fallback parsing will result in empty object.`);
       } else {
-         // this.logger.debug(`[CopyWriter] Raw LLM output: ${raw.substring(0, 500)}...`);
+        // this.logger.debug(`[CopyWriter] Raw LLM output: ${raw.substring(0, 500)}...`);
       }
-      
+
       const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
       if (fenceMatch) raw = fenceMatch[1].trim();
       if (!raw.startsWith('{') && raw.includes('{')) {

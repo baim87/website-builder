@@ -11,6 +11,7 @@ export interface SkillOutput {
   hash: string;
   model: string;
   usage?: UsageMetrics;
+  metadata?: any;
 }
 
 export interface Skill {

@@ -23,24 +23,24 @@ export class KeywordStrategySkill implements Skill {
     private readonly prisma: PrismaService,
     private readonly validator: OutputValidatorService,
     private readonly serviceRankingService: ServiceRankingService,
-  ) {}
+  ) { }
 
   async execute(input: SkillInput): Promise<SkillOutput> {
-    const { businessContext, pages } = input.context;
+    const { businessContext, pages, brandStrategy, brandPositioning } = input.context;
     const projectId = input.projectId;
-    
+
     if (!businessContext || !businessContext.trade || !businessContext.location || !projectId) {
       throw new Error('KeywordStrategySkill requires businessContext with trade and location, and projectId');
     }
 
     this.logger.log(`Fetching keywords for ${businessContext.trade} in ${businessContext.location}`);
-    
+
     // 1. Fetch real keyword data from Google Ads (with Redis cache)
     const keywords = await this.keywordsService.getKeywords(
       businessContext.trade,
       businessContext.location
     );
-    
+
     // 1. Read pre-ranked service keyword data
     let serviceKeywordMetrics = await this.prisma.serviceKeywordMetrics.findMany({
       where: { projectId },
@@ -52,10 +52,10 @@ export class KeywordStrategySkill implements Skill {
       this.logger.warn('No pre-ranked service metrics found in DB. Fetching now via ServiceRankingService...');
       const servicesList = businessContext.services || [];
       const serviceNames = servicesList.map((s: any) => typeof s === 'string' ? s : (s.name || s.title || 'Service'));
-      
+
       await this.serviceRankingService.rankServices(
-        projectId, 
-        serviceNames, 
+        projectId,
+        serviceNames,
         businessContext.location,
         businessContext.county,
         businessContext.state
@@ -71,7 +71,7 @@ export class KeywordStrategySkill implements Skill {
       service: m.service,
       keywords: [{ keyword: m.keyword, searchVolume: m.searchVolume, source: 'google' as const }],
     }));
-    
+
     // 1.5 Fetch Radius Location Keyword Metrics from DB
     const locationMetrics = await this.prisma.locationKeywordMetrics.findMany({
       where: { projectId }
@@ -83,7 +83,9 @@ export class KeywordStrategySkill implements Skill {
       keywords,
       serviceKeywords,
       locationMetrics,
-      pages
+      pages,
+      brandStrategy,
+      brandPositioning
     );
 
     this.logger.log('Generating keyword strategy with AI...');
@@ -95,7 +97,7 @@ export class KeywordStrategySkill implements Skill {
     if ((bareJsonSchema as any).$schema) delete (bareJsonSchema as any).$schema;
 
     const response = await this.aiGateway.generateText(AIModel.CLAUDE_FABLE_5, {
-      systemPrompt: 'You are an elite SEO strategist. Output structured data via the provided tool.',
+      systemPrompt: 'You are an elite SEO strategist for United States Contractors. Output structured data via the provided tool.',
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.2,
       maxTokens: 8192,

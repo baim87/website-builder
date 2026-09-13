@@ -263,7 +263,12 @@ export class GenerationOrchestratorService {
     if (!ctx.keywordStrategyResult || !ctx.keywordStrategyResult.pages) {
         ctx.keywordStrategyResult = await this.executeWithRetries(this.keywordStrategy, {
           projectId: ctx.projectId,
-          context: { businessContext: ctx.businessContext, pages: ctx.pagesToGenerate.filter(p => p !== 'layout') },
+          context: { 
+            businessContext: ctx.businessContext, 
+            pages: ctx.pagesToGenerate.filter(p => p !== 'layout'),
+            brandStrategy: ctx.brandStrategyResult,
+            brandPositioning: ctx.brandPositioningResult
+          },
           metadata: { phase: 'generation' }
         });
         await this.prisma.websiteData.update({
@@ -392,7 +397,14 @@ export class GenerationOrchestratorService {
         if (pageSlug !== 'layout') {
           seoResult = await this.executeWithRetries(this.seoMetadata, {
             projectId: ctx.projectId,
-            context: { businessContext: ctx.businessContext, pageSlug, keywordTarget, projectAssets: combinedAssets },
+            context: { 
+              businessContext: ctx.businessContext, 
+              pageSlug, 
+              keywordTarget, 
+              projectAssets: combinedAssets,
+              brandPositioning: ctx.brandPositioningResult,
+              brandMessaging: ctx.brandMessagingResult
+            },
             metadata: { phase: 'generation', pageSlug }
           });
         }

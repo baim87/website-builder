@@ -4,16 +4,12 @@ import { InterviewService } from '../interview/interview.service';
 import { BusinessContextService } from '../projects/business-context.service';
 import { ONBOARDING_FLOW_CONFIG, getFieldKeys } from '../interview/constants/onboarding-flow.config';
 import { GooglePlacesService } from '../projects/google-places.service';
-import { BrandKitGeneratorSkill } from '../skills/impl/brand-kit-generator.skill';
 import { BrandExtractionService } from '../assets/brand-extraction.service';
 import { LogoGenerationService } from '../assets/logo-generation.service';
 import { PortraitGenerationService } from '../assets/portrait-generation.service';
 import { ServiceSuggestionService } from '../keywords/service-suggestion.service';
 import { SecondaryKeywordWorker } from '../keywords/secondary-keyword.worker';
 import { GenerationProducer } from '../queue/producers/generation.producer';
-import { AIGatewayService } from '../ai-gateway/ai-gateway.service';
-import { AIModel } from '../common/constants/ai-models.constant';
-
 import { SkillExecutorService } from '../skills/skill-executor.service';
 import { BrandKnowledgeService } from '../brand/brand-knowledge.service';
 import { BrandStrategySkill } from '../skills/impl/brand-strategy.skill';
@@ -32,14 +28,12 @@ export class ChatFlowEngine {
     private readonly interviewService: InterviewService,
     private readonly businessContext: BusinessContextService,
     private readonly googlePlaces: GooglePlacesService,
-    private readonly brandKitGenerator: BrandKitGeneratorSkill,
     private readonly brandExtraction: BrandExtractionService,
     private readonly logoGeneration: LogoGenerationService,
     private readonly portraitGeneration: PortraitGenerationService,
     private readonly serviceSuggestionService: ServiceSuggestionService,
     private readonly secondaryKeywordWorker: SecondaryKeywordWorker,
     private readonly generationProducer: GenerationProducer,
-    private readonly aiGateway: AIGatewayService,
     private readonly executor: SkillExecutorService,
     private readonly brandKnowledge: BrandKnowledgeService,
     private readonly brandStrategy: BrandStrategySkill,
