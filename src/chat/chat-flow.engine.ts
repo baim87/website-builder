@@ -417,7 +417,18 @@ export class ChatFlowEngine {
     // Save answer if not the first display
     if (content && meta[`${step.id}_asked`]) {
       const currentQ = questions[qIndex];
-      answers[currentQ.fieldKey] = content;
+      let finalContent = content;
+      
+      // Enforce maxSelections on the backend
+      if (currentQ.type === 'multi-select' && currentQ.maxSelections) {
+        const parts = finalContent.split(',').map((s: string) => s.trim()).filter(Boolean);
+        if (parts.length > currentQ.maxSelections) {
+          finalContent = parts.slice(0, currentQ.maxSelections).join(', ');
+          this.logger.warn(`Truncated multi-select answer for ${currentQ.fieldKey} to ${currentQ.maxSelections} items.`);
+        }
+      }
+      
+      answers[currentQ.fieldKey] = finalContent;
       await this.updateMeta(projectId, { brandAnswers: answers, [`${step.id}_qIndex`]: qIndex + 1 });
       qIndex++;
     }
