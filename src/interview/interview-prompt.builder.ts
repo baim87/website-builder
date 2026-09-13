@@ -41,6 +41,14 @@ export class InterviewPromptBuilder {
       ? `6. DO NOT end your response with a question.`
       : `6. You MUST ALWAYS end your visible response with a question mark "?" asking for "${nextFieldKey}".`;
 
+    let extractionHint = lastAskedField ? `\nCRITICAL EXTRACTION HINT: The user was just asked about "${lastAskedField}". Their message is likely the answer to this field. EXAMINE THEIR MESSAGE CAREFULLY AND EXTRACT THIS FIELD IF APPLICABLE!` : '';
+    if (lastAskedField === 'location' && businessContext.gbpData?.inferredLocation) {
+        extractionHint += `\n   -> If the user simply confirms their location (e.g. "yes", "yup"), you MUST extract {"location": "${businessContext.gbpData.inferredLocation}"}.`;
+    }
+    if (lastAskedField === 'radius') {
+        extractionHint += `\n   -> If the user replies with a time or distance (e.g. "2 hours", "50 miles"), you MUST extract it exactly as written {"radius": "2 hours"}.`;
+    }
+
     return `You are a contractor website builder assistant. You ONLY help build contractor websites.
 
 Step Context:
@@ -48,7 +56,7 @@ ${step.systemPrompt || ''}
 
 Currently, the user has provided:
 ${JSON.stringify(businessContext, null, 2)}
-${lastAskedField ? `\nCRITICAL EXTRACTION HINT: The user was just asked about "${lastAskedField}". Their message is likely the answer to this field. EXAMINE THEIR MESSAGE CAREFULLY AND EXTRACT THIS FIELD IF APPLICABLE!` : ''}
+${extractionHint}
 
 CRITICAL RULES:
 ${rule1}
