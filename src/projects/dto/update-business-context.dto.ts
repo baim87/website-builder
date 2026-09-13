@@ -1,5 +1,25 @@
 import { z } from 'zod';
 
+export const BrandInterviewInputsSchema = z.object({
+  targetAudience: z.array(z.string()).optional(),
+  desiredSegments: z.array(z.string()).optional(),
+  customerFears: z.array(z.string()).optional(),
+  corePromise: z.string().optional(),
+  differentiators: z.array(z.string()).optional(),
+  proofPoints: z.array(z.string()).optional(),
+  brandPersonality: z.array(z.string()).max(5).optional(),
+  competitors: z.string().optional(),
+  companyAmbition: z.string().optional(),
+  founderStory: z.string().optional(),
+  visualDirection: z.string().optional(),
+  colorPreferences: z.string().optional(),
+  existingLogoFeedback: z.string().optional(),
+  primaryColor: z.string().optional(),
+  secondaryColor: z.string().optional(),
+  themePreference: z.string().optional(),
+  extractedBrand: z.any().optional(),
+});
+
 export const UpdateBusinessContextSchema = z.object({
   businessName: z.string().optional(),
   contactPerson: z.string().optional(),
@@ -13,7 +33,7 @@ export const UpdateBusinessContextSchema = z.object({
   radius: z.union([z.string(), z.number()]).optional(),
   services: z.array(z.string()).optional(),
   serviceAreas: z.array(z.string()).optional(),
-  brandIdentityInputs: z.record(z.string(), z.any()).optional(),
+  brandIdentityInputs: BrandInterviewInputsSchema.optional(),
   brandVoicePreference: z.string().optional(),
   primaryColor: z.string().optional(),
   secondaryColor: z.string().optional(),
