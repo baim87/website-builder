@@ -6,6 +6,7 @@ import { AIModel } from '../../common/constants/ai-models.constant';
 import { OutputValidatorService } from '../../guardrails/output-validator.service';
 import { BrandVisualOutputSchema } from '../schemas/skill-outputs.schema';
 import { zodToJsonSchema } from '@alcyone-labs/zod-to-json-schema';
+import { THEME_DEFINITIONS } from '../constants/theme-definitions.constant';
 
 @Injectable()
 export class BrandVisualSkill implements Skill {
@@ -36,7 +37,11 @@ export class BrandVisualSkill implements Skill {
       ? `EXISTING LOGO FEEDBACK (from user):\n${existingLogoFeedback}`
       : '';
 
-    const prompt = `You are a world-class brand strategist for US local contractors.\n\nYour task is to create a comprehensive Brand Visual document (Markdown format) based on the provided Brand Strategy.\n\nBUSINESS CONTEXT:\n${JSON.stringify(businessContext, null, 2)}\n\nBRAND STRATEGY:\n${brandStrategy}\n\nEXTRACTED COLORS FROM LOGO (if any):\n${extractedBrand ? JSON.stringify(extractedBrand, null, 2) : 'None'}\n\n${colorSection}\n${logoFeedbackSection ? '\n' + logoFeedbackSection : ''}\n\nOUTPUT FORMAT:\nReturn a JSON object containing:\n1. "markdown": A well-structured markdown document (\`brand-visual.md\`) that includes:\n   - Visual Strategy & Personality\n   - Logo Direction (type, concept, characteristics, avoid)\n   - Color Direction (primary territory, secondary, accent, avoid)\n   - Typography (primary, secondary, personality)\n   - Photography direction\n   - Iconography & Graphic Language\n   - Brand Recognition (trucks, uniforms, yard signs, website, social)\n   - Visual North Star\n\n2. "recommendedTheme": The best matching theme ID from the following list:\n   - 'editorial-luxury'\n   - 'modern-minimalist'\n   - 'soft-organic'\n   - 'dark-bento'\n   - 'awesomic'\n   - 'mercury'\n\nRULES:\n1. If EXTRACTED COLORS FROM LOGO exist, you MUST preserve them in your Color Direction.\n2. The visual style must align with the brand personality.\n3. Recommend the theme that best matches the Visual Strategy.\n\nReturn ONLY the raw JSON object without any code blocks or wrapper JSON.`;
+    const themeList = THEME_DEFINITIONS
+      .map(t => `   - '${t.id}' — ${t.label}: ${t.description}`)
+      .join('\n');
+
+    const prompt = `You are a world-class brand strategist for US local contractors.\n\nYour task is to create a comprehensive Brand Visual document (Markdown format) based on the provided Brand Strategy.\n\nBUSINESS CONTEXT:\n${JSON.stringify(businessContext, null, 2)}\n\nBRAND STRATEGY:\n${brandStrategy}\n\nEXTRACTED COLORS FROM LOGO (if any):\n${extractedBrand ? JSON.stringify(extractedBrand, null, 2) : 'None'}\n\n${colorSection}\n${logoFeedbackSection ? '\n' + logoFeedbackSection : ''}\n\nOUTPUT FORMAT:\nReturn a JSON object containing:\n1. "markdown": A well-structured markdown document (\`brand-visual.md\`) that includes:\n   - Visual Strategy & Personality\n   - Logo Direction (type, concept, characteristics, avoid)\n   - Color Direction (primary territory, secondary, accent, avoid)\n   - Typography (primary, secondary, personality)\n   - Photography direction\n   - Iconography & Graphic Language\n   - Brand Recognition (trucks, uniforms, yard signs, website, social)\n   - Visual North Star\n\n2. "recommendedTheme": The best matching theme ID from the following list (choose ONLY one ID exactly as written):\n${themeList}\n\nRULES:\n1. If EXTRACTED COLORS FROM LOGO exist, you MUST preserve them in your Color Direction.\n2. The visual style must align with the brand personality.\n3. Recommend the theme that best matches the Visual Strategy.\n\nReturn ONLY the raw JSON object without any code blocks or wrapper JSON.`;
 
 
     this.logger.log(`Generating brand visual markdown and theme using ${AIModel.CLAUDE_FABLE_5}`);
