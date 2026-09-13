@@ -4,6 +4,8 @@ import { AIGatewayService } from '../../ai-gateway/ai-gateway.service';
 import * as crypto from 'crypto';
 import { AIModel } from '../../common/constants/ai-models.constant';
 import { AISkill } from '../../common/constants/ai-skills.constant';
+import { buildBrandVoicePrompt } from '../prompts/builders/brand-voice.prompt';
+import { parseMarkdownFromLlm } from '../../guardrails/llm-parser';
 
 @Injectable()
 export class BrandVoiceSkill implements Skill {
@@ -17,26 +19,7 @@ export class BrandVoiceSkill implements Skill {
   async execute(input: SkillInput): Promise<SkillOutput> {
     const { businessContext, brandStrategy } = input.context;
 
-    const prompt = `You are an elite Brand Strategist and Copywriter for US home service contractors.
-
-Generate a comprehensive Brand Voice profile based on the Business Context and Brand Strategy.
-
-Business Context:
-${JSON.stringify(businessContext, null, 2)}
-
-Brand Strategy:
-${brandStrategy}
-
-Please generate a professional Markdown document titled "Brand Voice" that includes the following sections:
-- Voice Definition & Personality
-- Tone (We Sound Like / We Don't Sound Like)
-- Communication Principles
-- Writing Style (sentence style, vocabulary, preferred/avoided language)
-- Customer Communication (sales, website, service, complaints)
-- Examples (We Say / We Don't Say)
-- Voice North Star
-
-Output ONLY the markdown content. No conversational wrapper or markdown fences wrapping the entire output.`;
+    const prompt = buildBrandVoicePrompt(businessContext, brandStrategy);
 
     const response = await this.aiGateway.generateText(AIModel.CLAUDE_FABLE_5, {
       systemPrompt: 'You are an expert Brand Strategist. Output professional Markdown.',
@@ -47,17 +30,12 @@ Output ONLY the markdown content. No conversational wrapper or markdown fences w
 
     this.logger.debug(`BrandVoice generated markdown length: ${response.text.length}`);
 
-    let raw = response.text.trim();
-    if (raw.startsWith('```markdown')) {
-      raw = raw.replace(/^```markdown\s*/i, '').replace(/\s*```$/i, '');
-    } else if (raw.startsWith('```')) {
-      raw = raw.replace(/^```\s*/i, '').replace(/\s*```$/i, '');
-    }
+    const cleanMarkdown = parseMarkdownFromLlm(response.text);
 
-    const hash = crypto.createHash('sha256').update(raw).digest('hex');
+    const hash = crypto.createHash('sha256').update(cleanMarkdown).digest('hex');
 
     return {
-      data: raw,
+      data: cleanMarkdown,
       hash,
       model: AIModel.CLAUDE_FABLE_5,
       usage: (response as any).usage || response.usage,

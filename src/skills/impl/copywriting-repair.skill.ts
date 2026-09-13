@@ -3,6 +3,8 @@ import { Skill, SkillInput, SkillOutput } from '../interfaces/skill.interface';
 import { AIGatewayService } from '../../ai-gateway/ai-gateway.service';
 import { AIModel } from '../../common/constants/ai-models.constant';
 import { AISkill } from '../../common/constants/ai-skills.constant';
+import { buildCopywritingRepairPrompt } from '../prompts/builders/copywriting-repair.prompt';
+import { parseJsonFromLlm } from '../../guardrails/llm-parser';
 
 @Injectable()
 export class CopywritingRepairSkill implements Skill {
@@ -14,29 +16,9 @@ export class CopywritingRepairSkill implements Skill {
   ) { }
 
   async execute(input: SkillInput): Promise<SkillOutput> {
-    const { sectionType, brokenData, critique } = input.context;
+    const { sectionType, brokenData, critique, brandStrategy, brandVoice } = input.context;
 
-    const prompt = `
-You are a senior copywriter for US home service contractors (roofers, plumbers, landscapers, etc.).
-A visual QA AI has reviewed the website and found issues with the copywriting in the \`${sectionType}\` component.
-
-Critique / Issues to fix:
-${critique.map((c: string) => `- ${c}`).join('\n')}
-
-Here is the current JSON data for this section:
-${JSON.stringify(brokenData, null, 2)}
-
-Your task is to fix the text to address the critique.
-RULES:
-1. ONLY modify the text fields (e.g. headlines, paragraphs, button labels).
-2. DO NOT change the JSON structure or remove/add keys. Keep the exact same shape.
-3. DO NOT change image URLs or asset IDs.
-4. If the critique says it sounds like SaaS, rewrite it to sound rugged, professional, and targeted at local homeowners.
-5. If there is lorem ipsum or generic placeholders, replace them with realistic contractor copy.
-
-Return the completely fixed JSON object.
-`;
-
+    const prompt = buildCopywritingRepairPrompt(sectionType, brokenData, critique, brandStrategy, brandVoice);
 
     const response = await this.aiService.generateText(AIModel.CLAUDE_FABLE_5, {
       systemPrompt: 'You output ONLY valid JSON. No markdown fences. Just the raw JSON object that exactly matches the input structure.',
@@ -47,15 +29,7 @@ Return the completely fixed JSON object.
     });
 
     try {
-      let raw = response.text.trim();
-      const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-      if (fenceMatch) raw = fenceMatch[1].trim();
-      if (!raw.startsWith('{')) {
-        const start = raw.indexOf('{');
-        const end = raw.lastIndexOf('}');
-        if (start !== -1 && end > start) raw = raw.substring(start, end + 1);
-      }
-      const fixedData = JSON.parse(raw);
+      const fixedData = parseJsonFromLlm(response.text);
 
       this.logger.log(`Successfully generated copywriting repair for ${sectionType}`);
 

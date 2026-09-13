@@ -9,6 +9,7 @@ import { SectionDataSchemaRegistry } from '../schemas/section-data-contracts';
 import { buildCopyWriterPrompt } from '../prompts/builders/copy-writer.prompt';
 import { AIModel } from '../../common/constants/ai-models.constant';
 import { AISkill } from '../../common/constants/ai-skills.constant';
+import { parseJsonFromLlm } from '../../guardrails/llm-parser';
 @Injectable()
 export class CopyWriterSkill implements Skill {
   readonly name = AISkill.COPY_WRITER;
@@ -58,27 +59,7 @@ export class CopyWriterSkill implements Skill {
       schemaName: sectionType,
     });
 
-    let parsed: any;
-    try {
-      let raw = response.text.trim();
-      if (!raw) {
-        this.logger.warn(`[CopyWriter] Raw text was empty! Fallback parsing will result in empty object.`);
-      } else {
-        // this.logger.debug(`[CopyWriter] Raw LLM output: ${raw.substring(0, 500)}...`);
-      }
-
-      const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-      if (fenceMatch) raw = fenceMatch[1].trim();
-      if (!raw.startsWith('{') && raw.includes('{')) {
-        const start = raw.indexOf('{');
-        const end = raw.lastIndexOf('}');
-        if (start !== -1 && end > start) raw = raw.substring(start, end + 1);
-      }
-      parsed = JSON.parse(raw || '{}');
-    } catch (e) {
-      this.logger.error(`Failed to parse LLM output as JSON: ${response.text}`);
-      throw new Error(`CopyWriter LLM returned unparseable output: ${response.text.substring(0, 200)}`);
-    }
+    const parsed = parseJsonFromLlm(response.text);
 
     let validatedData = parsed;
     if (schema) {

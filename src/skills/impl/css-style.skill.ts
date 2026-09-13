@@ -2,10 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Skill, SkillInput, SkillOutput } from '../interfaces/skill.interface';
 import { AIGatewayService } from '../../ai-gateway/ai-gateway.service';
 import { OutputValidatorService } from '../../guardrails/output-validator.service';
-import { getThemeById } from '../constants/theme-definitions.constant';
 import * as crypto from 'crypto';
 import { AIModel } from '../../common/constants/ai-models.constant';
 import { AISkill } from '../../common/constants/ai-skills.constant';
+import { buildCssStylePrompt } from '../prompts/builders/css-style.prompt';
+import { parseCssFromLlm } from '../../guardrails/llm-parser';
 
 @Injectable()
 export class CSSStyleSkill implements Skill {
@@ -24,42 +25,7 @@ export class CSSStyleSkill implements Skill {
       throw new Error('CSSStyleSkill requires designSystem in context');
     }
 
-    const theme = themePreference ? getThemeById(themePreference) : undefined;
-    let themeHints = '';
-    if (theme && theme.globalCssHints) {
-      themeHints = `\nTHEME CSS RULES (${theme.label}):\n${theme.globalCssHints}\nYou MUST incorporate these rules into the generated CSS.\n`;
-    }
-
-    const prompt = `You are a Tailwind CSS configuration expert.
-Given this design system, generate the CSS overrides for a modern Tailwind CSS v4 project.
-
-DESIGN SYSTEM:
-Colors: ${JSON.stringify(designSystem.colors, null, 2)}
-Typography: ${JSON.stringify(designSystem.typography, null, 2)}
-${themeHints}
-REQUIREMENTS:
-1. Output valid CSS that defines CSS variables on the :root pseudo-class.
-2. Define the @theme block to map these variables to Tailwind's color system (e.g., --color-primary: var(--color-primary);).
-3. DO NOT include arbitrary pixel sizes for typography, use Tailwind's text scales.
-4. The output must strictly follow this structure:
-
-\`\`\`css
-@import "tailwindcss";
-
-:root {
-  /* Define variables */
-}
-
-@theme {
-  /* Override default theme */
-}
-
-@config {
-  /* Disable arbitrary values by restricting the core plugins if necessary */
-}
-\`\`\`
-
-Return ONLY the raw CSS code. No explanations.`;
+    const prompt = buildCssStylePrompt(designSystem, themePreference);
 
     this.logger.log(`Generating global CSS configuration...`);
 
@@ -70,13 +36,7 @@ Return ONLY the raw CSS code. No explanations.`;
       maxTokens: 8192,
     });
 
-    let css = response.text.trim();
-    
-    // Clean up if the LLM hallucinated markdown fences despite instructions
-    const cssFenceMatch = css.match(/```(?:css)?\s*([\s\S]*?)\s*```/i);
-    if (cssFenceMatch) {
-      css = cssFenceMatch[1].trim();
-    }
+    const css = parseCssFromLlm(response.text);
 
     try {
       this.validator.validateCSS(css);
@@ -95,4 +55,3 @@ Return ONLY the raw CSS code. No explanations.`;
     };
   }
 }
-

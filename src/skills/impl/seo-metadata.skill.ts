@@ -7,6 +7,8 @@ import * as crypto from 'crypto';
 import { zodToJsonSchema } from '@alcyone-labs/zod-to-json-schema';
 import { AIModel } from '../../common/constants/ai-models.constant';
 import { AISkill } from '../../common/constants/ai-skills.constant';
+import { buildSeoMetadataPrompt } from '../prompts/builders/seo-metadata.prompt';
+import { parseJsonFromLlm } from '../../guardrails/llm-parser';
 
 @Injectable()
 export class SeoMetadataSkill implements Skill {
@@ -27,46 +29,17 @@ export class SeoMetadataSkill implements Skill {
 
     const primaryKeyword = keywordTarget.primaryKeyword.keyword;
     const secondaryKeywords = keywordTarget.secondaryKeywords?.map((k: any) => k.keyword) || [];
-
     const availableAssets = projectAssets.map((a: any) => `ASSET:${a.id} - ${a.prompt}`).join('\n');
 
-    const prompt = `Generate SEO metadata for a specific page of this contractor website.
-
-BUSINESS CONTEXT:
-${JSON.stringify(businessContext)}
-
-BRAND POSITIONING & MESSAGING:
-${brandPositioning || 'Not provided'}
-${brandMessaging || 'Not provided'}
-
-PAGE SLUG: /${pageSlug}
-
-TARGET KEYWORDS:
-Primary Keyword: "${primaryKeyword}" (MUST be used in Title and H1)
-Secondary Keywords: ${secondaryKeywords.join(', ')}
-
-AVAILABLE IMAGES (for JSON-LD / og:image):
-${availableAssets || 'No specific images available, use a generic placeholder.'}
-
-RULES:
-1. The title MUST be 30-60 characters and MUST contain the Primary Keyword.
-2. The description MUST be 120-160 characters.
-3. The H1 MUST contain the Primary Keyword.
-4. Make it compelling for a user searching for these services, leveraging the Brand Positioning and Messaging.
-5. If available images are provided, select the most relevant 'ASSET:uuid' for the 'image' field. If none are relevant, omit the image field or use a generic UNSPLASH string.
-
-You MUST respond with ONLY a JSON object in this EXACT structure (no other text):
-{
-  "slug": "${pageSlug}",
-  "title": "string (30-60 chars, includes primary keyword)",
-  "description": "string (120-160 chars)",
-  "h1": "string (includes primary keyword)",
-  "keywords": ["string (primary + secondaries)"],
-  "ogTitle": "string",
-  "ogDescription": "string",
-  "canonicalPath": "/${pageSlug}",
-  "image": "string (ASSET:uuid or UNSPLASH:query)"
-}`;
+    const prompt = buildSeoMetadataPrompt(
+      businessContext,
+      pageSlug,
+      primaryKeyword,
+      secondaryKeywords,
+      availableAssets,
+      brandPositioning,
+      brandMessaging
+    );
 
     const fullJsonSchema = zodToJsonSchema(PageSeoSchema, 'PageSeo');
     const bareJsonSchema = fullJsonSchema.definitions
@@ -85,21 +58,7 @@ You MUST respond with ONLY a JSON object in this EXACT structure (no other text)
 
     this.logger.debug(`Raw LLM output: ${response.text}`);
 
-    let parsed: any;
-    try {
-      let raw = response.text.trim();
-      const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-      if (fenceMatch) raw = fenceMatch[1].trim();
-      if (!raw.startsWith('{')) {
-        const start = raw.indexOf('{');
-        const end = raw.lastIndexOf('}');
-        if (start !== -1 && end > start) raw = raw.substring(start, end + 1);
-      }
-      parsed = JSON.parse(raw);
-    } catch {
-      this.logger.error(`Failed to parse LLM output as JSON: ${response.text}`);
-      throw new Error(`SeoMetadata LLM returned unparseable output: ${response.text.substring(0, 200)}`);
-    }
+    const parsed = parseJsonFromLlm(response.text);
 
     const validatedData = this.validator.validate(parsed, PageSeoSchema);
     

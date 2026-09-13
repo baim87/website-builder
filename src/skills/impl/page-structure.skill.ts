@@ -7,6 +7,8 @@ import * as crypto from 'crypto';
 import { zodToJsonSchema } from '@alcyone-labs/zod-to-json-schema';
 import { AIModel } from '../../common/constants/ai-models.constant';
 import { AISkill } from '../../common/constants/ai-skills.constant';
+import { buildPageStructurePrompt } from '../prompts/builders/page-structure.prompt';
+import { parseJsonFromLlm } from '../../guardrails/llm-parser';
 
 @Injectable()
 export class PageStructureSkill implements Skill {
@@ -60,33 +62,13 @@ export class PageStructureSkill implements Skill {
       return { data: validatedData, hash, model: 'hardcoded' };
     }
     
-    const prompt = `Determine the layout for the "${pageSlug}" page of this contractor business.
-Business Context: ${JSON.stringify(input.context.businessContext)}
-Brand Voice: ${JSON.stringify(input.context.brandVoice || 'Not provided')}
-Brand Strategy: ${JSON.stringify(input.context.brandStrategy || 'Not provided')}
-Brand Positioning: ${JSON.stringify(input.context.brandPositioning || 'Not provided')}
-
-You MUST respond with ONLY a JSON object in this EXACT structure (no other text):
-{
-  "sections": ["HeroSection", "ServicesSection", "AboutSection"]
-}
-
-SUPPORTED SECTION TYPES (You can ONLY pick from these):
-- AnnouncementBarSection: Used to display seasonal offers or urgent messages at the very top of the page.
-- HeroSection: Used for top-of-page introductions on the home page.
-- PageHeaderSection: Used for the smaller hero section at the top of detail pages (like service or location details).
-- BrandsSection: Used to display trust badges, certifications, or partner logos.
-- ServicesSection: Used to list services offered.
-- AboutSection: Used for company history and team presentation.
-- WhyUsSection: Used for value propositions and differentiators.
-- BeforeAfterSection: Used to showcase project transformations.
-- TimelineSection: Used to explain the process step-by-step.
-- TestimonialsSection: Used for social proof and client reviews.
-- LocationsSection: Used to list service areas.
-- ServiceDetailsSection: Used for the detailed content body of a specific service.
-- CallToActionSection: Used for the large bottom CTA block commonly found on pages.
-
-Do not invent new section types. Just output the array of strings wrapped in the JSON object.`;
+    const prompt = buildPageStructurePrompt(
+      pageSlug,
+      input.context.businessContext,
+      input.context.brandVoice,
+      input.context.brandStrategy,
+      input.context.brandPositioning
+    );
 
     const fullJsonSchema = zodToJsonSchema(PageStructureSchema, 'PageStructure');
     const bareJsonSchema = fullJsonSchema.definitions
@@ -105,21 +87,7 @@ Do not invent new section types. Just output the array of strings wrapped in the
 
     this.logger.debug(`[${pageSlug}] PageStructure output: ${response.text}`);
 
-    let parsed: any;
-    try {
-      let raw = response.text.trim();
-      const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-      if (fenceMatch) raw = fenceMatch[1].trim();
-      if (!raw.startsWith('{')) {
-        const start = raw.indexOf('{');
-        const end = raw.lastIndexOf('}');
-        if (start !== -1 && end > start) raw = raw.substring(start, end + 1);
-      }
-      parsed = JSON.parse(raw);
-    } catch {
-      this.logger.error(`Failed to parse LLM output as JSON: ${response.text}`);
-      throw new Error(`PageStructure LLM returned unparseable output`);
-    }
+    const parsed = parseJsonFromLlm(response.text);
 
     const validatedData = this.validator.validate(parsed, PageStructureSchema);
     const hash = crypto.createHash('sha256').update(JSON.stringify(validatedData)).digest('hex');

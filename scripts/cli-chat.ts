@@ -11,7 +11,8 @@ import { BusinessContextService } from '../src/projects/business-context.service
 
 import { LogoGenerationService } from '../src/assets/logo-generation.service';
 import { BrandExtractionService } from '../src/assets/brand-extraction.service';
-import { BrandKitGeneratorSkill } from '../src/skills/impl/brand-kit-generator.skill';
+import { BrandStrategySkill } from '../src/skills/impl/brand-strategy.skill';
+import { BrandVisualSkill } from '../src/skills/impl/brand-visual.skill';
 import * as readline from 'readline';
 
 // ==========================================
@@ -113,7 +114,8 @@ async function bootstrap() {
   const googlePlacesService = app.get(GooglePlacesService);
   const businessContextService = app.get(BusinessContextService);
   const brandExtractionService = app.get(BrandExtractionService);
-  const brandKitGenerator = app.get(BrandKitGeneratorSkill);
+  const brandStrategySkill = app.get(BrandStrategySkill);
+  const brandVisualSkill = app.get(BrandVisualSkill);
 
   const rl = readline.createInterface({
     input: process.stdin,
@@ -274,8 +276,8 @@ async function bootstrap() {
         process.stdout.write(paint(`\n  ↳ [${SYSTEM_LABEL}] extracted ${event.data.field} = ${JSON.stringify(event.data.value)}`, c.dim) + ' ');
       } else if (event.event === 'done') {
         console.log('\n');
-      } else if (event.event === 'error') {
-        fail(`${event.data.message}\n`);
+      } else if ((event as any).event === 'error') {
+        fail(`${(event as any).data.message}\n`);
       }
     }
   }
@@ -384,11 +386,25 @@ async function bootstrap() {
       
       const stopBrandSpinner = startSpinner('Generating 13-point Brand Kit...');
       try {
-        const brandKitResult = await brandKitGenerator.execute({
+        const strategyResult = await brandStrategySkill.execute({
           projectId: project.id,
           context: { businessContext: existingBrandContext, stylePrompt },
           metadata: { phase: 'pre-generation' }
         });
+        
+        const visualResult = await brandVisualSkill.execute({
+          projectId: project.id,
+          context: { businessContext: existingBrandContext, stylePrompt, brandStrategy: strategyResult.data },
+          metadata: { phase: 'pre-generation' }
+        });
+        
+        const brandKitResult = {
+          data: {
+            ...strategyResult.data,
+            ...visualResult.data,
+            brandName: strategyResult.data.name || existingBrandContext?.businessName || 'Your Brand',
+          }
+        };
         
         stopBrandSpinner('', true);
         ok("Comprehensive Brand Kit generated successfully!");

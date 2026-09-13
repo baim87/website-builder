@@ -11,6 +11,7 @@ import { buildKeywordStrategyPrompt } from '../prompts/builders/keyword-strategy
 import { ServiceRankingService } from '../../keywords/service-ranking.service';
 import { AIModel } from '../../common/constants/ai-models.constant';
 import { AISkill } from '../../common/constants/ai-skills.constant';
+import { parseJsonFromLlm } from '../../guardrails/llm-parser';
 
 @Injectable()
 export class KeywordStrategySkill implements Skill {
@@ -105,21 +106,7 @@ export class KeywordStrategySkill implements Skill {
       schemaName: 'KeywordStrategy',
     });
 
-    let parsed: any;
-    try {
-      let raw = response.text.trim();
-      const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-      if (fenceMatch) raw = fenceMatch[1].trim();
-      if (!raw.startsWith('{')) {
-        const start = raw.indexOf('{');
-        const end = raw.lastIndexOf('}');
-        if (start !== -1 && end > start) raw = raw.substring(start, end + 1);
-      }
-      parsed = JSON.parse(raw);
-    } catch {
-      this.logger.error(`Failed to parse LLM output as JSON: ${response.text}`);
-      throw new Error(`KeywordStrategy LLM returned unparseable output: ${response.text.substring(0, 200)}`);
-    }
+    const parsed = parseJsonFromLlm(response.text);
 
     const validatedData = this.validator.validate(parsed, KeywordStrategySchema);
     const hash = crypto.createHash('sha256').update(JSON.stringify(validatedData)).digest('hex');

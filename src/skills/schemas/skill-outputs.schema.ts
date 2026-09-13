@@ -141,3 +141,23 @@ export type Section = z.infer<typeof SectionSchema>;
 export type PageContent = z.infer<typeof PageContentSchema>;
 export type CopyData = z.infer<typeof CopyDataSchema>;
 
+
+export function buildBrandStorySchema(hasFounderStory: boolean) {
+  const schemaShape: Record<string, z.ZodTypeAny> = {
+    whyWeExist: z.string().describe('Why this company exists — the underlying mission and purpose.'),
+    whatWeBelieve: z.string().describe('Core beliefs and values that drive the company.'),
+    customerProblemAndTransformation: z.string().describe('The customer\'s problem before finding this company, and the positive transformation after.'),
+    brandNarrative: z.string().describe('A compelling, cohesive brand narrative (2-3 paragraphs).'),
+    storyThemes: z.array(z.string()).describe('3-5 recurring story themes to reinforce consistently.'),
+    aboutUsDirection: z.string().describe('Strategic direction for writing the About Us page.'),
+    storytellingPrinciples: z.array(z.string()).describe('4-6 guiding principles for brand storytelling.'),
+  };
+
+  if (hasFounderStory) {
+    schemaShape.originAndFounderStory = z.string().describe(
+      'The origin and founder story based on the provided user input. Do NOT embellish or add facts not present in the user input.'
+    );
+  }
+
+  return z.object(schemaShape);
+}

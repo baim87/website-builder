@@ -7,7 +7,7 @@ import { OutputValidatorService } from '../../guardrails/output-validator.servic
 import { BrandVisualOutputSchema } from '../schemas/skill-outputs.schema';
 import { zodToJsonSchema } from '@alcyone-labs/zod-to-json-schema';
 import { buildBrandVisualPrompt } from '../prompts/builders/brand-visual.prompt';
-import { parseBrandVisualResponse } from '../prompts/parsers/brand-visual.parser';
+import { parseJsonFromLlm } from '../../guardrails/llm-parser';
 
 @Injectable()
 export class BrandVisualSkill implements Skill {
@@ -43,7 +43,7 @@ export class BrandVisualSkill implements Skill {
 
     let parsed: any;
     try {
-      parsed = parseBrandVisualResponse(result.text);
+      parsed = parseJsonFromLlm(result.text);
     } catch (e) {
       this.logger.error(`Failed to parse Brand Visual output: ${result.text.substring(0, 200)}`);
       throw new Error('Invalid JSON from Brand Visual Skill');

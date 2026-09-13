@@ -1,10 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Skill, SkillInput, SkillOutput } from '../interfaces/skill.interface';
 import { AIGatewayService } from '../../ai-gateway/ai-gateway.service';
-import { SectionDataSchemaRegistry } from '../schemas/section-data-contracts';
-import { zodToJsonSchema } from '@alcyone-labs/zod-to-json-schema';
 import { AIModel } from '../../common/constants/ai-models.constant';
 import { AISkill } from '../../common/constants/ai-skills.constant';
+import { buildComponentValidationPrompt } from '../prompts/builders/component-validation.prompt';
+import { parseJsonFromLlm } from '../../guardrails/llm-parser';
 
 export interface ValidationCritique {
   isValid: boolean;
@@ -25,37 +25,12 @@ export class ComponentValidationSkill implements Skill {
       throw new Error('ComponentValidationSkill requires sectionType and componentCode');
     }
 
-    const schema = (SectionDataSchemaRegistry as any)[sectionType];
-    if (!schema) {
+    const prompt = buildComponentValidationPrompt(sectionType, componentCode);
+
+    if (!prompt) {
       this.logger.warn(`No schema found for ${sectionType}, skipping validation.`);
       return { data: { isValid: true, missingElements: [] }, hash: '', model: '' };
     }
-
-    const fullJsonSchema = zodToJsonSchema(schema, sectionType);
-    const bareJsonSchema = fullJsonSchema.definitions ? fullJsonSchema.definitions[sectionType] : fullJsonSchema;
-
-    const prompt = `
-You are a strict React and Next.js UI Validator.
-Your task is to analyze the following React component source code and verify if it explicitly renders ALL the required data fields defined in its JSON schema contract.
-
-SECTION TYPE: ${sectionType}
-ZOD SCHEMA CONTRACT:
-${JSON.stringify(bareJsonSchema, null, 2)}
-
-REACT COMPONENT SOURCE CODE:
-\`\`\`tsx
-${componentCode}
-\`\`\`
-
-REQUIREMENTS:
-1. The component receives a 'data' prop. You must ensure that the code actually renders the required fields from the schema (e.g. data.mapUrl, data.hours, data.phone) into the UI.
-2. If the schema requires a Google Maps iframe (mapUrl) and the code doesn't have an iframe using data.mapUrl, that is a missing element.
-3. If the code completely ignores rendering required text fields or contact info, that is a missing element.
-4. Output a JSON object with 'isValid' (boolean) and 'missingElements' (array of strings describing exactly what is missing and how to fix it).
-
-Return ONLY valid JSON.
-{ "isValid": false, "missingElements": ["The iframe for data.mapUrl is completely missing.", "data.hours is not rendered anywhere."] }
-`;
 
     const response = await this.aiGateway.generateText(AIModel.CLAUDE_FABLE_5, {
       systemPrompt: 'You output ONLY valid JSON. No markdown fences. No explanations.',
@@ -66,16 +41,13 @@ Return ONLY valid JSON.
     });
 
     try {
-      let raw = response.text.trim();
-      const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-      if (fenceMatch) raw = fenceMatch[1].trim();
-      const parsed = JSON.parse(raw) as ValidationCritique;
+      const parsed = parseJsonFromLlm(response.text) as ValidationCritique;
       
       return {
         data: parsed,
         hash: '',
         model: AIModel.CLAUDE_FABLE_5,
-      usage: (response as any).usage || response.usage,
+        usage: (response as any).usage || response.usage,
       };
     } catch (e) {
       this.logger.error(`Validation LLM returned unparseable JSON: ${response.text}`);

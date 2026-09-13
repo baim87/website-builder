@@ -11,7 +11,6 @@ import { BrandStorySkill } from './impl/brand-story.skill';
 import { DesignSystemSkill } from './impl/design-system.skill';
 import { SeoMetadataSkill } from './impl/seo-metadata.skill';
 import { PageStructureSkill } from './impl/page-structure.skill';
-import { SectionContentSkill } from './impl/section-content.skill';
 import { KeywordStrategySkill } from './impl/keyword-strategy.skill';
 import { CSSStyleSkill } from './impl/css-style.skill';
 import { CopyWriterSkill } from './impl/copy-writer.skill';
@@ -47,7 +46,6 @@ import { AssetsModule } from '../assets/assets.module';
     SeoMetadataSkill,
     PageStructureSkill,
     ImagePlannerSkill,
-    SectionContentSkill,
     KeywordStrategySkill,
     CSSStyleSkill,
     CopyWriterSkill,

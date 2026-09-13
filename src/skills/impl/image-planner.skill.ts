@@ -8,6 +8,7 @@ import { zodToJsonSchema } from '@alcyone-labs/zod-to-json-schema';
 import { buildImagePlannerPrompt } from '../prompts/builders/image-planner.prompt';
 import { AIModel } from '../../common/constants/ai-models.constant';
 import { AISkill } from '../../common/constants/ai-skills.constant';
+import { parseJsonFromLlm } from '../../guardrails/llm-parser';
 
 const ImagePlanSchema = z.object({
   images: z.array(z.object({
@@ -51,21 +52,7 @@ export class ImagePlannerSkill implements Skill {
       schemaName: 'ImagePlan',
     });
 
-    let parsed: any;
-    try {
-      let raw = response.text.trim();
-      const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-      if (fenceMatch) raw = fenceMatch[1].trim();
-      if (!raw.startsWith('{') && raw.includes('{')) {
-        const start = raw.indexOf('{');
-        const end = raw.lastIndexOf('}');
-        if (start !== -1 && end > start) raw = raw.substring(start, end + 1);
-      }
-      parsed = JSON.parse(raw || '{}');
-    } catch (e) {
-      this.logger.error(`Failed to parse LLM output as JSON: ${response.text}`);
-      throw new Error(`ImagePlanner LLM returned unparseable output`);
-    }
+    const parsed = parseJsonFromLlm(response.text);
 
     const validatedData = ImagePlanSchema.parse(parsed);
 

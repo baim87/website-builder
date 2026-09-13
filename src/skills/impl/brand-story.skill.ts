@@ -5,7 +5,9 @@ import { OutputValidatorService } from '../../guardrails/output-validator.servic
 import * as crypto from 'crypto';
 import { AIModel } from '../../common/constants/ai-models.constant';
 import { AISkill } from '../../common/constants/ai-skills.constant';
-import { z } from 'zod';
+import { parseJsonFromLlm } from '../../guardrails/llm-parser';
+import { buildBrandStorySchema } from '../schemas/skill-outputs.schema';
+import { buildBrandStoryPrompt } from '../prompts/builders/brand-story.prompt';
 import { zodToJsonSchema } from '@alcyone-labs/zod-to-json-schema';
 
 @Injectable()
@@ -30,26 +32,7 @@ export class BrandStorySkill implements Skill {
       founderStory.trim().toLowerCase() !== 'skip' &&
       founderStory.trim().length > 0;
 
-    // Build the Zod schema dynamically.
-    // If the user skipped a section, its field is NEVER added to the schema,
-    // so the LLM is structurally prevented from fabricating content.
-    const schemaShape: Record<string, z.ZodTypeAny> = {
-      whyWeExist: z.string().describe('Why this company exists — the underlying mission and purpose.'),
-      whatWeBelieve: z.string().describe('Core beliefs and values that drive the company.'),
-      customerProblemAndTransformation: z.string().describe('The customer\'s problem before finding this company, and the positive transformation after.'),
-      brandNarrative: z.string().describe('A compelling, cohesive brand narrative (2-3 paragraphs).'),
-      storyThemes: z.array(z.string()).describe('3-5 recurring story themes to reinforce consistently.'),
-      aboutUsDirection: z.string().describe('Strategic direction for writing the About Us page.'),
-      storytellingPrinciples: z.array(z.string()).describe('4-6 guiding principles for brand storytelling.'),
-    };
-
-    if (hasFounderStory) {
-      schemaShape.originAndFounderStory = z.string().describe(
-        'The origin and founder story based on the provided user input. Do NOT embellish or add facts not present in the user input.'
-      );
-    }
-
-    const BrandStorySchema = z.object(schemaShape);
+    const BrandStorySchema = buildBrandStorySchema(hasFounderStory);
 
     // Extract clean tool schema
     const fullJsonSchema = zodToJsonSchema(BrandStorySchema, 'BrandStory');
@@ -58,29 +41,9 @@ export class BrandStorySkill implements Skill {
       : fullJsonSchema;
     if ((bareJsonSchema as any).$schema) delete (bareJsonSchema as any).$schema;
 
-    const founderSection = hasFounderStory
-      ? `FOUNDER STORY (provided by user — use this, do NOT embellish):\n${founderStory}`
-      : `FOUNDER STORY: Not provided. The originAndFounderStory field is OMITTED from the schema. Do not fabricate any founder history.`;
+    const prompt = buildBrandStoryPrompt(businessContext, brandStrategy, founderStory);
 
-    const prompt = `You are an elite Brand Strategist and Copywriter for US home service contractors.
-
-Generate a comprehensive Brand Story document based on the Business Context and Brand Strategy.
-
-BUSINESS CONTEXT:
-${JSON.stringify(businessContext, null, 2)}
-
-BRAND STRATEGY:
-${brandStrategy}
-
-${founderSection}
-
-RULES:
-1. All content must be grounded in the actual business context provided above.
-2. Do NOT fabricate facts, histories, years founded, or personal anecdotes unless explicitly provided.
-3. Be bold, confident, and persuasive — this is not a corporate press release.
-4. Write for US home service contractors. Tone should match the brand personality.`;
-
-    this.logger.log(`BrandStorySkill: hasFounderStory=${hasFounderStory}. Building schema with ${Object.keys(schemaShape).length} fields.`);
+    this.logger.log(`BrandStorySkill: hasFounderStory=${hasFounderStory}. Building schema.`);
 
     const response = await this.aiGateway.generateText(AIModel.CLAUDE_FABLE_5, {
       systemPrompt: 'You are an expert Brand Strategist. Output structured data via the provided tool.',
@@ -91,21 +54,7 @@ RULES:
       schemaName: 'BrandStory',
     });
 
-    let parsed: any;
-    try {
-      let raw = response.text.trim();
-      const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-      if (fenceMatch) raw = fenceMatch[1].trim();
-      if (!raw.startsWith('{')) {
-        const start = raw.indexOf('{');
-        const end = raw.lastIndexOf('}');
-        if (start !== -1 && end > start) raw = raw.substring(start, end + 1);
-      }
-      parsed = JSON.parse(raw);
-    } catch {
-      this.logger.error(`Failed to parse BrandStory LLM output: ${response.text.substring(0, 200)}`);
-      throw new Error('BrandStory LLM returned unparseable JSON output');
-    }
+    const parsed = parseJsonFromLlm(response.text);
 
     const validatedData = this.validator.validate(parsed, BrandStorySchema);
 
