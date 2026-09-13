@@ -282,4 +282,16 @@ No AI-looking artifacts.`;
 
     return uploadedWebpUrl;
   }
+
+  async generatePortraitVariants(projectId: string, trade: string, localImagePath: string, brandHints?: string): Promise<string[]> {
+    this.logger.log(`Generating 3 portrait variants for project ${projectId}...`);
+    // Run 3 generations in parallel to give the user 3 distinct options
+    const variants = await Promise.all([
+      this.generatePortrait(projectId, trade, localImagePath, brandHints),
+      this.generatePortrait(projectId, trade, localImagePath, brandHints),
+      this.generatePortrait(projectId, trade, localImagePath, brandHints)
+    ]);
+    return variants;
+  }
 }
+

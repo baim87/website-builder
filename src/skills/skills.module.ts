@@ -30,9 +30,10 @@ import { KeywordsModule } from '../keywords/keywords.module';
 import { UnsplashService } from '../assets/unsplash.service';
 import { QueueModule } from '../queue/queue.module';
 import { AssetsModule } from '../assets/assets.module';
+import { BrandModule } from '../brand/brand.module';
 
 @Module({
-  imports: [AIGatewayModule, PrismaModule, GuardrailsModule, KeywordsModule, forwardRef(() => QueueModule), forwardRef(() => AssetsModule)],
+  imports: [AIGatewayModule, PrismaModule, GuardrailsModule, KeywordsModule, forwardRef(() => QueueModule), forwardRef(() => AssetsModule), BrandModule],
   providers: [
     SkillLoggerService,
     SkillExecutorService,
@@ -60,6 +61,22 @@ import { AssetsModule } from '../assets/assets.module';
     UnsplashService,
     CostAggregatorService,
   ],
-  exports: [SkillExecutorService, GenerationOrchestratorService, CodeRepairSkill, ComponentValidationSkill, AssetRepairSkill, CopywritingRepairSkill, CostAggregatorService, ComponentEditorSkill, SkillLoggerService],
+  exports: [
+    SkillExecutorService, 
+    GenerationOrchestratorService, 
+    CodeRepairSkill, 
+    ComponentValidationSkill, 
+    AssetRepairSkill, 
+    CopywritingRepairSkill, 
+    CostAggregatorService, 
+    ComponentEditorSkill, 
+    SkillLoggerService,
+    BrandStrategySkill,
+    BrandPositioningSkill,
+    BrandVoiceSkill,
+    BrandVisualSkill,
+    BrandMessagingSkill,
+    BrandStorySkill,
+  ],
 })
 export class SkillsModule {}

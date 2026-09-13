@@ -3,33 +3,49 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 import { getErrorMessage } from '../common/utils/error.util';
+import { LeadsGateway } from './leads.gateway';
+import { google } from 'googleapis';
 
 @Injectable()
 export class LeadsService {
   private readonly logger = new Logger(LeadsService.name);
-  private transporter: nodemailer.Transporter;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
-  ) {
-    this.initializeMailer();
-  }
+    private readonly leadsGateway: LeadsGateway,
+  ) {}
 
-  private initializeMailer() {
-    const user = this.configService.get<string>('SMTP_EMAIL');
-    const pass = this.configService.get<string>('SMTP_PASSWORD');
+  private async createTransporterForUser(email: string, refreshToken: string): Promise<nodemailer.Transporter> {
+    const clientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
+    const clientSecret = this.configService.get<string>('GOOGLE_CLIENT_SECRET');
 
-    if (!user || !pass) {
-      this.logger.warn('SMTP credentials missing. Lead forwarding will fail.');
-      return;
+    if (!clientId || !clientSecret || !refreshToken) {
+      throw new Error('Missing Google OAuth credentials for user');
     }
 
-    this.transporter = nodemailer.createTransport({
+    const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, 'https://developers.google.com/oauthplayground');
+    oauth2Client.setCredentials({ refresh_token: refreshToken });
+    
+    // We attempt to get a fresh access token
+    const accessToken = await new Promise((resolve, reject) => {
+      oauth2Client.getAccessToken((err, token) => {
+        if (err) {
+          reject(new Error('Failed to create access token: ' + err.message));
+        }
+        resolve(token);
+      });
+    });
+
+    return nodemailer.createTransport({
       service: 'gmail',
       auth: {
-        user,
-        pass,
+        type: 'OAuth2',
+        user: email,
+        clientId,
+        clientSecret,
+        refreshToken,
+        accessToken: accessToken as string,
       },
     });
   }
@@ -37,19 +53,47 @@ export class LeadsService {
   async forwardLead(projectId: string, leadData: any) {
     this.logger.log(`Received new lead for project ${projectId}`);
 
-    // Find the project and the owner's email
+    // 1. Find the project and the owner's email & refresh token
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
-      include: { user: true },
+      include: { user: true, businessContext: true },
     });
 
     if (!project) {
       throw new HttpException('Project not found', HttpStatus.NOT_FOUND);
     }
 
-    const contractorEmail = project.user.email;
-    const { name, email, phone, service, message } = leadData;
+    const contractorUser = project.user;
+    if (!contractorUser) {
+       throw new HttpException('Project has no owner', HttpStatus.BAD_REQUEST);
+    }
 
+    const contractorEmail = contractorUser.email;
+    const businessName = project.businessContext?.businessName || 'Your Local Contractor';
+    const { name, email, phone, service, message, source } = leadData;
+
+    // 2. Save lead to the database
+    const savedLead = await this.prisma.lead.create({
+      data: {
+        projectId,
+        name,
+        email,
+        phone,
+        message,
+        source: source || 'website',
+      }
+    });
+
+    // 3. Emit real-time notification to WebSocket
+    this.leadsGateway.notifyNewLead(contractorUser.id, {
+      id: savedLead.id,
+      name,
+      date: savedLead.createdAt.toLocaleDateString(),
+      time: savedLead.createdAt.toLocaleTimeString(),
+      service,
+    });
+
+    // Escaping helper for emails
     const escapeHtml = (unsafe: string) => {
       if (!unsafe) return 'N/A';
       return String(unsafe)
@@ -66,32 +110,69 @@ export class LeadsService {
     const safeService = escapeHtml(service);
     const safeMessage = escapeHtml(message);
 
-    const htmlContent = `
-      <h2>New Lead from your Website!</h2>
-      <p><strong>Name:</strong> ${safeName}</p>
-      <p><strong>Email:</strong> ${safeEmail}</p>
-      <p><strong>Phone:</strong> ${safePhone}</p>
-      <p><strong>Service Requested:</strong> ${safeService}</p>
-      <br/>
-      <p><strong>Message:</strong></p>
-      <p>${safeMessage === 'N/A' ? 'No message provided.' : safeMessage}</p>
-    `;
-
+    // 4. Set up Mailer using User's credentials
+    let transporter: nodemailer.Transporter | null = null;
     try {
-      if (!this.transporter) throw new Error('Mailer not initialized');
-
-      await this.transporter.sendMail({
-        from: `"Local Empire Leads" <${this.configService.get<string>('SMTP_EMAIL')}>`,
-        to: contractorEmail,
-        subject: `New Lead: ${service || 'Service Inquiry'} from ${name}`,
-        html: htmlContent,
-      });
-
-      this.logger.log(`Successfully forwarded lead to ${contractorEmail}`);
-      return { success: true, message: 'Lead forwarded successfully' };
+      if (!contractorUser.gmailRefreshToken) {
+        this.logger.warn(`User ${contractorUser.id} has no gmailRefreshToken. Cannot send emails on their behalf.`);
+      } else {
+        transporter = await this.createTransporterForUser(contractorEmail, contractorUser.gmailRefreshToken);
+      }
     } catch (error) {
-      this.logger.error(`Failed to send lead email: ${getErrorMessage(error)}`);
-      throw new HttpException('Failed to forward lead', HttpStatus.INTERNAL_SERVER_ERROR);
+      this.logger.error(`Failed to initialize OAuth2 Transporter for user: ${getErrorMessage(error)}`);
     }
+
+    if (transporter) {
+      // 5. Send Email to Contractor (Notification)
+      const contractorHtml = `
+        <h2>New Lead from your Website!</h2>
+        <p><strong>Name:</strong> ${safeName}</p>
+        <p><strong>Email:</strong> ${safeEmail}</p>
+        <p><strong>Phone:</strong> ${safePhone}</p>
+        <p><strong>Service Requested:</strong> ${safeService}</p>
+        <br/>
+        <p><strong>Message:</strong></p>
+        <p>${safeMessage === 'N/A' ? 'No message provided.' : safeMessage}</p>
+      `;
+
+      // 6. Send Email to Submitter (Receipt)
+      const submitterHtml = `
+        <div style="font-family: sans-serif; padding: 20px;">
+          <h2>Thank you for reaching out to ${businessName}!</h2>
+          <p>Hi ${safeName},</p>
+          <p>We have received your inquiry regarding <strong>${safeService}</strong>.</p>
+          <p>Our team will review your message and get back to you as soon as possible.</p>
+          <br/>
+          <p>Best regards,</p>
+          <p><strong>${businessName}</strong></p>
+        </div>
+      `;
+
+      try {
+        // Send to Contractor
+        await transporter.sendMail({
+          from: contractorEmail,
+          to: contractorEmail,
+          subject: `New Lead: ${service || 'Service Inquiry'} from ${name}`,
+          html: contractorHtml,
+        });
+
+        // Send to Submitter (if they provided an email)
+        if (email) {
+          await transporter.sendMail({
+            from: contractorEmail,
+            to: email,
+            subject: `Thank you for contacting ${businessName}`,
+            html: submitterHtml,
+          });
+        }
+        
+        this.logger.log(`Successfully sent dual lead emails via OAuth2`);
+      } catch (error) {
+        this.logger.error(`Failed to send lead emails: ${getErrorMessage(error)}`);
+      }
+    }
+
+    return { success: true, message: 'Lead saved and processed successfully', leadId: savedLead.id };
   }
 }

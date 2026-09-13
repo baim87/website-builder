@@ -272,11 +272,6 @@ export class NextjsBuilderService {
       const envVars = [
         { key: 'NEXT_PUBLIC_API_URL', value: process.env.API_URL || 'http://localhost:3000', target: ['production', 'preview', 'development'], type: 'plain' },
         { key: 'NEXT_PUBLIC_PROJECT_ID', value: projectId, target: ['production', 'preview', 'development'], type: 'plain' },
-        { key: 'SMTP_HOST', value: process.env.SMTP_HOST || 'smtp.gmail.com', target: ['production', 'preview', 'development'], type: 'plain' },
-        { key: 'SMTP_PORT', value: process.env.SMTP_PORT || '465', target: ['production', 'preview', 'development'], type: 'plain' },
-        { key: 'SMTP_USER', value: process.env.SMTP_EMAIL || '', target: ['production', 'preview', 'development'], type: 'plain' },
-        { key: 'SMTP_PASS', value: process.env.SMTP_PASSWORD || '', target: ['production', 'preview', 'development'], type: 'plain' },
-        { key: 'CONTACT_EMAIL', value: businessContext?.email || process.env.CONTACT_EMAIL || '', target: ['production', 'preview', 'development'], type: 'plain' },
         { key: 'BUILDER_API_SECRET', value: process.env.BUILDER_API_SECRET || '', target: ['production', 'preview', 'development'], type: 'plain' }
       ];
 

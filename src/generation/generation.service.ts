@@ -1,4 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ClsService } from 'nestjs-cls';
+import * as crypto from 'crypto';
 import { GenerationOrchestratorService } from './generation-orchestrator.service';
 import { WebsiteDataService } from '../projects/website-data.service';
 import { BusinessContextService } from '../projects/business-context.service';
@@ -28,18 +30,32 @@ export class GenerationService {
     private readonly costAggregator: CostAggregatorService,
     private readonly brandExtractionService: BrandExtractionService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly cls: ClsService,
   ) {}
 
   async generateProject(projectId: string, userId: string, jobId: string, job?: Job) {
-    const generationStartTimeMs = Date.now();
-    this.logger.log(`Starting full generation for project ${projectId} (job: ${jobId})`);
-    
-    // 1. Acquire atomic lock (retry tolerant)
-    await this.websiteDataService.acquireGenerationLock(projectId, userId, jobId);
+    return this.cls.run(async () => {
+      this.cls.set('traceId', jobId || crypto.randomUUID());
+      this.cls.set('userId', userId);
+      this.cls.set('projectId', projectId);
 
-    try {
-      // 2. Fetch context
-      const businessContext = await this.businessContextService.findByProjectId(projectId) as any;
+      const generationStartTimeMs = Date.now();
+      this.logger.log(`Starting full generation for project ${projectId} (job: ${jobId})`);
+      
+      // 1. Acquire atomic lock (retry tolerant)
+      await this.websiteDataService.acquireGenerationLock(projectId, userId, jobId);
+
+      try {
+        // Tenant Isolation Check
+        const project = await this.prisma.project.findUnique({ where: { id: projectId } });
+        if (!project || project.userId !== userId) {
+          const errMsg = `TenantIsolationError: Project ${projectId} does not belong to user ${userId}`;
+          this.logger.fatal ? this.logger.fatal(errMsg) : this.logger.error(errMsg);
+          throw new Error(errMsg);
+        }
+
+        // 2. Fetch context
+        const businessContext = await this.businessContextService.findByProjectId(projectId) as any;
       
       const logoAsset = await this.prisma.asset.findFirst({
         where: { projectId, OR: [{ purpose: 'logo' }, { type: 'image' }] },
@@ -99,10 +115,6 @@ export class GenerationService {
         lastGeneratedAt: new Date(),
       }, userId);
 
-      // Print Cost Report
-      const totalWallClockTimeMs = Date.now() - generationStartTimeMs;
-      await this.costAggregator.printCostReport(projectId, 'generation', totalWallClockTimeMs);
-
       // 7. Push to GitHub and Trigger Vercel
       this.logger.log(`Initiating GitHub push & Vercel deployment for project ${projectId}`);
       const deployStartTimeMs = Date.now();
@@ -155,6 +167,11 @@ export class GenerationService {
       this.logger.error(`Generation failed for project ${projectId}`, error.stack);
       await this.websiteDataService.releaseGenerationLock(projectId, userId, 'failed');
       throw error;
+    } finally {
+      // Print Cost Report
+      const totalWallClockTimeMs = Date.now() - generationStartTimeMs;
+      await this.costAggregator.printCostReport(projectId, 'generation', totalWallClockTimeMs);
     }
+    });
   }
 }

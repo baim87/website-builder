@@ -110,60 +110,72 @@ export class ServiceSuggestionService {
 
     if (apiTargets.length > 0) {
       this.logger.log(`[TIER 3 MISS] Fetching keywords for ${apiTargets.length} services from Google Ads...`);
-      const apiResults = await this.googleAdsClient.fetchKeywordsBatch(apiTargets, location);
+      
+      try {
+        const apiResults = await this.googleAdsClient.fetchKeywordsBatch(apiTargets, location);
 
-      for (const service of apiTargets) {
-        const bestKeyword = this.pickBestTransactionalKeyword(service, apiResults);
-        
-        if (bestKeyword) {
-          suggestions.push({
-            service,
-            keyword: bestKeyword.keyword,
-            searchVolume: bestKeyword.searchVolume,
-            competition: bestKeyword.competition,
-            cpc: bestKeyword.cpc,
-            monthlyVolumes: bestKeyword.monthlySearchVolumes,
-          });
+        for (const service of apiTargets) {
+          const bestKeyword = this.pickBestTransactionalKeyword(service, apiResults);
+          
+          if (bestKeyword) {
+            suggestions.push({
+              service,
+              keyword: bestKeyword.keyword,
+              searchVolume: bestKeyword.searchVolume,
+              competition: bestKeyword.competition,
+              cpc: bestKeyword.cpc,
+              monthlyVolumes: bestKeyword.monthlySearchVolumes,
+            });
 
-          globalInserts.push({
-            city: normalizedLocation,
-            state: parsedState,
-            trade,
-            service,
-            keyword: bestKeyword.keyword,
-            searchVolume: bestKeyword.searchVolume,
-            monthlyVolumes: (bestKeyword.monthlySearchVolumes as any) || [],
-            competition: bestKeyword.competition,
-            cpc: bestKeyword.cpc,
-            geoScope: 'national_proxy',
+            globalInserts.push({
+              city: normalizedLocation,
+              state: parsedState,
+              trade,
+              service,
+              keyword: bestKeyword.keyword,
+              searchVolume: bestKeyword.searchVolume,
+              monthlyVolumes: (bestKeyword.monthlySearchVolumes as any) || [],
+              competition: bestKeyword.competition,
+              cpc: bestKeyword.cpc,
+              geoScope: 'national_proxy',
+            });
+          } else {
+            // Fallback: zero-result
+            suggestions.push({
+              service,
+              keyword: `${service} ${location}`,
+              searchVolume: 0,
+            });
+
+            globalInserts.push({
+              city: normalizedLocation,
+              state: parsedState,
+              trade,
+              service,
+              keyword: `${service} ${location}`,
+              searchVolume: 0,
+              geoScope: 'national_proxy',
+            });
+          }
+        }
+
+        // Persist to Global Cache
+        if (globalInserts.length > 0) {
+          await this.prisma.globalKeywordCache.createMany({
+            data: globalInserts,
+            skipDuplicates: true,
           });
-        } else {
-          // Fallback: zero-result
+          this.logger.log(`Persisted ${globalInserts.length} new metrics to GlobalKeywordCache.`);
+        }
+      } catch (e: any) {
+        this.logger.error(`[TIER 3 FAILED] Google Ads API failed: ${e.message}. Falling back to zero-volume metrics.`);
+        for (const service of apiTargets) {
           suggestions.push({
             service,
             keyword: `${service} ${location}`,
             searchVolume: 0,
-          });
-
-          globalInserts.push({
-            city: normalizedLocation,
-            state: parsedState,
-            trade,
-            service,
-            keyword: `${service} ${location}`,
-            searchVolume: 0,
-            geoScope: 'national_proxy',
           });
         }
-      }
-
-      // Persist to Global Cache
-      if (globalInserts.length > 0) {
-        await this.prisma.globalKeywordCache.createMany({
-          data: globalInserts,
-          skipDuplicates: true,
-        });
-        this.logger.log(`Persisted ${globalInserts.length} new metrics to GlobalKeywordCache.`);
       }
     }
 

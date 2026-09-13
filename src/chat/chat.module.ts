@@ -16,9 +16,11 @@ import { ChatFlowEngine } from './chat-flow.engine';
 import { SkillsModule } from '../skills/skills.module';
 import { AssetsModule } from '../assets/assets.module';
 import { KeywordsModule } from '../keywords/keywords.module';
+import { BrandModule } from '../brand/brand.module';
+import { SeoModule } from '../seo/seo.module';
 
 @Module({
-  imports: [PrismaModule, AIGatewayModule, forwardRef(() => InterviewModule), QueueModule, ProjectsModule, GuardrailsModule, SkillsModule, AssetsModule, KeywordsModule],
+  imports: [PrismaModule, AIGatewayModule, forwardRef(() => InterviewModule), QueueModule, ProjectsModule, GuardrailsModule, SkillsModule, AssetsModule, KeywordsModule, BrandModule, SeoModule],
   controllers: [ChatController],
   providers: [ChatService, ChatStreamService, EditIntentService, EditExecutorService, ChatFlowEngine],
   exports: [ChatService, ChatStreamService, EditIntentService, EditExecutorService, ChatFlowEngine],

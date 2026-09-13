@@ -8,9 +8,10 @@ import { GooglePlacesService } from './google-places.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { QueueModule } from '../queue/queue.module';
 import { SeoModule } from '../seo/seo.module';
+import { StorageModule } from '../storage/storage.module';
 
 @Module({
-  imports: [PrismaModule, forwardRef(() => QueueModule), SeoModule],
+  imports: [PrismaModule, forwardRef(() => QueueModule), SeoModule, StorageModule],
   controllers: [ProjectsController],
   providers: [ProjectsService, BusinessContextService, WebsiteDataService, PageService, GooglePlacesService],
   exports: [ProjectsService, BusinessContextService, WebsiteDataService, PageService, GooglePlacesService],

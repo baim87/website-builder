@@ -8,16 +8,17 @@ datasource db {
 }
 
 model User {
-  id                String        @id @default(uuid())
-  email             String        @unique
+  id                String            @id @default(uuid())
+  email             String            @unique
   name              String?
-  googleId          String?       @unique
+  googleId          String?           @unique
   gmailRefreshToken String?
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
   payments          Payment[]
   projects          Project[]
   subscription      Subscription?
+  skillInvocations  SkillInvocation[]
 }
 
 model Project {
@@ -39,6 +40,7 @@ model Project {
   skillInvocations       SkillInvocation[]
   websiteData            WebsiteData?
   serviceKeywordMetrics  ServiceKeywordMetrics[]
+  leads                  Lead[]
 }
 
 model BusinessContext {
@@ -169,7 +171,16 @@ model SkillInvocation {
   metadata         Json?
   promptTokens     Int?
   outputData       Json?
-  project          Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  traceId String?
+  userId  String?
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([traceId])
+  @@index([userId])
+  @@index([projectId])
 }
 
 model Subscription {
@@ -209,19 +220,19 @@ model Domain {
 }
 
 model Page {
-  id            String   @id @default(uuid())
-  projectId     String
-  slug          String
-  content       Json
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  componentCode Json?
-  customCSS     String?
-  keywordTarget Json?
-  seoMeta       Json?
-  status        String   @default("pending")
+  id             String   @id @default(uuid())
+  projectId      String
+  slug           String
+  content        Json
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  componentCode  Json?
+  customCSS      String?
+  keywordTarget  Json?
+  seoMeta        Json?
+  status         String   @default("pending")
   contentVersion Int      @default(1)
-  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, slug])
 }
@@ -230,6 +241,20 @@ model StripeEvent {
   id        String   @id
   type      String
   createdAt DateTime @default(now())
+}
+
+model Lead {
+  id        String   @id @default(uuid())
+  projectId String
+  name      String?
+  email     String?
+  phone     String?
+  message   String?
+  source    String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }
 
 model LocationKeywordMetrics {
@@ -250,25 +275,25 @@ model LocationKeywordMetrics {
 }
 
 model GlobalKeywordCache {
-  id               String   @id @default(uuid())
-  city             String
-  state            String?
-  trade            String?  // Optional: The broad trade category (e.g. "Decking")
-  service          String   // The specific service (e.g. "Deck Building")
-  keyword          String   // The actual search query (e.g. "deck building omaha")
-  
-  // Google Ads Metrics
-  searchVolume     Int
-  monthlyVolumes   Json?    
-  competition      String?  
-  cpc              Float?
-  geoScope         String   @default("national_proxy")
+  id      String  @id @default(uuid())
+  city    String
+  state   String?
+  trade   String? // Optional: The broad trade category (e.g. "Decking")
+  service String // The specific service (e.g. "Deck Building")
+  keyword String // The actual search query (e.g. "deck building omaha")
 
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  // Google Ads Metrics
+  searchVolume   Int
+  monthlyVolumes Json?
+  competition    String?
+  cpc            Float?
+  geoScope       String  @default("national_proxy")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // A city and a specific service should be globally unique
-  @@unique([city, service]) 
+  @@unique([city, service])
 }
 
 model ServiceKeywordMetrics {

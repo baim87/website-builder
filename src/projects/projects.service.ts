@@ -1,10 +1,14 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProjectDto } from './dto/create-project.dto';
+import { StorageService } from '../storage/storage.service';
 
 @Injectable()
 export class ProjectsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storageService: StorageService
+  ) {}
 
   async create(userId: string, dto: CreateProjectDto) {
     return this.prisma.project.create({
@@ -78,9 +82,14 @@ export class ProjectsService {
       if (userId) {
         whereClause.userId = userId;
       }
-      await this.prisma.project.delete({
+      const project = await this.prisma.project.delete({
         where: whereClause,
       });
+
+      // Delete project files in R2 storage
+      const projectFolderPrefix = `users/${project.userId}/projects/${project.id}/`;
+      await this.storageService.deleteDirectory(projectFolderPrefix);
+
       return { success: true };
     } catch (e) {
       throw new NotFoundException(`Project ${id} not found or you don't have access`);

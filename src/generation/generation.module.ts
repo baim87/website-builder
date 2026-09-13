@@ -9,11 +9,13 @@ import { SeoModule } from '../seo/seo.module';
 import { DeploymentModule } from '../deployment/deployment.module';
 import { QueueModule } from '../queue/queue.module';
 import { AssetsModule } from '../assets/assets.module';
+import { GenerationGateway } from './generation.gateway';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [SkillsModule, forwardRef(() => ProjectsModule), SeoModule, DeploymentModule, forwardRef(() => QueueModule), AssetsModule],
+  imports: [SkillsModule, forwardRef(() => ProjectsModule), SeoModule, DeploymentModule, forwardRef(() => QueueModule), AssetsModule, AuthModule],
   controllers: [PublicSiteController],
-  providers: [GenerationService, NextjsBuilderService, SiteContentService],
+  providers: [GenerationService, NextjsBuilderService, SiteContentService, GenerationGateway],
   exports: [GenerationService, NextjsBuilderService, SiteContentService],
 })
 export class GenerationModule {}

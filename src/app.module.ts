@@ -1,4 +1,7 @@
 import { Module } from '@nestjs/common';
+import { ClsModule, ClsService } from 'nestjs-cls';
+import { LoggerModule } from 'nestjs-pino';
+import * as crypto from 'crypto';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ConfigModule } from './config/config.module';
@@ -36,7 +39,39 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 import { EditorModule } from './editor/editor.module';
 
 @Module({
-  imports: [ConfigModule, PrismaModule, AuthModule, ProjectsModule, ChatModule, InterviewModule, GbpModule, GuardrailsModule, SeoModule, GenerationModule, AssetsModule, AIGatewayModule, QueueModule, StorageModule, KeywordsModule, SkillsModule, BillingModule, HealthModule, AnalyticsModule, StripeModule, VercelModule, DeploymentModule, DomainModule, LeadsModule, RedisModule, QualityControlModule, AutoRepairModule, EditorModule, EventEmitterModule.forRoot()],
+  imports: [
+    ClsModule.forRoot({
+      global: true,
+      middleware: { mount: true, generateId: true, idGenerator: () => crypto.randomUUID() },
+    }),
+    LoggerModule.forRootAsync({
+      imports: [ClsModule],
+      inject: [ClsService],
+      useFactory: (cls: ClsService) => {
+        return {
+          pinoHttp: {
+            transport: process.env.NODE_ENV !== 'production' ? {
+              target: 'pino-pretty',
+              options: { colorize: true, singleLine: true }
+            } : undefined,
+            level: process.env.LOG_LEVEL || 'info',
+            redact: [
+              'req.headers.authorization',
+              'businessContext',
+              'projectAssets',
+            ],
+            mixin: () => {
+              return {
+                traceId: cls.get('traceId'),
+                userId: cls.get('userId'),
+                projectId: cls.get('projectId'),
+              };
+            },
+          },
+        };
+      },
+    }),
+    ConfigModule, PrismaModule, AuthModule, ProjectsModule, ChatModule, InterviewModule, GbpModule, GuardrailsModule, SeoModule, GenerationModule, AssetsModule, AIGatewayModule, QueueModule, StorageModule, KeywordsModule, SkillsModule, BillingModule, HealthModule, AnalyticsModule, StripeModule, VercelModule, DeploymentModule, DomainModule, LeadsModule, RedisModule, QualityControlModule, AutoRepairModule, EditorModule, EventEmitterModule.forRoot()],
 
   controllers: [AppController],
   providers: [

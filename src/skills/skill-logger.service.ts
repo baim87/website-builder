@@ -1,14 +1,17 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { PinoLogger } from 'nestjs-pino';
 
 @Injectable()
 export class SkillLoggerService {
-  private readonly logger = new Logger(SkillLoggerService.name);
-
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly logger: PinoLogger) {
+    this.logger.setContext(SkillLoggerService.name);
+  }
 
   async logInvocation(params: {
     projectId: string;
+    userId?: string;
+    traceId?: string;
     skillType: string;
     inputHash: string;
     model: string;
@@ -23,7 +26,7 @@ export class SkillLoggerService {
     status: 'success' | 'failed';
     error?: string;
   }) {
-    this.logger.log(`Logging skill invocation for ${params.skillType} on project ${params.projectId}`);
+    this.logger.info(`Logging skill invocation for ${params.skillType} on project ${params.projectId}`);
     return this.prisma.skillInvocation.create({
       data: params,
     });

@@ -7,7 +7,8 @@ export class InterviewExtractorService {
   private readonly logger = new Logger(InterviewExtractorService.name);
 
   extract(agentResponse: string): ExtractedFields {
-    const regex = /<!--\s*EXTRACT:\s*({.*?})\s*-->/gs;
+    // This regex looks for JSON inside the EXTRACT block, optionally ignoring markdown backticks
+    const regex = /<!--\s*EXTRACT:\s*(?:```json)?\s*({.*?})\s*(?:```)?\s*-->/gs;
     const matches = [...agentResponse.matchAll(regex)];
     
     let extractedFields = {};

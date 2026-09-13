@@ -1,7 +1,7 @@
 import { Controller, Post, Param, Body } from '@nestjs/common';
 import { LeadsService } from './leads.service';
 
-@Controller('projects/:projectId/leads')
+@Controller('public/leads/:projectId')
 export class LeadsController {
   constructor(private readonly leadsService: LeadsService) {}
 
