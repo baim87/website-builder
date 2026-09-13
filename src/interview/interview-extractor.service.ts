@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ExtractedFields } from './interfaces/interview.types';
+import { UpdateBusinessContextSchema } from '../projects/dto/update-business-context.dto';
 
 @Injectable()
 export class InterviewExtractorService {
@@ -17,7 +18,7 @@ export class InterviewExtractorService {
         try {
           // LLMs sometimes add newlines in JSON output
           const parsed = JSON.parse(match[1]);
-          
+
           // Enforce arrays for specific fields
           const arrayFields = ['services', 'hours', 'serviceAreas', 'competitors'];
           for (const field of arrayFields) {
@@ -26,7 +27,12 @@ export class InterviewExtractorService {
             }
           }
           
-          extractedFields = { ...extractedFields, ...parsed };
+          const validated = UpdateBusinessContextSchema.partial().safeParse(parsed);
+          if (validated.success) {
+            extractedFields = { ...extractedFields, ...validated.data };
+          } else {
+            this.logger.warn(`Zod validation failed for extracted fields: ${validated.error.message}`);
+          }
         } catch (e) {
           this.logger.error('Failed to parse JSON from extract block', e);
         }

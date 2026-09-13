@@ -31,14 +31,29 @@ export class ChatFlowEngine {
     private readonly secondaryKeywordWorker: SecondaryKeywordWorker,
     private readonly generationProducer: GenerationProducer,
     private readonly aiGateway: AIGatewayService,
-  ) {}
+  ) { }
 
   async *processMessage(projectId: string, content: string, displayText?: string): AsyncGenerator<any, void, unknown> {
-    this.logger.log(`[ChatFlowEngine] Processing message for project ${projectId} (Length: ${content.length})`);
     const context = await this.businessContext.findByProjectId(projectId);
     const meta: any = context.interviewMetadata || {};
     const stepIndex = meta.stepIndex || 0;
-    
+
+    // Add detailed logging
+    const currentStepConfig = ONBOARDING_FLOW_CONFIG[stepIndex];
+    if (currentStepConfig) {
+      const totalQuestions = currentStepConfig.fields?.length || 0;
+      const status = await this.interviewService.checkCompleteness(projectId, getFieldKeys(currentStepConfig)).catch(() => ({ complete: false, missingFields: [] }));
+      const answeredCount = status.complete ? totalQuestions : totalQuestions - status.missingFields.length;
+
+      this.logger.log(`\n======================================================\n` +
+        `[User Input]: "${content}"\n` +
+        `[Step]: ${currentStepConfig.id} (${stepIndex + 1}/${ONBOARDING_FLOW_CONFIG.length})\n` +
+        `[Progress]: Question ${answeredCount}/${totalQuestions}\n` +
+        `======================================================\n`);
+    } else {
+      this.logger.log(`[ChatFlowEngine] Processing message: "${content}"`);
+    }
+
     if (content.trim()) {
       await this.prisma.chatMessage.create({
         data: { projectId, role: 'user', content: displayText || content }
@@ -96,7 +111,7 @@ export class ChatFlowEngine {
     }
 
     const status = await this.interviewService.checkCompleteness(projectId, getFieldKeys(currentStep));
-    
+
     if (status.complete && state !== 'editing') {
       if (state !== 'confirmed') {
         yield* this.showConfirmationSummary(projectId, currentStep);
@@ -106,37 +121,66 @@ export class ChatFlowEngine {
       return;
     }
 
-    const stream = this.interviewService.processMessage(projectId, content, status.missingFields, currentStep);
+    const lastAskedField = meta[`${currentStep.id}_lastAskedField`];
+    const fieldsToAsk = lastAskedField
+      ? status.missingFields.filter((f: string) => f !== lastAskedField)
+      : status.missingFields;
+
+    const stream = this.interviewService.processMessage(projectId, content, fieldsToAsk, currentStep, state === 'editing');
+    let latestMissingFields = status.missingFields;
     for await (const event of stream) {
+      if (event.event === 'progress') {
+        latestMissingFields = event.data.missingFields;
+      }
       yield event;
     }
 
+    await this.updateMeta(projectId, { [`${currentStep.id}_lastAskedField`]: latestMissingFields[0] ?? null });
+
     const finalStatus = await this.interviewService.checkCompleteness(projectId, getFieldKeys(currentStep));
-    
     // Intercept when the next missing field is 'services' to suggest options
     if (!finalStatus.complete && finalStatus.missingFields[0] === 'services') {
       const ctx = await this.businessContext.findByProjectId(projectId);
       if (ctx.trade && ctx.location) {
         yield { event: 'thinking-status', data: { message: 'Fetching Google Ads Keyword Data...' } };
-        
+
         try {
           const suggestions = await this.serviceSuggestionService.getServiceSuggestions(projectId, ctx.trade, ctx.location);
-          
+
+          const uiMultiSelectData = {
+            options: suggestions.map(s => ({
+              id: s.service,
+              label: s.service,
+              description: s.searchVolume > 0
+                ? `${s.searchVolume.toLocaleString()} monthly searches`
+                : `< 10 monthly searches`,
+            })),
+            confirmLabel: 'Confirm Services',
+            allowCustom: true,
+            customPlaceholder: 'Add more services (comma separated)',
+          };
+
           yield {
             event: 'ui-multi-select',
-            data: {
-              options: suggestions.map(s => ({
-                id: s.service,
-                label: s.service,
-                description: s.searchVolume > 0
-                  ? `${s.searchVolume.toLocaleString()} monthly searches`
-                  : `< 10 monthly searches`,
-              })),
-              confirmLabel: 'Confirm Services',
-              allowCustom: true,
-              customPlaceholder: 'Add more services (comma separated)',
-            }
+            data: uiMultiSelectData
           };
+
+          const latestMsg = await this.prisma.chatMessage.findFirst({
+            where: { projectId, role: 'assistant' },
+            orderBy: { createdAt: 'desc' }
+          });
+          
+          if (latestMsg) {
+            await this.prisma.chatMessage.update({
+              where: { id: latestMsg.id },
+              data: {
+                metadata: {
+                  ...(typeof latestMsg.metadata === 'object' && latestMsg.metadata ? (latestMsg.metadata as object) : {}),
+                  uiMultiSelect: uiMultiSelectData
+                }
+              }
+            });
+          }
         } catch (e: any) {
           this.logger.error(`Failed to generate service suggestions: ${e.message}`);
         }
@@ -161,7 +205,7 @@ export class ChatFlowEngine {
   private async *showConfirmationSummary(projectId: string, currentStep: any): AsyncGenerator<any, void, unknown> {
     await this.updateMeta(projectId, { [`${currentStep.id}_state`]: 'confirming' });
     const ctx = await this.businessContext.findByProjectId(projectId) as any;
-    
+
     let summaryText = `**Let's confirm your details before we move on:**\n\n`;
     summaryText += `| Question | Your Answer |\n`;
     summaryText += `|---|---|\n`;
@@ -175,7 +219,7 @@ export class ChatFlowEngine {
       const sanitizedVal = typeof displayVal === 'string' ? displayVal.replace(/\n/g, '<br/>') : (displayVal || 'Not provided');
       summaryText += `| ${field.question} | **${sanitizedVal}** |\n`;
     }
-    
+
     if (currentStep.id === 'business' && ctx.serviceAreas && Array.isArray(ctx.serviceAreas) && ctx.serviceAreas.length > 0) {
       summaryText += `| Service Areas / Cities | **${ctx.serviceAreas.join(', ')}** |\n`;
     }
@@ -232,7 +276,7 @@ export class ChatFlowEngine {
         if (!isNaN(idx) && results[idx]) {
           const chosen = results[idx];
           await this.businessContext.upsert(projectId, chosen);
-          
+
           if (chosen.trade) {
             await this.updateMeta(projectId, { [`${step.id}_state`]: 'confirming_trade', chosenTrade: chosen.trade });
             const text = `Based on your Google Business Profile, your primary trade is **${chosen.trade}**. Is this correct?`;
@@ -321,12 +365,12 @@ export class ChatFlowEngine {
         yield { event: 'token', data: { token: "Logo received! Extracting brand colors and fonts...\n" } };
         try {
           const extractedBrand = await this.brandExtraction.extractBrandFromLogo(content);
-          
+
           const getSwatch = (hex: string) => `<span style="display:inline-block;width:16px;height:16px;background-color:${hex};border-radius:50%;border:1px solid rgba(255,255,255,0.2);vertical-align:-3px;margin-right:6px;"></span>${hex}`;
-          
+
           yield { event: 'token', data: { token: `Extracted Details:\n- **Primary Color:** ${getSwatch(extractedBrand.colors.primary)}\n- **Secondary Color:** ${getSwatch(extractedBrand.colors.secondary)}\n- **Fonts:** ${extractedBrand.typography.headingFont} & ${extractedBrand.typography.bodyFont}\n\n` } };
           await this.updateMeta(projectId, { extractedBrand, brandBranch: 'A', [`${step.id}_state`]: 'uploading-favicon' });
-          
+
           const text = "Great! Please upload your favicon (the small icon that appears in the browser tab), or type 'skip':";
           await this.saveAssistantMsg(projectId, text, undefined, { type: 'image', purpose: 'favicon' });
           yield { event: 'token', data: { token: text } };
@@ -334,7 +378,7 @@ export class ChatFlowEngine {
         } catch (e: any) {
           yield { event: 'token', data: { token: `Failed to extract logo: ${e.message}\n\n` } };
           await this.updateMeta(projectId, { brandBranch: 'A', [`${step.id}_state`]: 'uploading-favicon' });
-          
+
           const text = "Please upload your favicon (the small icon that appears in the browser tab), or type 'skip':";
           await this.saveAssistantMsg(projectId, text, undefined, { type: 'image', purpose: 'favicon' });
           yield { event: 'token', data: { token: text } };
@@ -360,12 +404,12 @@ export class ChatFlowEngine {
         const ctx = await this.businessContext.findByProjectId(projectId);
         const brandKitResult = await this.brandKitGenerator.execute({ projectId, context: { businessContext: ctx, stylePrompt: content }, metadata: { phase: 'pre-generation' } });
         const kit = brandKitResult.data;
-        
+
         yield { event: 'thinking', data: { message: "Generating AI logo from Brand Kit..." } };
         await this.logoGeneration.generateLogoAndFavicon(projectId, kit.brandName || ctx.businessName || 'business', ctx.trade || 'contractor', kit.logoDirection + " " + JSON.stringify(kit.colors));
-        
+
         await this.prisma.businessContext.update({ where: { projectId }, data: { brandIdentityInputs: kit } });
-        
+
         // Skip brand-identity questions entirely, jump to theme
         yield* this.advanceToNextStep(projectId, stepIndex + 1);
       } catch (e: any) {
@@ -384,62 +428,62 @@ export class ChatFlowEngine {
 
     if (content && meta[`${step.id}_asked`]) {
       if (isConfirmingSuggestion) {
-         if (content === 'yes') {
-            answers[`q${qIndex + 1}`] = suggestionText;
-            await this.updateMeta(projectId, { 
-               brandAnswers: answers, 
-               [`${step.id}_qIndex`]: qIndex + 1,
-               [`${step.id}_confirming_suggestion`]: false
-            });
-            qIndex = qIndex + 1;
-         } else if (content === 'no') {
-            await this.updateMeta(projectId, { [`${step.id}_confirming_suggestion`]: false });
-            // Will re-ask the current question below
-         } else {
-            yield { event: 'token', data: { token: "Please select Yes or No." } };
-            return;
-         }
+        if (content === 'yes') {
+          answers[`q${qIndex + 1}`] = suggestionText;
+          await this.updateMeta(projectId, {
+            brandAnswers: answers,
+            [`${step.id}_qIndex`]: qIndex + 1,
+            [`${step.id}_confirming_suggestion`]: false
+          });
+          qIndex = qIndex + 1;
+        } else if (content === 'no') {
+          await this.updateMeta(projectId, { [`${step.id}_confirming_suggestion`]: false });
+          // Will re-ask the current question below
+        } else {
+          yield { event: 'token', data: { token: "Please select Yes or No." } };
+          return;
+        }
       } else {
-         const needsSuggestion = /(suggest|don'?t know|no idea|not sure|you choose|decide for me|whatever)/i.test(content);
-         
-         if (needsSuggestion) {
-            yield { event: 'thinking', data: { message: "Drafting a suggestion..." } };
-            
-            const ctx = await this.businessContext.findByProjectId(projectId);
-            const prompt = `You are an expert brand strategist. 
+        const needsSuggestion = /(suggest|don'?t know|no idea|not sure|you choose|decide for me|whatever)/i.test(content);
+
+        if (needsSuggestion) {
+          yield { event: 'thinking', data: { message: "Drafting a suggestion..." } };
+
+          const ctx = await this.businessContext.findByProjectId(projectId);
+          const prompt = `You are an expert brand strategist. 
 Business: ${ctx.businessName || 'Unknown'}, Trade: ${ctx.trade || 'General Contractor'}, Location: ${ctx.location || 'Unknown'}
 Target Question: "${questions[qIndex]}"
 
 The user doesn't know the answer and asked for a suggestion.
 Provide a concise, professional, and highly specific suggestion (1-2 sentences) that perfectly fits their business context. Do not include introductory or concluding filler. Just the suggestion itself. DO NOT use any markdown formatting (no headers, no bold text). Output plain text only.`;
 
-            const aiResult = await this.aiGateway.generateText(AIModel.CLAUDE_HAIKU_4_5, {
-              messages: [{ role: 'user', content: prompt }]
-            });
-            
-            // Clean up any rogue markdown just in case
-            const suggestion = aiResult.text.replace(/^#.*?\n/gm, '').replace(/\*\*/g, '').trim();
-            
-            await this.updateMeta(projectId, { 
-               [`${step.id}_confirming_suggestion`]: true,
-               [`${step.id}_suggestion_text`]: suggestion 
-            });
-            
-            const text = `How about this?\n\n> ${suggestion}\n\nDoes this sound good to you?`;
-            const options = [
-              { id: 'yes', label: 'Yes, use this' },
-              { id: 'no', label: 'No, let me answer manually' }
-            ];
-            
-            await this.saveAssistantMsg(projectId, text, options);
-            yield { event: 'token', data: { token: text } };
-            yield { event: 'ui-options', data: { options } };
-            return;
-         } else {
-            answers[`q${qIndex + 1}`] = content;
-            await this.updateMeta(projectId, { brandAnswers: answers, [`${step.id}_qIndex`]: qIndex + 1 });
-            qIndex = qIndex + 1;
-         }
+          const aiResult = await this.aiGateway.generateText(AIModel.CLAUDE_HAIKU_4_5, {
+            messages: [{ role: 'user', content: prompt }]
+          });
+
+          // Clean up any rogue markdown just in case
+          const suggestion = aiResult.text.replace(/^#.*?\n/gm, '').replace(/\*\*/g, '').trim();
+
+          await this.updateMeta(projectId, {
+            [`${step.id}_confirming_suggestion`]: true,
+            [`${step.id}_suggestion_text`]: suggestion
+          });
+
+          const text = `How about this?\n\n> ${suggestion}\n\nDoes this sound good to you?`;
+          const options = [
+            { id: 'yes', label: 'Yes, use this' },
+            { id: 'no', label: 'No, let me answer manually' }
+          ];
+
+          await this.saveAssistantMsg(projectId, text, options);
+          yield { event: 'token', data: { token: text } };
+          yield { event: 'ui-options', data: { options } };
+          return;
+        } else {
+          answers[`q${qIndex + 1}`] = content;
+          await this.updateMeta(projectId, { brandAnswers: answers, [`${step.id}_qIndex`]: qIndex + 1 });
+          qIndex = qIndex + 1;
+        }
       }
     }
 
@@ -481,12 +525,12 @@ Provide a concise, professional, and highly specific suggestion (1-2 sentences) 
     if (state === 'initial') {
       const contact = ctx.contactPerson || 'the owner';
       const initialMsg = `Got a photo of ${contact} to generate a professional portrait for the About section?`;
-      
+
       await this.updateMeta(projectId, { [`${step.id}_state`]: 'uploading_portrait' });
-      
+
       const uiOptions = [{ id: 'skip', label: 'Skip this step' }];
       const uiUpload = { type: 'image', purpose: 'portrait' };
-      
+
       await this.saveAssistantMsg(projectId, initialMsg, uiOptions, uiUpload);
       yield { event: 'token', data: { token: initialMsg } };
       yield { event: 'ui-upload', data: uiUpload };
@@ -499,14 +543,14 @@ Provide a concise, professional, and highly specific suggestion (1-2 sentences) 
         yield { event: 'thinking', data: { message: "Generating professional portrait..." } };
         try {
           const generatedUrl = await this.portraitGeneration.generatePortrait(projectId, ctx.trade || 'contractor', content);
-          await this.updateMeta(projectId, { 
-            portraitStatus: 'Generated', 
+          await this.updateMeta(projectId, {
+            portraitStatus: 'Generated',
             originalPortraitInput: content,
             generatedPortraits: [generatedUrl],
             portraitRetries: 0,
-            [`${step.id}_state`]: 'evaluating_portrait' 
+            [`${step.id}_state`]: 'evaluating_portrait'
           });
-          
+
           const text = `![Generated Portrait](${generatedUrl})\n\nDo you like this portrait?`;
           const options = [
             { id: 'yes', label: 'Yes, use this one' },
@@ -515,7 +559,7 @@ Provide a concise, professional, and highly specific suggestion (1-2 sentences) 
           await this.saveAssistantMsg(projectId, text, options);
           yield { event: 'token', data: { token: text } };
           yield { event: 'ui-options', data: { options } };
-        } catch(e: any) {
+        } catch (e: any) {
           yield { event: 'token', data: { token: `Portrait generation failed: ${e.message}\n\n` } };
           await this.updateMeta(projectId, { portraitStatus: 'Failed', [`${step.id}_state`]: 'confirming' });
           yield* this.renderBrandRecap(projectId, meta, ctx, 'Failed');
@@ -535,11 +579,11 @@ Provide a concise, professional, and highly specific suggestion (1-2 sentences) 
           try {
             const generatedUrl = await this.portraitGeneration.generatePortrait(projectId, ctx.trade || 'contractor', meta.originalPortraitInput);
             const generatedPortraits = [...(meta.generatedPortraits || []), generatedUrl];
-            await this.updateMeta(projectId, { 
+            await this.updateMeta(projectId, {
               generatedPortraits,
               portraitRetries: retries + 1,
             });
-            
+
             const text = `![Generated Portrait](${generatedUrl})\n\nHow about this one?`;
             const options = [
               { id: 'yes', label: 'Yes, use this one' },
@@ -548,21 +592,21 @@ Provide a concise, professional, and highly specific suggestion (1-2 sentences) 
             await this.saveAssistantMsg(projectId, text, options);
             yield { event: 'token', data: { token: text } };
             yield { event: 'ui-options', data: { options } };
-          } catch(e: any) {
+          } catch (e: any) {
             yield { event: 'token', data: { token: `Generation failed: ${e.message}\n\n` } };
           }
         } else {
           await this.updateMeta(projectId, { [`${step.id}_state`]: 'selecting_portrait' });
           const generatedPortraits = meta.generatedPortraits || [];
           const text = `I've generated a few options based on your photo. Which one do you prefer?`;
-          
+
           const options: any[] = generatedPortraits.map((url: string, i: number) => ({
             id: url,
             label: `Option ${i + 1}`,
             description: `![Option ${i + 1}](${url})`
           }));
           options.push({ id: 'upload_new', label: 'Upload my own photo instead', icon: 'upload' });
-          
+
           await this.saveAssistantMsg(projectId, text, options);
           yield { event: 'token', data: { token: text } };
           yield { event: 'ui-options', data: { options } };
@@ -604,12 +648,12 @@ Provide a concise, professional, and highly specific suggestion (1-2 sentences) 
           try {
             await this.logoGeneration.generateLogoAndFavicon(projectId, ctx.businessName || 'business', ctx.trade || 'contractor', JSON.stringify(answers));
             yield { event: 'token', data: { token: "Logo generated successfully!\n\n" } };
-          } catch(e: any) {
+          } catch (e: any) {
             yield { event: 'token', data: { token: `Logo generation failed: ${e.message}\n\n` } };
           }
         }
         await this.prisma.businessContext.update({ where: { projectId }, data: { brandIdentityInputs: answers } });
-        
+
         yield* this.advanceToNextStep(projectId, stepIndex);
       } else if (content === 'edit') {
         await this.updateMeta(projectId, { [`${step.id}_state`]: 'editing' });
@@ -644,7 +688,7 @@ Provide a concise, professional, and highly specific suggestion (1-2 sentences) 
     if (nextIndex < ONBOARDING_FLOW_CONFIG.length) {
       const nextStep = ONBOARDING_FLOW_CONFIG[nextIndex];
       yield { event: 'flow-state', data: { state: nextStep.id } };
-      
+
       const transitionText = currentStep.transitionMessage ? `\n\n${currentStep.transitionMessage}\n\n` : `\n\nGreat! We have all the details for ${currentStep.frontendLabel}.\n\nLet's move on to ${nextStep.frontendLabel}.\n\n`;
       yield { event: 'token', data: { token: transitionText } };
       await this.saveAssistantMsg(projectId, transitionText.trim());
@@ -660,7 +704,14 @@ Provide a concise, professional, and highly specific suggestion (1-2 sentences) 
       } else {
         const nextStatus = await this.interviewService.checkCompleteness(projectId, getFieldKeys(nextStep));
         const stream = this.interviewService.processMessage(projectId, injectedContent || "Let's continue.", nextStatus.missingFields, nextStep);
-        for await (const event of stream) { yield event; }
+        let latestMissingFields = nextStatus.missingFields;
+        for await (const event of stream) {
+          if (event.event === 'progress') {
+            latestMissingFields = (event.data as { missingFields: string[] }).missingFields;
+          }
+          yield event;
+        }
+        await this.updateMeta(projectId, { [`${nextStep.id}_lastAskedField`]: latestMissingFields[0] ?? null });
       }
     } else {
       yield* this.triggerGeneration(projectId);
@@ -683,20 +734,20 @@ Provide a concise, professional, and highly specific suggestion (1-2 sentences) 
 
   private async *renderBrandRecap(projectId: string, meta: any, ctx: any, portraitStatus: string): AsyncGenerator<any, void, unknown> {
     const getSwatch = (hex: string) => `<span style="display:inline-block;width:16px;height:16px;background-color:${hex};border-radius:50%;border:1px solid rgba(255,255,255,0.2);vertical-align:-3px;margin-right:6px;"></span>${hex}`;
-    
+
     let summaryText = `**Awesome. Let's recap your brand before we generate the website:**\n\n`;
     summaryText += `| Brand Element | Details |\n`;
     summaryText += `|---|---|\n`;
-    
+
     // Colors
     if (meta.extractedBrand) {
       summaryText += `| Primary Color | **${getSwatch(meta.extractedBrand.colors.primary)}** |\n`;
       summaryText += `| Secondary Color | **${getSwatch(meta.extractedBrand.colors.secondary)}** |\n`;
       summaryText += `| Fonts | **${meta.extractedBrand.typography.headingFont} & ${meta.extractedBrand.typography.bodyFont}** |\n`;
     } else {
-       // for branch B
-       const ans = meta.brandAnswers || {};
-       summaryText += `| Colors & Fonts | **${(ans.q2 || 'N/A').replace(/\n/g, '<br/>')}** |\n`;
+      // for branch B
+      const ans = meta.brandAnswers || {};
+      summaryText += `| Colors & Fonts | **${(ans.q2 || 'N/A').replace(/\n/g, '<br/>')}** |\n`;
     }
 
     // Q&A
@@ -704,29 +755,29 @@ Provide a concise, professional, and highly specific suggestion (1-2 sentences) 
     const brandIdentityStep = ONBOARDING_FLOW_CONFIG.find(s => s.id === 'brand-identity');
     const questions = branch === 'A' ? brandIdentityStep?.branchAQuestions : brandIdentityStep?.branchBQuestions;
     const answers = meta.brandAnswers || {};
-    
+
     if (questions) {
-       for (let i = 0; i < questions.length; i++) {
-         if (branch === 'B' && i === 1) continue;
-         const rawAnswer = answers[`q${i + 1}`] || 'N/A';
-         const sanitizedVal = typeof rawAnswer === 'string' ? rawAnswer.replace(/\n/g, '<br/>') : rawAnswer;
-         let shortQ = "Answer";
-         if (questions[i].includes('slogan')) shortQ = "Personality & Positioning";
-         if (questions[i].includes('services')) shortQ = "Services & Benefits";
-         if (questions[i].includes('visual mood')) shortQ = "Visual Mood";
-         
-         summaryText += `| ${shortQ} | **${sanitizedVal}** |\n`;
-       }
+      for (let i = 0; i < questions.length; i++) {
+        if (branch === 'B' && i === 1) continue;
+        const rawAnswer = answers[`q${i + 1}`] || 'N/A';
+        const sanitizedVal = typeof rawAnswer === 'string' ? rawAnswer.replace(/\n/g, '<br/>') : rawAnswer;
+        let shortQ = "Answer";
+        if (questions[i].includes('slogan')) shortQ = "Personality & Positioning";
+        if (questions[i].includes('services')) shortQ = "Services & Benefits";
+        if (questions[i].includes('visual mood')) shortQ = "Visual Mood";
+
+        summaryText += `| ${shortQ} | **${sanitizedVal}** |\n`;
+      }
     }
-    
+
     summaryText += `| Theme | **${ctx.brandVoicePreference || 'None'}** |\n`;
-    
+
     if (portraitStatus === 'Uploaded & Generated' && meta.finalPortraitUrl) {
       summaryText += `| Portrait | <img src="${meta.finalPortraitUrl}" width="80" style="border-radius:8px" /> |\n`;
     } else {
       summaryText += `| Portrait | **${portraitStatus}** |\n`;
     }
-    
+
     summaryText += `\nIs everything correct?`;
 
     const options = [
@@ -743,7 +794,7 @@ Provide a concise, professional, and highly specific suggestion (1-2 sentences) 
     this.logger.log(`[ChatFlowEngine] Triggering generation for project ${projectId}`);
     yield { event: 'flow-state', data: { state: 'generation' } };
     await this.updateMeta(projectId, { stepIndex: 999 });
-    
+
     // Kick off background keyword enrichment for secondary cities
     this.secondaryKeywordWorker.enrichSecondaryKeywords(projectId).catch(e => {
       this.logger.error(`[ChatFlowEngine] Secondary keyword worker failed: ${e.message}`, e.stack);
