@@ -2,9 +2,12 @@ import { Module, forwardRef } from '@nestjs/common';
 import { CostAggregatorService } from './cost-aggregator.service';
 import { SkillLoggerService } from './skill-logger.service';
 import { SkillExecutorService } from './skill-executor.service';
-import { BrandIdentitySkill } from './impl/brand-identity.skill';
+import { BrandStrategySkill } from './impl/brand-strategy.skill';
+import { BrandPositioningSkill } from './impl/brand-positioning.skill';
 import { BrandVoiceSkill } from './impl/brand-voice.skill';
-import { BrandKitGeneratorSkill } from './impl/brand-kit-generator.skill';
+import { BrandVisualSkill } from './impl/brand-visual.skill';
+import { BrandMessagingSkill } from './impl/brand-messaging.skill';
+import { BrandStorySkill } from './impl/brand-story.skill';
 import { DesignSystemSkill } from './impl/design-system.skill';
 import { SeoMetadataSkill } from './impl/seo-metadata.skill';
 import { PageStructureSkill } from './impl/page-structure.skill';
@@ -34,8 +37,12 @@ import { AssetsModule } from '../assets/assets.module';
   providers: [
     SkillLoggerService,
     SkillExecutorService,
-    BrandIdentitySkill,
+    BrandStrategySkill,
+    BrandPositioningSkill,
     BrandVoiceSkill,
+    BrandVisualSkill,
+    BrandMessagingSkill,
+    BrandStorySkill,
     DesignSystemSkill,
     SeoMetadataSkill,
     PageStructureSkill,
@@ -54,8 +61,7 @@ import { AssetsModule } from '../assets/assets.module';
     GenerationOrchestratorService,
     UnsplashService,
     CostAggregatorService,
-    BrandKitGeneratorSkill,
   ],
-  exports: [SkillExecutorService, GenerationOrchestratorService, CodeRepairSkill, ComponentValidationSkill, AssetRepairSkill, CopywritingRepairSkill, CostAggregatorService, BrandKitGeneratorSkill, ComponentEditorSkill, SkillLoggerService],
+  exports: [SkillExecutorService, GenerationOrchestratorService, CodeRepairSkill, ComponentValidationSkill, AssetRepairSkill, CopywritingRepairSkill, CostAggregatorService, ComponentEditorSkill, SkillLoggerService],
 })
 export class SkillsModule {}
