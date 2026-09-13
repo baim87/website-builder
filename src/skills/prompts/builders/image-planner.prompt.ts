@@ -1,6 +1,6 @@
 import { BusinessContext } from '@prisma/client';
 
-export function buildImagePlannerPrompt(businessContext: Partial<BusinessContext>, pagesToGenerate: string[]): string {
+export function buildImagePlannerPrompt(businessContext: Partial<BusinessContext>, pagesToGenerate: string[], brandVisual?: string): string {
   const businessName = businessContext.businessName || 'Contractor Business';
   const trade = businessContext.trade || 'General Contracting';
   const services = businessContext.services ? JSON.stringify(businessContext.services) : 'No specific services listed';
@@ -23,5 +23,8 @@ Your job is to read the pages we are generating and services offered, and genera
 
 Pages to generate:
 ${JSON.stringify(pagesToGenerate, null, 2)}
+
+Brand Visual Identity & Photography Direction:
+${brandVisual || 'Not provided. Make assumptions based on the trade.'}
 `;
 }

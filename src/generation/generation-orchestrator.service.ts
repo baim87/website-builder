@@ -237,7 +237,7 @@ export class GenerationOrchestratorService {
       this.logger.log('Generating Design System and Global CSS...');
       ctx.designSystemResult = await this.executeWithRetries(this.designSystem, {
         projectId: ctx.projectId,
-        context: { businessContext: ctx.businessContext, brandIdentity: ctx.brandVisualResult, themePreference: ctx.themePreference },
+        context: { businessContext: ctx.businessContext, brandVisual: ctx.brandVisualResult, themePreference: ctx.themePreference },
         metadata: { phase: 'generation' }
       });
 
@@ -287,7 +287,7 @@ export class GenerationOrchestratorService {
     if (existingAssets === 0) {
       const imagePlanResult = await this.executeWithRetries(this.imagePlanner, {
         projectId: ctx.projectId,
-        context: { businessContext: ctx.businessContext, pagesToGenerate: ctx.pagesToGenerate },
+        context: { businessContext: ctx.businessContext, pagesToGenerate: ctx.pagesToGenerate, brandVisual: ctx.brandVisualResult },
         metadata: { phase: 'generation' }
       });
       

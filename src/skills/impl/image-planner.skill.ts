@@ -29,7 +29,7 @@ export class ImagePlannerSkill implements Skill {
   ) {}
 
   async execute(input: SkillInput): Promise<SkillOutput> {
-    const { businessContext, pagesToGenerate } = input.context;
+    const { businessContext, pagesToGenerate, brandVisual } = input.context;
 
     if (!businessContext) {
       throw new Error('ImagePlannerSkill requires businessContext');
@@ -39,7 +39,7 @@ export class ImagePlannerSkill implements Skill {
     let bareJsonSchema: any = fullJsonSchema.definitions ? fullJsonSchema.definitions['ImagePlan'] : fullJsonSchema;
     if (bareJsonSchema.$schema) delete bareJsonSchema.$schema;
 
-    const prompt = buildImagePlannerPrompt(businessContext, pagesToGenerate);
+    const prompt = buildImagePlannerPrompt(businessContext, pagesToGenerate, brandVisual);
     this.logger.log(`Planning image generation strategy...`);
 
     const response = await this.aiGateway.generateText(AIModel.CLAUDE_FABLE_5, {
