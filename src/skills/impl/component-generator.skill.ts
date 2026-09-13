@@ -74,6 +74,10 @@ export class ComponentGeneratorSkill implements Skill {
       themeHints += `Typography Rules: Headings: ${theme.typographyHints?.headingStyle} | Body: ${theme.typographyHints?.bodyStyle}\n`;
     }
 
+    if (brandVisual) {
+      themeHints += `\nBRAND VISUAL IDENTITY:\n${brandVisual}\n`;
+    }
+
     const schema = (SectionDataSchemaRegistry as any)[sectionType];
     let jsonSchemaStr = '';
     if (schema) {
