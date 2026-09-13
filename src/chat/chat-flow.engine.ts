@@ -215,11 +215,10 @@ export class ChatFlowEngine {
         // This is done here so it includes any custom services the user might have just typed.
         if (currentStep.id === 'business') {
           const ctx = await this.businessContext.findByProjectId(projectId);
-          if (ctx.location && Array.isArray(ctx.services) && ctx.services.length > 0) {
+          if (Array.isArray(ctx.serviceAreas) && ctx.serviceAreas.length > 0 && Array.isArray(ctx.services) && ctx.services.length > 0) {
             this.locationMetricsService.processProjectMetrics(
               projectId,
-              ctx.location,
-              parseRadiusToMiles(ctx.radius),
+              ctx.serviceAreas as string[],
               ctx.services as string[]
             ).catch(e => this.logger.error(`Failed to process background location metrics for project ${projectId}`, e.stack));
           }

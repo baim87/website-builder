@@ -19,39 +19,109 @@ export class LocationMetricsService {
     this.mapsClient = new Client({});
   }
 
-  async processProjectMetrics(projectId: string, baseLocation: string, radiusMiles: number, services: string[]) {
-    this.logger.log(`Starting background location metrics processing for project ${projectId}. Base: ${baseLocation}, Radius: ${radiusMiles}`);
+  async processProjectMetrics(projectId: string, cities: string[], services: string[]) {
+    this.logger.log(`Starting background location metrics processing for project ${projectId}. Cities: ${cities.length}`);
     
-    // 1. Get cities in radius
-    const cities = await this.getCitiesInRadius(baseLocation, radiusMiles);
-    this.logger.log(`Found ${cities.length} cities within ${radiusMiles} miles of ${baseLocation}.`);
-
-    // 2. Fetch volumes for each city+service combo
+    // 3. Fetch volumes for each city+service combo
     const metricsToSave = [];
+
+    // TIER 2: Pre-fetch from Global Cache
+    const globalCacheResults = await this.prisma.globalKeywordCache.findMany({
+      where: {
+        city: { in: cities.map(c => c.toLowerCase()) },
+        service: { in: services }
+      }
+    });
+    
+    const globalCacheMap = new Map();
+    for (const res of globalCacheResults) {
+      globalCacheMap.set(`${res.service.toLowerCase()}|${res.city.toLowerCase()}`, res);
+    }
     
     for (const city of cities) {
       for (const service of services) {
         try {
-          // Add a delay to respect Google Ads strict quotas
-          await new Promise((resolve) => setTimeout(resolve, 1500));
+          const cacheKey = `${service.toLowerCase()}|${city.toLowerCase()}`;
+          const cached = globalCacheMap.get(cacheKey);
           
-          this.logger.debug(`Fetching keywords for ${service} in ${city}...`);
-          const results = await this.googleAdsClient.fetchKeywords(service, city);
-          
-          // Find the highest volume relevant keyword
-          if (results && results.length > 0) {
-            // Sort by search volume descending
-            const topResult = results.sort((a, b) => b.searchVolume - a.searchVolume)[0];
-            
+          if (cached) {
+            this.logger.debug(`[TIER 2 HIT] Found ${service} in ${city} in GlobalKeywordCache.`);
             metricsToSave.push({
               projectId,
               city,
               service,
-              keyword: topResult.keyword,
-              searchVolume: topResult.searchVolume,
-              difficulty: 0, // Mock for now if Google Ads doesn't provide it
-              cpc: 0,
+              keyword: cached.keyword,
+              searchVolume: cached.searchVolume,
+              difficulty: cached.competition || 0,
+              cpc: cached.cpc || 0,
             });
+            continue;
+          }
+
+          // Add a delay to respect Google Ads strict quotas
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+          
+          this.logger.debug(`[TIER 3 MISS] Fetching keywords for ${service} in ${city}...`);
+          const results = await this.googleAdsClient.fetchKeywords(service, city);
+          
+          if (results && results.length > 0) {
+            // Strict Transactional Filter
+            const serviceTokens = service.toLowerCase().split(' ').filter(t => t.length > 2);
+            let relevantResults = results.filter(r => {
+              const kw = r.keyword.toLowerCase();
+              return kw.includes(service.toLowerCase()) || serviceTokens.some(token => kw.includes(token));
+            });
+
+            const infoWords = ['how', 'what', 'why', 'cost of', 'diy', 'price', 'vs', 'vs.', 'guide'];
+            const brandWords = ['home depot', 'lowes', 'menards', 'buy', 'for sale'];
+            const badWords = [...infoWords, ...brandWords];
+            
+            relevantResults = relevantResults.filter(r => {
+              const kw = r.keyword.toLowerCase();
+              return !badWords.some(bad => kw.includes(bad) || kw.startsWith(bad));
+            });
+            
+            // Contractor Intent Boost
+            const contractorIntent = ['contractor', 'contractors', 'company', 'companies', 'builder', 'builders', 'installer', 'installation', 'services', 'repair', 'near me', city.toLowerCase().split(',')[0]];
+            
+            // Score and sort
+            relevantResults.sort((a, b) => {
+              const aKw = a.keyword.toLowerCase();
+              const bKw = b.keyword.toLowerCase();
+              const aBoost = contractorIntent.some(i => aKw.includes(i)) ? 2 : 1;
+              const bBoost = contractorIntent.some(i => bKw.includes(i)) ? 2 : 1;
+              return (b.searchVolume * bBoost) - (a.searchVolume * aBoost);
+            });
+
+            if (relevantResults.length > 0) {
+              const topResult = relevantResults[0];
+              
+              metricsToSave.push({
+                projectId,
+                city,
+                service,
+                keyword: topResult.keyword,
+                searchVolume: topResult.searchVolume,
+                difficulty: topResult.competition || 0,
+                cpc: topResult.cpc || 0,
+              });
+
+              // Save to Global Cache for future projects
+              await this.prisma.globalKeywordCache.create({
+                data: {
+                  city: city.toLowerCase(),
+                  state: city.includes(',') ? city.split(',')[1].trim().toUpperCase() : null,
+                  trade: 'Local Service',
+                  service,
+                  keyword: topResult.keyword,
+                  searchVolume: topResult.searchVolume,
+                  competition: topResult.competition,
+                  cpc: topResult.cpc,
+                  monthlyVolumes: (topResult.monthlySearchVolumes as any) || [],
+                  geoScope: 'local'
+                }
+              }).catch(() => {}); // Ignore unique constraint collisions
+            }
           }
         } catch (error: any) {
            this.logger.warn(`Failed to fetch keyword volume for ${service} in ${city}: ${error.message}`);
@@ -94,8 +164,7 @@ export class LocationMetricsService {
 
       const cities = new Set<string>();
       // Always include the base city explicitly
-      const baseCity = baseLocation.split(',')[0].trim();
-      cities.add(baseCity);
+      cities.add(baseLocation);
 
       if (textRes.data.results) {
         for (const place of textRes.data.results) {
@@ -106,7 +175,17 @@ export class LocationMetricsService {
                if (place.geometry && place.geometry.location) {
                  const distanceMeters = this.calculateDistance(lat, lng, place.geometry.location.lat, place.geometry.location.lng);
                  if (distanceMeters <= radiusMeters) {
-                   cities.add(place.name);
+                   let cityName = place.name;
+                   if (place.formatted_address) {
+                     const parts = place.formatted_address.split(',');
+                     if (parts.length >= 2) {
+                       const statePart = parts[1].trim().split(' ')[0];
+                       if (statePart.length === 2 && statePart === statePart.toUpperCase()) {
+                         cityName = `${place.name}, ${statePart}`;
+                       }
+                     }
+                   }
+                   cities.add(cityName);
                  }
                }
              }

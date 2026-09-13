@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, ForbiddenException, Logger } from '@nest
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateBusinessContextDto } from './dto/update-business-context.dto';
 import { LocationMetricsService } from '../seo/location-metrics.service';
+import { parseRadiusToMiles } from '../utils/parse-radius.util';
 
 @Injectable()
 export class BusinessContextService {
@@ -44,10 +45,7 @@ export class BusinessContextService {
     const hasNewBrand = primaryColor !== undefined || secondaryColor !== undefined || themePreference !== undefined;
     
     if (rest.radius !== undefined) {
-      if (typeof rest.radius === 'string') {
-        const parsed = parseInt(String(rest.radius).replace(/[^0-9]/g, ''), 10);
-        rest.radius = isNaN(parsed) ? 50 : parsed;
-      }
+      rest.radius = parseRadiusToMiles(rest.radius);
     }
 
     const finalContext = await this.prisma.$transaction(async (tx) => {
@@ -86,14 +84,14 @@ export class BusinessContextService {
       });
     });
 
-    if (finalContext.location && finalContext.services) {
+    if (finalContext.serviceAreas && finalContext.services) {
       const servicesArray = Array.isArray(finalContext.services) ? finalContext.services : [];
-      if (servicesArray.length > 0) {
+      const citiesArray = Array.isArray(finalContext.serviceAreas) ? finalContext.serviceAreas : [];
+      if (servicesArray.length > 0 && citiesArray.length > 0) {
         // Fire and forget
         this.locationMetrics.processProjectMetrics(
           projectId, 
-          finalContext.location, 
-          finalContext.radius || 50, 
+          citiesArray as string[], 
           servicesArray as string[]
         ).catch(e => {
           this.logger.error(`Failed to process background location metrics for project ${projectId}`, e.stack);
