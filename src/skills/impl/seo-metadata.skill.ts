@@ -4,6 +4,7 @@ import { AIGatewayService } from '../../ai-gateway/ai-gateway.service';
 import { OutputValidatorService } from '../../guardrails/output-validator.service';
 import { PageSeoSchema } from '../schemas/skill-outputs.schema';
 import * as crypto from 'crypto';
+import { zodToJsonSchema } from '@alcyone-labs/zod-to-json-schema';
 import { AIModel } from '../../common/constants/ai-models.constant';
 import { AISkill } from '../../common/constants/ai-skills.constant';
 
@@ -63,12 +64,19 @@ You MUST respond with ONLY a JSON object in this EXACT structure (no other text)
   "image": "string (ASSET:uuid or UNSPLASH:query)"
 }`;
 
+    const fullJsonSchema = zodToJsonSchema(PageSeoSchema, 'PageSeo');
+    const bareJsonSchema = fullJsonSchema.definitions
+      ? fullJsonSchema.definitions['PageSeo']
+      : fullJsonSchema;
+    if ((bareJsonSchema as any).$schema) delete (bareJsonSchema as any).$schema;
+
     const response = await this.aiGateway.generateText(AIModel.CLAUDE_FABLE_5, {
-      systemPrompt: 'You output ONLY valid JSON. No markdown fences, no explanation, no commentary. Just the raw JSON object.',
+      systemPrompt: 'You are an elite SEO specialist. Output structured data via the provided tool.',
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.3,
       maxTokens: 8192,
-      responseFormat: 'json',
+      schema: bareJsonSchema,
+      schemaName: 'PageSeo',
     });
 
     this.logger.debug(`Raw LLM output: ${response.text}`);

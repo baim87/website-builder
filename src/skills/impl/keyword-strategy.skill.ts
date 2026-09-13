@@ -6,6 +6,7 @@ import { KeywordsService } from '../../keywords/keywords.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { KeywordStrategySchema } from '../schemas/skill-outputs.schema';
 import * as crypto from 'crypto';
+import { zodToJsonSchema } from '@alcyone-labs/zod-to-json-schema';
 import { buildKeywordStrategyPrompt } from '../prompts/builders/keyword-strategy.prompt';
 import { ServiceRankingService } from '../../keywords/service-ranking.service';
 import { AIModel } from '../../common/constants/ai-models.constant';
@@ -87,12 +88,19 @@ export class KeywordStrategySkill implements Skill {
 
     this.logger.log('Generating keyword strategy with AI...');
 
+    const fullJsonSchema = zodToJsonSchema(KeywordStrategySchema, 'KeywordStrategy');
+    const bareJsonSchema = fullJsonSchema.definitions
+      ? fullJsonSchema.definitions['KeywordStrategy']
+      : fullJsonSchema;
+    if ((bareJsonSchema as any).$schema) delete (bareJsonSchema as any).$schema;
+
     const response = await this.aiGateway.generateText(AIModel.CLAUDE_FABLE_5, {
-      systemPrompt: 'You output ONLY valid JSON. No markdown fences, no explanation, no commentary. Just the raw JSON object.',
+      systemPrompt: 'You are an elite SEO strategist. Output structured data via the provided tool.',
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.2,
       maxTokens: 8192,
-      responseFormat: 'json',
+      schema: bareJsonSchema,
+      schemaName: 'KeywordStrategy',
     });
 
     let parsed: any;

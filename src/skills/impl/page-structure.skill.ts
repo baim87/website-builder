@@ -4,6 +4,7 @@ import { AIGatewayService } from '../../ai-gateway/ai-gateway.service';
 import { OutputValidatorService } from '../../guardrails/output-validator.service';
 import { PageStructureSchema } from '../schemas/skill-outputs.schema';
 import * as crypto from 'crypto';
+import { zodToJsonSchema } from '@alcyone-labs/zod-to-json-schema';
 import { AIModel } from '../../common/constants/ai-models.constant';
 import { AISkill } from '../../common/constants/ai-skills.constant';
 
@@ -87,12 +88,19 @@ SUPPORTED SECTION TYPES (You can ONLY pick from these):
 
 Do not invent new section types. Just output the array of strings wrapped in the JSON object.`;
 
+    const fullJsonSchema = zodToJsonSchema(PageStructureSchema, 'PageStructure');
+    const bareJsonSchema = fullJsonSchema.definitions
+      ? fullJsonSchema.definitions['PageStructure']
+      : fullJsonSchema;
+    if ((bareJsonSchema as any).$schema) delete (bareJsonSchema as any).$schema;
+
     const response = await this.aiGateway.generateText(AIModel.CLAUDE_FABLE_5, {
-      systemPrompt: 'You output ONLY valid JSON. No markdown fences, no explanation, no commentary. Just the raw JSON object.',
+      systemPrompt: 'You are an expert Website Architect. Output structured data via the provided tool.',
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.1,
       maxTokens: 8192,
-      responseFormat: 'json',
+      schema: bareJsonSchema,
+      schemaName: 'PageStructure',
     });
 
     this.logger.debug(`[${pageSlug}] PageStructure output: ${response.text}`);
