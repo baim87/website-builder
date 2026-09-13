@@ -21,45 +21,23 @@ export class BrandVisualSkill implements Skill {
     const { context } = input;
     const { businessContext, brandStrategy, extractedBrand } = context;
 
-    const prompt = `You are a world-class brand strategist for US local contractors.
+    const brandInputs = businessContext?.brandIdentityInputs || {};
 
-Your task is to create a comprehensive Brand Visual document (Markdown format) based on the provided Brand Strategy.
+    // Resolve optional fields — filter out 'skip' or empty strings so the LLM never sees them
+    const isSkipped = (val: any) => !val || (typeof val === 'string' && val.trim().toLowerCase() === 'skip');
+    const colorPreferences = isSkipped(brandInputs.colorPreferences) ? null : brandInputs.colorPreferences;
+    const existingLogoFeedback = isSkipped(brandInputs.existingLogoFeedback) ? null : brandInputs.existingLogoFeedback;
 
-BUSINESS CONTEXT:
-${JSON.stringify(businessContext, null, 2)}
+    const colorSection = colorPreferences
+      ? `COLOR PREFERENCES (from user):\n${colorPreferences}`
+      : `COLOR PREFERENCES: Not provided. Derive color direction purely from the Brand Strategy and Visual Direction.`;
 
-BRAND STRATEGY:
-${brandStrategy}
+    const logoFeedbackSection = existingLogoFeedback
+      ? `EXISTING LOGO FEEDBACK (from user):\n${existingLogoFeedback}`
+      : '';
 
-EXTRACTED COLORS FROM LOGO (if any):
-${extractedBrand ? JSON.stringify(extractedBrand, null, 2) : 'None'}
+    const prompt = `You are a world-class brand strategist for US local contractors.\n\nYour task is to create a comprehensive Brand Visual document (Markdown format) based on the provided Brand Strategy.\n\nBUSINESS CONTEXT:\n${JSON.stringify(businessContext, null, 2)}\n\nBRAND STRATEGY:\n${brandStrategy}\n\nEXTRACTED COLORS FROM LOGO (if any):\n${extractedBrand ? JSON.stringify(extractedBrand, null, 2) : 'None'}\n\n${colorSection}\n${logoFeedbackSection ? '\n' + logoFeedbackSection : ''}\n\nOUTPUT FORMAT:\nReturn a JSON object containing:\n1. "markdown": A well-structured markdown document (\`brand-visual.md\`) that includes:\n   - Visual Strategy & Personality\n   - Logo Direction (type, concept, characteristics, avoid)\n   - Color Direction (primary territory, secondary, accent, avoid)\n   - Typography (primary, secondary, personality)\n   - Photography direction\n   - Iconography & Graphic Language\n   - Brand Recognition (trucks, uniforms, yard signs, website, social)\n   - Visual North Star\n\n2. "recommendedTheme": The best matching theme ID from the following list:\n   - 'editorial-luxury'\n   - 'modern-minimalist'\n   - 'soft-organic'\n   - 'dark-bento'\n   - 'awesomic'\n   - 'mercury'\n\nRULES:\n1. If EXTRACTED COLORS FROM LOGO exist, you MUST preserve them in your Color Direction.\n2. The visual style must align with the brand personality.\n3. Recommend the theme that best matches the Visual Strategy.\n\nReturn ONLY the raw JSON object without any code blocks or wrapper JSON.`;
 
-OUTPUT FORMAT:
-Return a JSON object containing:
-1. "markdown": A well-structured markdown document (\`brand-visual.md\`) that includes:
-   - Visual Strategy & Personality
-   - Logo Direction (type, concept, characteristics, avoid)
-   - Color Direction (primary territory, secondary, accent, avoid)
-   - Typography (primary, secondary, personality)
-   - Photography direction
-   - Iconography & Graphic Language
-   - Brand Recognition (trucks, uniforms, yard signs, website, social)
-   - Visual North Star
-
-2. "recommendedTheme": The best matching theme ID from the following list:
-   - 'editorial-luxury'
-   - 'modern-minimalist'
-   - 'soft-organic'
-   - 'dark-bento'
-   - 'awesomic'
-   - 'mercury'
-
-RULES:
-1. If EXTRACTED COLORS FROM LOGO exist, you MUST preserve them in your Color Direction.
-2. The visual style must align with the brand personality.
-3. Recommend the theme that best matches the Visual Strategy.
-
-Return ONLY the raw JSON object without any code blocks or wrapper JSON.`;
 
     this.logger.log(`Generating brand visual markdown and theme using ${AIModel.CLAUDE_FABLE_5}`);
 

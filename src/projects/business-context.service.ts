@@ -75,12 +75,12 @@ export class BusinessContextService {
       return tx.businessContext.upsert({
         where: { projectId },
         update: {
-          ...rest,
+          ...(rest as any),
           ...(hasNewBrand && { brandIdentityInputs: newBrandIdentityInputs }),
         },
         create: {
           projectId,
-          ...rest,
+          ...(rest as any),
           ...(hasNewBrand && { brandIdentityInputs: newBrandIdentityInputs }),
         },
       });
