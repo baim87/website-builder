@@ -6,9 +6,9 @@ import { AIModel } from '../../common/constants/ai-models.constant';
 import { AISkill } from '../../common/constants/ai-skills.constant';
 
 @Injectable()
-export class BrandVoiceSkill implements Skill {
-  readonly name = AISkill.BRAND_VOICE;
-  private readonly logger = new Logger(BrandVoiceSkill.name);
+export class BrandPositioningSkill implements Skill {
+  readonly name = AISkill.BRAND_POSITIONING;
+  private readonly logger = new Logger(BrandPositioningSkill.name);
 
   constructor(
     private readonly aiGateway: AIGatewayService,
@@ -17,9 +17,10 @@ export class BrandVoiceSkill implements Skill {
   async execute(input: SkillInput): Promise<SkillOutput> {
     const { businessContext, brandStrategy } = input.context;
 
-    const prompt = `You are an elite Brand Strategist and Copywriter for US home service contractors.
+    const prompt = `You are an elite Brand Strategist for US home service contractors.
 
-Generate a comprehensive Brand Voice profile based on the Business Context and Brand Strategy.
+Based on the provided Business Context and Brand Strategy, generate a comprehensive Brand Positioning document.
+Do not fabricate facts. Focus on positioning the brand effectively in its market.
 
 Business Context:
 ${JSON.stringify(businessContext, null, 2)}
@@ -27,14 +28,13 @@ ${JSON.stringify(businessContext, null, 2)}
 Brand Strategy:
 ${brandStrategy}
 
-Please generate a professional Markdown document titled "Brand Voice" that includes the following sections:
-- Voice Definition & Personality
-- Tone (We Sound Like / We Don't Sound Like)
-- Communication Principles
-- Writing Style (sentence style, vocabulary, preferred/avoided language)
-- Customer Communication (sales, website, service, complaints)
-- Examples (We Say / We Don't Say)
-- Voice North Star
+Please generate a professional Markdown document titled "Brand Positioning" that includes the following sections:
+- Category & Positioning Statement
+- Market Position
+- Primary & Supporting Differentiators
+- Customer Problem & Fear
+- Competitive Context (competitors, patterns, whitespace)
+- Proof Points & Trust Signals
 
 Output ONLY the markdown content. No conversational wrapper or markdown fences wrapping the entire output.`;
 
@@ -45,7 +45,7 @@ Output ONLY the markdown content. No conversational wrapper or markdown fences w
       maxTokens: 8192,
     });
 
-    this.logger.debug(`BrandVoice generated markdown length: ${response.text.length}`);
+    this.logger.debug(`BrandPositioning generated markdown length: ${response.text.length}`);
 
     let raw = response.text.trim();
     if (raw.startsWith('```markdown')) {

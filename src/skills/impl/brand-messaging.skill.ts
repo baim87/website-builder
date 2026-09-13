@@ -6,20 +6,21 @@ import { AIModel } from '../../common/constants/ai-models.constant';
 import { AISkill } from '../../common/constants/ai-skills.constant';
 
 @Injectable()
-export class BrandVoiceSkill implements Skill {
-  readonly name = AISkill.BRAND_VOICE;
-  private readonly logger = new Logger(BrandVoiceSkill.name);
+export class BrandMessagingSkill implements Skill {
+  readonly name = AISkill.BRAND_MESSAGING;
+  private readonly logger = new Logger(BrandMessagingSkill.name);
 
   constructor(
     private readonly aiGateway: AIGatewayService,
   ) {}
 
   async execute(input: SkillInput): Promise<SkillOutput> {
-    const { businessContext, brandStrategy } = input.context;
+    const { businessContext, brandStrategy, brandPositioning } = input.context;
 
-    const prompt = `You are an elite Brand Strategist and Copywriter for US home service contractors.
+    const prompt = `You are an elite Brand Strategist for US home service contractors.
 
-Generate a comprehensive Brand Voice profile based on the Business Context and Brand Strategy.
+Generate a comprehensive Brand Messaging document based on the Business Context, Brand Strategy, and Brand Positioning.
+Do not fabricate facts. Focus on actionable, customer-facing messaging.
 
 Business Context:
 ${JSON.stringify(businessContext, null, 2)}
@@ -27,14 +28,17 @@ ${JSON.stringify(businessContext, null, 2)}
 Brand Strategy:
 ${brandStrategy}
 
-Please generate a professional Markdown document titled "Brand Voice" that includes the following sections:
-- Voice Definition & Personality
-- Tone (We Sound Like / We Don't Sound Like)
-- Communication Principles
-- Writing Style (sentence style, vocabulary, preferred/avoided language)
-- Customer Communication (sales, website, service, complaints)
-- Examples (We Say / We Don't Say)
-- Voice North Star
+Brand Positioning (if available):
+${brandPositioning || 'Not provided'}
+
+Please generate a professional Markdown document titled "Brand Messaging" that includes the following sections:
+- Core Message & Value Proposition
+- Brand Promise
+- Key Differentiators & Proof Points
+- Customer-Facing Messages (hero, CTA, trust, why-us, about-us, service)
+- Messaging Pillars (3)
+- Key Phrases
+- Messages to Avoid
 
 Output ONLY the markdown content. No conversational wrapper or markdown fences wrapping the entire output.`;
 
@@ -45,7 +49,7 @@ Output ONLY the markdown content. No conversational wrapper or markdown fences w
       maxTokens: 8192,
     });
 
-    this.logger.debug(`BrandVoice generated markdown length: ${response.text.length}`);
+    this.logger.debug(`BrandMessaging generated markdown length: ${response.text.length}`);
 
     let raw = response.text.trim();
     if (raw.startsWith('```markdown')) {

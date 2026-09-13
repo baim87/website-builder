@@ -37,6 +37,22 @@ export interface OnboardingStep {
   sequentialQuestions?: string[];
   branchAQuestions?: string[];
   branchBQuestions?: string[];
+  /** New UI-driven strategic brand interview questions */
+  interviewQuestions?: BrandInterviewQuestion[];
+}
+
+export interface BrandInterviewQuestion {
+  id: string;
+  question: string;
+  type: 'multi-select' | 'single-select' | 'free-text' | 'upload';
+  fieldKey: string;
+  options?: UiOption[];
+  allowCustomInput?: boolean;
+  maxSelections?: number;
+  optional?: boolean;
+  placeholder?: string;
+  uploadConfig?: { type: string; purpose: string };
+  conditionalOn?: { field: string; value: any; negate?: boolean };
 }
 
 // ─── Flow Configuration ─────────────────────────────────────────────────
@@ -108,41 +124,174 @@ Rules:
   },
 
   {
-    id: 'brand-identity',
-    frontendLabel: 'Brand Identity',
+    id: 'brand-interview',
+    frontendLabel: 'Brand Interview',
     phase: 'brand',
     fields: [],
-    customHandler: 'handleBrandIdentity',
-    branchAQuestions: [
-      'Do you have a slogan, and how would you describe your brand\'s personality, positioning, and target audience? (Or type \'skip\')',
-      'How would you describe your services, materials used, and key benefits? (Or type \'skip\')',
-      'What is the visual mood of your brand — lighting style, textures, atmosphere? (Or type \'skip\')',
-    ],
-    branchBQuestions: [
-      'Do you have a slogan, and how would you describe your brand\'s personality and target audience?',
-      'What are your brand\'s color palette and typography/font preferences? (Share hex codes if you have them)',
-      'How would you describe your services, materials used, and key benefits?',
-      'What is the visual mood of your brand — lighting style, textures, atmosphere?'
-    ],
-  },
-
-  {
-    id: 'theme',
-    frontendLabel: 'Theme Selection',
-    phase: 'brand',
-    fields: [],
-    customHandler: 'handleThemeSelection',
-    initialMessage: 'Which design theme would you prefer for your website?',
-    uiOptions: [
-      { id: 'editorial-luxury', label: 'Editorial Luxury', description: 'Earthy, Magazine-style' },
-      { id: 'modern-minimalist', label: 'Modern Minimalist', description: 'Crisp, High Contrast' },
-      { id: 'soft-organic', label: 'Soft & Organic', description: 'Rounded, Warm' },
-      { id: 'dark-bento', label: 'Dark Bento', description: 'Dark Mode, Structured' },
-      { id: 'awesomic', label: 'Awesomic', description: 'Technical Marketplace' },
-      { id: 'mercury', label: 'Mercury', description: 'Alpine Banking' },
-      { id: 'hyer-aviation', label: 'Hyer Aviation', description: 'Luxury Travel Editorial' },
-      { id: 'superpower', label: 'Superpower', description: 'Cinematic Health Tech' },
-      { id: '11x-editorial', label: '11x', description: 'Cinematic Editorial Serif' },
+    customHandler: 'handleBrandInterview',
+    interviewQuestions: [
+      {
+        id: 'targetAudience',
+        fieldKey: 'targetAudience',
+        question: 'Who do you primarily serve?',
+        type: 'multi-select',
+        allowCustomInput: true,
+        options: [
+          { id: 'residential', label: 'Residential Homeowners' },
+          { id: 'commercial', label: 'Commercial Businesses' },
+          { id: 'property-managers', label: 'Property Managers' },
+          { id: 'builders', label: 'General Contractors & Builders' },
+        ],
+      },
+      {
+        id: 'desiredSegments',
+        fieldKey: 'desiredSegments',
+        question: 'Who do you want more of?',
+        type: 'multi-select',
+        allowCustomInput: true,
+        options: [
+          { id: 'high-end', label: 'High-end / Luxury clients' },
+          { id: 'budget', label: 'Budget-conscious clients' },
+          { id: 'maintenance', label: 'Recurring maintenance clients' },
+          { id: 'large-projects', label: 'Large remodeling/install projects' },
+        ],
+      },
+      {
+        id: 'customerFears',
+        fieldKey: 'customerFears',
+        question: 'What worries customers most when hiring someone like you?',
+        type: 'multi-select',
+        allowCustomInput: true,
+        options: [
+          { id: 'unreliable', label: 'Contractors not showing up or finishing late' },
+          { id: 'messy', label: 'Leaving a mess in their home' },
+          { id: 'hidden-fees', label: 'Hidden fees or going over budget' },
+          { id: 'poor-quality', label: 'Poor quality work that won\'t last' },
+          { id: 'unprofessional', label: 'Unprofessional behavior' },
+        ],
+      },
+      {
+        id: 'corePromise',
+        fieldKey: 'corePromise',
+        question: 'What do you want customers to trust you for most?',
+        type: 'single-select',
+        allowCustomInput: true,
+        options: [
+          { id: 'quality', label: 'Uncompromising Quality & Craftsmanship' },
+          { id: 'speed', label: 'Speed & Efficiency' },
+          { id: 'service', label: 'White-glove Customer Service' },
+          { id: 'affordability', label: 'Fair & Transparent Pricing' },
+        ],
+      },
+      {
+        id: 'differentiators',
+        fieldKey: 'differentiators',
+        question: 'Why should customers choose you over others?',
+        type: 'multi-select',
+        allowCustomInput: true,
+        options: [
+          { id: 'family-owned', label: 'Family Owned & Operated' },
+          { id: 'experience', label: 'Decades of Experience' },
+          { id: 'warranty', label: 'Industry-leading Warranty' },
+          { id: 'speed', label: 'Fastest Response Time' },
+          { id: 'clean', label: 'Cleanest Job Sites' },
+        ],
+      },
+      {
+        id: 'proofPoints',
+        fieldKey: 'proofPoints',
+        question: 'What can you prove about your company?',
+        type: 'multi-select',
+        allowCustomInput: true,
+        options: [
+          { id: 'licensed', label: 'Fully Licensed & Insured' },
+          { id: 'reviews', label: '100+ 5-Star Reviews' },
+          { id: 'awards', label: 'Award-winning Service' },
+          { id: 'guarantee', label: '100% Satisfaction Guarantee' },
+        ],
+      },
+      {
+        id: 'brandPersonality',
+        fieldKey: 'brandPersonality',
+        question: 'How should your company feel? (Pick up to 3)',
+        type: 'multi-select',
+        maxSelections: 3,
+        allowCustomInput: true,
+        options: [
+          { id: 'professional', label: 'Professional & Corporate' },
+          { id: 'friendly', label: 'Friendly & Approachable' },
+          { id: 'rugged', label: 'Rugged & Tough' },
+          { id: 'luxury', label: 'Premium & High-End' },
+          { id: 'modern', label: 'Modern & Innovative' },
+          { id: 'traditional', label: 'Traditional & Classic' },
+        ],
+      },
+      {
+        id: 'competitors',
+        fieldKey: 'competitors',
+        question: 'Who are customers comparing you with?',
+        type: 'free-text',
+        placeholder: 'e.g., ABC Plumbing, Joe\'s Roofing',
+        optional: true,
+      },
+      {
+        id: 'companyAmbition',
+        fieldKey: 'companyAmbition',
+        question: 'Where do you want the company to go?',
+        type: 'single-select',
+        options: [
+          { id: 'local-leader', label: 'Be the undisputed #1 in my city' },
+          { id: 'regional', label: 'Expand across multiple regions/states' },
+          { id: 'boutique', label: 'Stay small and highly profitable' },
+          { id: 'franchise', label: 'Franchise the model' },
+        ],
+      },
+      {
+        id: 'founderStory',
+        fieldKey: 'founderStory',
+        question: 'What makes your company story worth telling?',
+        type: 'free-text',
+        placeholder: 'e.g., Started by my grandfather in 1985...',
+        optional: true,
+      },
+      {
+        id: 'visualDirection',
+        fieldKey: 'visualDirection',
+        question: 'What should your brand look and feel like?',
+        type: 'single-select',
+        allowCustomInput: true,
+        options: [
+          { id: 'bold', label: 'Bold & High Contrast' },
+          { id: 'clean', label: 'Clean & Minimalist' },
+          { id: 'warm', label: 'Warm & Organic' },
+          { id: 'classic', label: 'Classic & Heritage' },
+          { id: 'technical', label: 'Technical & Engineered' },
+        ],
+      },
+      {
+        id: 'colorPreferences',
+        fieldKey: 'colorPreferences',
+        question: 'Any colors you want or don\'t want?',
+        type: 'free-text',
+        placeholder: 'e.g., I love navy blue, please no red.',
+        optional: true,
+      },
+      {
+        id: 'existingLogoFeedback',
+        fieldKey: 'existingLogoFeedback',
+        question: 'What do you want to keep or change about your current branding?',
+        type: 'free-text',
+        optional: true,
+        conditionalOn: { field: 'brandStrategySelection', value: 'has-logo' },
+      },
+      {
+        id: 'ownerPortrait',
+        fieldKey: 'ownerPortrait',
+        question: 'Got a photo of the owner or team? We\'ll create a professional portrait that matches your brand.',
+        type: 'upload',
+        optional: true,
+        uploadConfig: { type: 'image', purpose: 'portrait' },
+      },
     ],
   },
 

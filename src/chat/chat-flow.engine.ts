@@ -14,6 +14,15 @@ import { GenerationProducer } from '../queue/producers/generation.producer';
 import { AIGatewayService } from '../ai-gateway/ai-gateway.service';
 import { AIModel } from '../common/constants/ai-models.constant';
 
+import { SkillExecutorService } from '../skills/skill-executor.service';
+import { BrandKnowledgeService } from '../brand/brand-knowledge.service';
+import { BrandStrategySkill } from '../skills/impl/brand-strategy.skill';
+import { BrandPositioningSkill } from '../skills/impl/brand-positioning.skill';
+import { BrandVoiceSkill } from '../skills/impl/brand-voice.skill';
+import { BrandVisualSkill } from '../skills/impl/brand-visual.skill';
+import { BrandMessagingSkill } from '../skills/impl/brand-messaging.skill';
+import { BrandStorySkill } from '../skills/impl/brand-story.skill';
+
 @Injectable()
 export class ChatFlowEngine {
   private readonly logger = new Logger(ChatFlowEngine.name);
@@ -31,6 +40,14 @@ export class ChatFlowEngine {
     private readonly secondaryKeywordWorker: SecondaryKeywordWorker,
     private readonly generationProducer: GenerationProducer,
     private readonly aiGateway: AIGatewayService,
+    private readonly executor: SkillExecutorService,
+    private readonly brandKnowledge: BrandKnowledgeService,
+    private readonly brandStrategy: BrandStrategySkill,
+    private readonly brandPositioning: BrandPositioningSkill,
+    private readonly brandVoice: BrandVoiceSkill,
+    private readonly brandVisual: BrandVisualSkill,
+    private readonly brandMessaging: BrandMessagingSkill,
+    private readonly brandStory: BrandStorySkill,
   ) { }
 
   async *processMessage(projectId: string, content: string, displayText?: string): AsyncGenerator<any, void, unknown> {
@@ -344,19 +361,17 @@ export class ChatFlowEngine {
       yield { event: 'ui-options', data: { options: step.uiOptions } };
     } else if (state === 'choosing') {
       if (content === 'has-logo') {
-        await this.updateMeta(projectId, { [`${step.id}_state`]: 'uploading-logo' });
+        await this.updateMeta(projectId, { brandStrategySelection: 'has-logo', [`${step.id}_state`]: 'uploading-logo' });
         const text = "Awesome. Please upload your logo:";
         await this.saveAssistantMsg(projectId, text, undefined, { type: 'image', purpose: 'logo' });
         yield { event: 'token', data: { token: text } };
         yield { event: 'ui-upload', data: { type: 'image', purpose: 'logo' } };
       } else if (content === 'no-logo') {
-        await this.updateMeta(projectId, { brandBranch: 'B' });
+        await this.updateMeta(projectId, { brandStrategySelection: 'no-logo', brandBranch: 'B' });
         yield* this.advanceToNextStep(projectId, stepIndex);
       } else if (content === 'scratch') {
-        await this.updateMeta(projectId, { [`${step.id}_state`]: 'prompting-scratch' });
-        const text = "No problem! Let's build a premium brand from scratch. What general visual style, color palette, or mood do you want? (e.g. 'dark & cinematic with gold accents', or 'clean minimal blues')";
-        await this.saveAssistantMsg(projectId, text);
-        yield { event: 'token', data: { token: text } };
+        await this.updateMeta(projectId, { brandStrategySelection: 'scratch', brandBranch: 'C' });
+        yield* this.advanceToNextStep(projectId, stepIndex);
       } else {
         yield { event: 'token', data: { token: "Please select a valid option." } };
       }
@@ -390,7 +405,6 @@ export class ChatFlowEngine {
     } else if (state === 'uploading-favicon') {
       if (content.startsWith('http')) {
         yield { event: 'token', data: { token: "Favicon received!\n\n" } };
-        // Save it or just let the asset system handle it, then advance
         yield* this.advanceToNextStep(projectId, stepIndex);
       } else if (content.toLowerCase() === 'skip') {
         yield { event: 'token', data: { token: "Skipping favicon.\n\n" } };
@@ -398,122 +412,120 @@ export class ChatFlowEngine {
       } else {
         yield { event: 'token', data: { token: "Please provide a valid favicon URL, upload a file, or type 'skip'." } };
       }
-    } else if (state === 'prompting-scratch') {
-      yield { event: 'thinking', data: { message: "Generating 13-point Brand Kit..." } };
-      try {
-        const ctx = await this.businessContext.findByProjectId(projectId);
-        const brandKitResult = await this.brandKitGenerator.execute({ projectId, context: { businessContext: ctx, stylePrompt: content }, metadata: { phase: 'pre-generation' } });
-        const kit = brandKitResult.data;
-
-        yield { event: 'thinking', data: { message: "Generating AI logo from Brand Kit..." } };
-        await this.logoGeneration.generateLogoAndFavicon(projectId, kit.brandName || ctx.businessName || 'business', ctx.trade || 'contractor', kit.logoDirection + " " + JSON.stringify(kit.colors));
-
-        await this.prisma.businessContext.update({ where: { projectId }, data: { brandIdentityInputs: kit } });
-
-        // Skip brand-identity questions entirely, jump to theme
-        yield* this.advanceToNextStep(projectId, stepIndex + 1);
-      } catch (e: any) {
-        yield { event: 'token', data: { token: `Error generating brand kit: ${e.message}\n` } };
-      }
     }
   }
 
-  public async *handleBrandIdentity(projectId: string, content: string, meta: any, step: any, stepIndex: number): AsyncGenerator<any, void, unknown> {
+  public async *handleBrandInterview(projectId: string, content: string, meta: any, step: any, stepIndex: number): AsyncGenerator<any, void, unknown> {
     let qIndex = meta[`${step.id}_qIndex`] || 0;
     let answers = meta.brandAnswers || {};
-    const branch = meta.brandBranch || 'A';
-    const questions = branch === 'A' ? step.branchAQuestions : step.branchBQuestions;
-    const isConfirmingSuggestion = meta[`${step.id}_confirming_suggestion`];
-    const suggestionText = meta[`${step.id}_suggestion_text`];
+    const questions = step.interviewQuestions || [];
 
+    // Save answer if not the first display
     if (content && meta[`${step.id}_asked`]) {
-      if (isConfirmingSuggestion) {
-        if (content === 'yes') {
-          answers[`q${qIndex + 1}`] = suggestionText;
-          await this.updateMeta(projectId, {
-            brandAnswers: answers,
-            [`${step.id}_qIndex`]: qIndex + 1,
-            [`${step.id}_confirming_suggestion`]: false
-          });
-          qIndex = qIndex + 1;
-        } else if (content === 'no') {
-          await this.updateMeta(projectId, { [`${step.id}_confirming_suggestion`]: false });
-          // Will re-ask the current question below
-        } else {
-          yield { event: 'token', data: { token: "Please select Yes or No." } };
-          return;
-        }
-      } else {
-        const needsSuggestion = /(suggest|don'?t know|no idea|not sure|you choose|decide for me|whatever)/i.test(content);
+      const currentQ = questions[qIndex];
+      answers[currentQ.fieldKey] = content;
+      await this.updateMeta(projectId, { brandAnswers: answers, [`${step.id}_qIndex`]: qIndex + 1 });
+      qIndex++;
+    }
 
-        if (needsSuggestion) {
-          yield { event: 'thinking', data: { message: "Drafting a suggestion..." } };
-
-          const ctx = await this.businessContext.findByProjectId(projectId);
-          const prompt = `You are an expert brand strategist. 
-Business: ${ctx.businessName || 'Unknown'}, Trade: ${ctx.trade || 'General Contractor'}, Location: ${ctx.location || 'Unknown'}
-Target Question: "${questions[qIndex]}"
-
-The user doesn't know the answer and asked for a suggestion.
-Provide a concise, professional, and highly specific suggestion (1-2 sentences) that perfectly fits their business context. Do not include introductory or concluding filler. Just the suggestion itself. DO NOT use any markdown formatting (no headers, no bold text). Output plain text only.`;
-
-          const aiResult = await this.aiGateway.generateText(AIModel.CLAUDE_HAIKU_4_5, {
-            messages: [{ role: 'user', content: prompt }]
-          });
-
-          // Clean up any rogue markdown just in case
-          const suggestion = aiResult.text.replace(/^#.*?\n/gm, '').replace(/\*\*/g, '').trim();
-
-          await this.updateMeta(projectId, {
-            [`${step.id}_confirming_suggestion`]: true,
-            [`${step.id}_suggestion_text`]: suggestion
-          });
-
-          const text = `How about this?\n\n> ${suggestion}\n\nDoes this sound good to you?`;
-          const options = [
-            { id: 'yes', label: 'Yes, use this' },
-            { id: 'no', label: 'No, let me answer manually' }
-          ];
-
-          await this.saveAssistantMsg(projectId, text, options);
-          yield { event: 'token', data: { token: text } };
-          yield { event: 'ui-options', data: { options } };
-          return;
-        } else {
-          answers[`q${qIndex + 1}`] = content;
-          await this.updateMeta(projectId, { brandAnswers: answers, [`${step.id}_qIndex`]: qIndex + 1 });
-          qIndex = qIndex + 1;
+    // Skip conditionals if needed
+    while (qIndex < questions.length) {
+      const q = questions[qIndex];
+      if (q.conditionalOn) {
+        const { field, value, negate } = q.conditionalOn;
+        const depValue = meta[field] || answers[field];
+        const match = depValue === value;
+        if ((!negate && !match) || (negate && match)) {
+          qIndex++; // skip this question
+          await this.updateMeta(projectId, { [`${step.id}_qIndex`]: qIndex });
+          continue;
         }
       }
+      break; // found the next question to ask
     }
 
     if (qIndex < questions.length) {
-      let q = questions[qIndex];
-      // Dropping the [1/3] prefix as requested
-      const text = q;
+      const q = questions[qIndex];
+      
+      const text = q.question;
       await this.updateMeta(projectId, { [`${step.id}_asked`]: true });
-      await this.saveAssistantMsg(projectId, text);
+      await this.saveAssistantMsg(projectId, text, q.options, q.uploadConfig);
+      
       yield { event: 'token', data: { token: text } };
+      if (q.options) yield { event: 'ui-options', data: { options: q.options } };
+      if (q.uploadConfig) yield { event: 'ui-upload', data: q.uploadConfig };
+      // Also potentially send multi-select info if needed, but ui-options handles it via the frontend
     } else {
       await this.updateMeta(projectId, { [`${step.id}_asked`]: false });
-      yield* this.advanceToNextStep(projectId, stepIndex);
-    }
-  }
-
-  public async *handleThemeSelection(projectId: string, content: string, meta: any, step: any, stepIndex: number): AsyncGenerator<any, void, unknown> {
-    const state = meta[`${step.id}_state`] || 'initial';
-    if (state === 'initial') {
-      await this.updateMeta(projectId, { [`${step.id}_state`]: 'choosing' });
-      await this.saveAssistantMsg(projectId, step.initialMessage, step.uiOptions);
-      yield { event: 'token', data: { token: step.initialMessage } };
-      yield { event: 'ui-options', data: { options: step.uiOptions } };
-    } else if (state === 'choosing') {
-      const valid = step.uiOptions.some((o: any) => o.id === content);
-      if (valid) {
-        await this.prisma.businessContext.update({ where: { projectId }, data: { brandVoicePreference: content } });
+      
+      // All questions answered, generate brand knowledge files!
+      yield { event: 'thinking', data: { message: "Synthesizing your brand strategy..." } };
+      
+      try {
+        const businessContext = await this.businessContext.findByProjectId(projectId);
+        // Include interview answers into business context for the skills
+        const fullContext = { ...businessContext, brandIdentityInputs: answers };
+        
+        // 1. Run brand-strategy.skill FIRST (foundation)
+        const strategyResult = await this.executor.executeSkill(this.brandStrategy, {
+          projectId, context: { businessContext: fullContext }
+        });
+        await this.brandKnowledge.saveBrandFile(projectId, 'brand-strategy.md', strategyResult.data);
+        
+        yield { event: 'thinking', data: { message: "Developing brand positioning, messaging, and visual direction..." } };
+        
+        // 2. Run the other 5 skills IN PARALLEL (all read strategy)
+        const [positioning, voice, visual, messaging, story] = await Promise.all([
+          this.executor.executeSkill(this.brandPositioning, {
+            projectId, context: { businessContext: fullContext, brandStrategy: strategyResult.data }
+          }),
+          this.executor.executeSkill(this.brandVoice, {
+            projectId, context: { businessContext: fullContext, brandStrategy: strategyResult.data }
+          }),
+          this.executor.executeSkill(this.brandVisual, {
+            projectId, context: { businessContext: fullContext, brandStrategy: strategyResult.data, extractedBrand: meta.extractedBrand }
+          }),
+          this.executor.executeSkill(this.brandMessaging, {
+            projectId, context: { businessContext: fullContext, brandStrategy: strategyResult.data }
+          }),
+          this.executor.executeSkill(this.brandStory, {
+            projectId, context: { businessContext: fullContext, brandStrategy: strategyResult.data }
+          }),
+        ]);
+        
+        // 3. Save all files to R2
+        await Promise.all([
+          this.brandKnowledge.saveBrandFile(projectId, 'brand-positioning.md', positioning.data),
+          this.brandKnowledge.saveBrandFile(projectId, 'brand-voice.md', voice.data),
+          this.brandKnowledge.saveBrandFile(projectId, 'brand-visual.md', visual.data),
+          this.brandKnowledge.saveBrandFile(projectId, 'brand-messaging.md', messaging.data),
+          this.brandKnowledge.saveBrandFile(projectId, 'brand-story.md', story.data),
+        ]);
+        
+        // 4. Auto-select theme from brand-visual.skill output
+        const recommendedTheme = visual.metadata?.recommendedTheme || 'modern-minimalist';
+        await this.businessContext.upsert(projectId, {
+          brandIdentityInputs: { ...answers, themePreference: recommendedTheme }
+        });
+        
+        // 5. Generate logo (if Branch B or Scratch — no existing logo)
+        const hasExistingLogo = meta.brandStrategySelection === 'has-logo';
+        if (!hasExistingLogo) {
+          yield { event: 'thinking', data: { message: "Generating brand logo..." } };
+          await this.logoGeneration.generateLogoAndFavicon(projectId, fullContext.businessName || 'business', fullContext.trade || 'contractor', visual.data);
+        }
+        
+        // 6. Generate portrait (if user uploaded a photo in Q14)
+        const portraitImageUrl = answers['ownerPortrait'];
+        if (portraitImageUrl && portraitImageUrl !== 'skip') {
+          yield { event: 'thinking', data: { message: "Generating professional portrait..." } };
+          const generatedUrl = await this.portraitGeneration.generatePortrait(projectId, fullContext.trade || 'contractor', portraitImageUrl, visual.data);
+          await this.updateMeta(projectId, { finalPortraitUrl: generatedUrl });
+        }
+        
         yield* this.advanceToNextStep(projectId, stepIndex);
-      } else {
-        yield { event: 'token', data: { token: "Invalid theme." } };
+      } catch (e: any) {
+        yield { event: 'token', data: { token: `Error generating brand kit: ${e.message}\n` } };
       }
     }
   }
@@ -523,137 +535,10 @@ Provide a concise, professional, and highly specific suggestion (1-2 sentences) 
     const ctx = await this.businessContext.findByProjectId(projectId);
 
     if (state === 'initial') {
-      const contact = ctx.contactPerson || 'the owner';
-      const initialMsg = `Got a photo of ${contact} to generate a professional portrait for the About section?`;
-
-      await this.updateMeta(projectId, { [`${step.id}_state`]: 'uploading_portrait' });
-
-      const uiOptions = [{ id: 'skip', label: 'Skip this step' }];
-      const uiUpload = { type: 'image', purpose: 'portrait' };
-
-      await this.saveAssistantMsg(projectId, initialMsg, uiOptions, uiUpload);
-      yield { event: 'token', data: { token: initialMsg } };
-      yield { event: 'ui-upload', data: uiUpload };
-      yield { event: 'ui-options', data: { options: uiOptions } };
-    } else if (state === 'uploading_portrait') {
-      if (content === 'skip') {
-        await this.updateMeta(projectId, { portraitStatus: 'Skipped', [`${step.id}_state`]: 'confirming' });
-        yield* this.renderBrandRecap(projectId, meta, ctx, 'Skipped');
-      } else if (content.startsWith('http')) {
-        yield { event: 'thinking', data: { message: "Generating professional portrait..." } };
-        try {
-          const generatedUrl = await this.portraitGeneration.generatePortrait(projectId, ctx.trade || 'contractor', content);
-          await this.updateMeta(projectId, {
-            portraitStatus: 'Generated',
-            originalPortraitInput: content,
-            generatedPortraits: [generatedUrl],
-            portraitRetries: 0,
-            [`${step.id}_state`]: 'evaluating_portrait'
-          });
-
-          const text = `![Generated Portrait](${generatedUrl})\n\nDo you like this portrait?`;
-          const options = [
-            { id: 'yes', label: 'Yes, use this one' },
-            { id: 'no', label: 'No, try again' }
-          ];
-          await this.saveAssistantMsg(projectId, text, options);
-          yield { event: 'token', data: { token: text } };
-          yield { event: 'ui-options', data: { options } };
-        } catch (e: any) {
-          yield { event: 'token', data: { token: `Portrait generation failed: ${e.message}\n\n` } };
-          await this.updateMeta(projectId, { portraitStatus: 'Failed', [`${step.id}_state`]: 'confirming' });
-          yield* this.renderBrandRecap(projectId, meta, ctx, 'Failed');
-        }
-      } else {
-        yield { event: 'token', data: { token: "Please upload an image or click skip." } };
-      }
-    } else if (state === 'evaluating_portrait') {
-      if (content === 'yes') {
-        const finalUrl = meta.generatedPortraits?.[meta.generatedPortraits.length - 1];
-        await this.updateMeta(projectId, { portraitStatus: 'Uploaded & Generated', finalPortraitUrl: finalUrl, [`${step.id}_state`]: 'confirming' });
-        yield* this.renderBrandRecap(projectId, meta, ctx, 'Uploaded & Generated');
-      } else if (content === 'no') {
-        const retries = meta.portraitRetries || 0;
-        if (retries < 2) {
-          yield { event: 'thinking', data: { message: "Generating another variation..." } };
-          try {
-            const generatedUrl = await this.portraitGeneration.generatePortrait(projectId, ctx.trade || 'contractor', meta.originalPortraitInput);
-            const generatedPortraits = [...(meta.generatedPortraits || []), generatedUrl];
-            await this.updateMeta(projectId, {
-              generatedPortraits,
-              portraitRetries: retries + 1,
-            });
-
-            const text = `![Generated Portrait](${generatedUrl})\n\nHow about this one?`;
-            const options = [
-              { id: 'yes', label: 'Yes, use this one' },
-              { id: 'no', label: 'No, try again' }
-            ];
-            await this.saveAssistantMsg(projectId, text, options);
-            yield { event: 'token', data: { token: text } };
-            yield { event: 'ui-options', data: { options } };
-          } catch (e: any) {
-            yield { event: 'token', data: { token: `Generation failed: ${e.message}\n\n` } };
-          }
-        } else {
-          await this.updateMeta(projectId, { [`${step.id}_state`]: 'selecting_portrait' });
-          const generatedPortraits = meta.generatedPortraits || [];
-          const text = `I've generated a few options based on your photo. Which one do you prefer?`;
-
-          const options: any[] = generatedPortraits.map((url: string, i: number) => ({
-            id: url,
-            label: `Option ${i + 1}`,
-            description: `![Option ${i + 1}](${url})`
-          }));
-          options.push({ id: 'upload_new', label: 'Upload my own photo instead', icon: 'upload' });
-
-          await this.saveAssistantMsg(projectId, text, options);
-          yield { event: 'token', data: { token: text } };
-          yield { event: 'ui-options', data: { options } };
-        }
-      } else {
-        yield { event: 'token', data: { token: "Please select Yes or No using the buttons." } };
-      }
-    } else if (state === 'selecting_portrait') {
-      if (content === 'upload_new') {
-        await this.updateMeta(projectId, { [`${step.id}_state`]: 'uploading_final_portrait' });
-        const text = "Please upload your final portrait photo (I'll use it exactly as is, without any AI enhancement):";
-        await this.saveAssistantMsg(projectId, text, undefined, { type: 'image', purpose: 'portrait' });
-        yield { event: 'token', data: { token: text } };
-        yield { event: 'ui-upload', data: { type: 'image', purpose: 'portrait' } };
-      } else if (content.startsWith('http')) {
-        await this.updateMeta(projectId, { portraitStatus: 'Uploaded & Generated', finalPortraitUrl: content, [`${step.id}_state`]: 'confirming' });
-        yield* this.renderBrandRecap(projectId, meta, ctx, 'Uploaded & Generated');
-      } else {
-        yield { event: 'token', data: { token: "Please select one of the options." } };
-      }
-    } else if (state === 'uploading_final_portrait') {
-      if (content.startsWith('http')) {
-        await this.updateMeta(projectId, { portraitStatus: 'Uploaded Direct', finalPortraitUrl: content, [`${step.id}_state`]: 'confirming' });
-        yield* this.renderBrandRecap(projectId, meta, ctx, 'Uploaded Direct');
-      } else {
-        yield { event: 'token', data: { token: "Please upload an image." } };
-      }
+      await this.updateMeta(projectId, { [`${step.id}_state`]: 'confirming' });
+      yield* this.renderBrandRecap(projectId, meta, ctx);
     } else if (state === 'confirming') {
       if (content === 'yes') {
-        const branch = meta.brandBranch || 'A';
-        const answers = meta.brandAnswers || {};
-        if (branch === 'A' && meta.extractedBrand) {
-          answers['primaryColor'] = meta.extractedBrand.colors.primary;
-          answers['secondaryColor'] = meta.extractedBrand.colors.secondary;
-          answers['headingFont'] = meta.extractedBrand.typography.headingFont;
-        }
-        if (branch === 'B') {
-          yield { event: 'token', data: { token: "Generating AI logo...\n" } };
-          try {
-            await this.logoGeneration.generateLogoAndFavicon(projectId, ctx.businessName || 'business', ctx.trade || 'contractor', JSON.stringify(answers));
-            yield { event: 'token', data: { token: "Logo generated successfully!\n\n" } };
-          } catch (e: any) {
-            yield { event: 'token', data: { token: `Logo generation failed: ${e.message}\n\n` } };
-          }
-        }
-        await this.prisma.businessContext.update({ where: { projectId }, data: { brandIdentityInputs: answers } });
-
         yield* this.advanceToNextStep(projectId, stepIndex);
       } else if (content === 'edit') {
         await this.updateMeta(projectId, { [`${step.id}_state`]: 'editing' });
@@ -732,50 +617,38 @@ Provide a concise, professional, and highly specific suggestion (1-2 sentences) 
     });
   }
 
-  private async *renderBrandRecap(projectId: string, meta: any, ctx: any, portraitStatus: string): AsyncGenerator<any, void, unknown> {
+  private async *renderBrandRecap(projectId: string, meta: any, ctx: any): AsyncGenerator<any, void, unknown> {
     const getSwatch = (hex: string) => `<span style="display:inline-block;width:16px;height:16px;background-color:${hex};border-radius:50%;border:1px solid rgba(255,255,255,0.2);vertical-align:-3px;margin-right:6px;"></span>${hex}`;
 
     let summaryText = `**Awesome. Let's recap your brand before we generate the website:**\n\n`;
+    
+    // Quick attempt to load the actual generated brand files to prove it worked
+    try {
+      const visualMd = await this.brandKnowledge.getBrandFile(projectId, 'brand-visual.md');
+      if (visualMd) {
+        summaryText += `*We successfully built your strategic Brand Knowledge Base (Strategy, Positioning, Voice, Visuals, Messaging, and Story) from your interview answers!*\n\n`;
+      }
+    } catch (e) {}
+
     summaryText += `| Brand Element | Details |\n`;
     summaryText += `|---|---|\n`;
 
-    // Colors
+    const answers = meta.brandAnswers || {};
+    const themePref = ctx.brandIdentityInputs?.themePreference || 'Not Set';
+    
+    // Show some key inputs that were collected
+    summaryText += `| Core Promise | **${answers.corePromise || 'N/A'}** |\n`;
+    summaryText += `| Brand Personality | **${Array.isArray(answers.brandPersonality) ? answers.brandPersonality.join(', ') : (answers.brandPersonality || 'N/A')}** |\n`;
+    summaryText += `| Recommended Theme | **${themePref}** |\n`;
+
     if (meta.extractedBrand) {
       summaryText += `| Primary Color | **${getSwatch(meta.extractedBrand.colors.primary)}** |\n`;
       summaryText += `| Secondary Color | **${getSwatch(meta.extractedBrand.colors.secondary)}** |\n`;
       summaryText += `| Fonts | **${meta.extractedBrand.typography.headingFont} & ${meta.extractedBrand.typography.bodyFont}** |\n`;
-    } else {
-      // for branch B
-      const ans = meta.brandAnswers || {};
-      summaryText += `| Colors & Fonts | **${(ans.q2 || 'N/A').replace(/\n/g, '<br/>')}** |\n`;
     }
 
-    // Q&A
-    const branch = meta.brandBranch || 'A';
-    const brandIdentityStep = ONBOARDING_FLOW_CONFIG.find(s => s.id === 'brand-identity');
-    const questions = branch === 'A' ? brandIdentityStep?.branchAQuestions : brandIdentityStep?.branchBQuestions;
-    const answers = meta.brandAnswers || {};
-
-    if (questions) {
-      for (let i = 0; i < questions.length; i++) {
-        if (branch === 'B' && i === 1) continue;
-        const rawAnswer = answers[`q${i + 1}`] || 'N/A';
-        const sanitizedVal = typeof rawAnswer === 'string' ? rawAnswer.replace(/\n/g, '<br/>') : rawAnswer;
-        let shortQ = "Answer";
-        if (questions[i].includes('slogan')) shortQ = "Personality & Positioning";
-        if (questions[i].includes('services')) shortQ = "Services & Benefits";
-        if (questions[i].includes('visual mood')) shortQ = "Visual Mood";
-
-        summaryText += `| ${shortQ} | **${sanitizedVal}** |\n`;
-      }
-    }
-
-    summaryText += `| Theme | **${ctx.brandVoicePreference || 'None'}** |\n`;
-
-    if (portraitStatus === 'Uploaded & Generated' && meta.finalPortraitUrl) {
+    if (meta.finalPortraitUrl) {
       summaryText += `| Portrait | <img src="${meta.finalPortraitUrl}" width="80" style="border-radius:8px" /> |\n`;
-    } else {
-      summaryText += `| Portrait | **${portraitStatus}** |\n`;
     }
 
     summaryText += `\nIs everything correct?`;

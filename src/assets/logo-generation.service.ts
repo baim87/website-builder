@@ -21,7 +21,9 @@ export class LogoGenerationService {
   async generateLogoAndFavicon(projectId: string, bName: string, trade: string, brandHints: string) {
     const prompt = `A professional vector logo for a contractor business named "${bName}". 
 The design MUST feature clean, bold typography containing the text "${bName}", alongside a modern, minimal icon related to the ${trade} industry.
-Brand guidelines/colors to strictly follow: ${brandHints}.
+Brand guidelines/colors to strictly follow (provided as a markdown document):
+${brandHints}
+
 Style: flat vector, corporate, high-end, similar to modern service brands. 
 The background MUST be transparent (no background).`;
     

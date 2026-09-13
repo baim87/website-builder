@@ -60,4 +60,15 @@ export class AssetPathResolverService {
   resolveGlobalBrandLogoPath(domain: string, extension: string): string {
     return `global/brands/${domain}/logo.${extension}`;
   }
+
+  /**
+   * Resolves the R2 path for Brand Knowledge Markdown files.
+   */
+  resolveBrandKnowledgePath(
+    userId: string,
+    projectId: string,
+    fileName: string
+  ): { key: string } {
+    return { key: `users/${userId}/projects/${projectId}/assets/brands/${fileName}` };
+  }
 }

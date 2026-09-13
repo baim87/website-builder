@@ -1,8 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { SkillExecutorService } from '../skills/skill-executor.service';
-import { BrandVoiceSkill } from '../skills/impl/brand-voice.skill';
-import { BrandIdentitySkill } from '../skills/impl/brand-identity.skill';
+import { BrandKnowledgeService } from '../brand/brand-knowledge.service';
 import { DesignSystemSkill } from '../skills/impl/design-system.skill';
 import { PageStructureSkill } from '../skills/impl/page-structure.skill';
 import { SeoMetadataSkill } from '../skills/impl/seo-metadata.skill';
@@ -29,8 +28,13 @@ export interface GenerationContext {
   existingWebsiteData: any;
   themePreference: string;
   
-  brandIdentityResult?: any;
-  brandVoiceResult?: any;
+  brandStrategyResult?: string;
+  brandPositioningResult?: string;
+  brandVoiceResult?: string;
+  brandVisualResult?: string;
+  brandMessagingResult?: string;
+  brandStoryResult?: string;
+  
   designSystemResult?: any;
   globalCssResult?: any;
   keywordStrategyResult?: any;
@@ -43,8 +47,7 @@ export class GenerationOrchestratorService {
 
   constructor(
     private readonly executor: SkillExecutorService,
-    private readonly brandVoice: BrandVoiceSkill,
-    private readonly brandIdentity: BrandIdentitySkill,
+    private readonly brandKnowledge: BrandKnowledgeService,
     private readonly designSystem: DesignSystemSkill,
     private readonly pageStructure: PageStructureSkill,
     private readonly seoMetadata: SeoMetadataSkill,
@@ -209,25 +212,32 @@ export class GenerationOrchestratorService {
 
   private async executePhase1BrandDesign(ctx: GenerationContext) {
     this.logger.log('Phase 1: Brand & Design System');
-    const phase1Input = { projectId: ctx.projectId, context: { businessContext: ctx.businessContext, themePreference: ctx.themePreference }, metadata: { phase: 'generation' } };
+    
+    // Load Brand Knowledge files
+    this.logger.log('Loading Brand Knowledge files from R2...');
+    const [strategy, positioning, voice, visual, messaging, story] = await Promise.all([
+      this.brandKnowledge.getBrandFile(ctx.projectId, 'brand-strategy.md').catch(() => ''),
+      this.brandKnowledge.getBrandFile(ctx.projectId, 'brand-positioning.md').catch(() => ''),
+      this.brandKnowledge.getBrandFile(ctx.projectId, 'brand-voice.md').catch(() => ''),
+      this.brandKnowledge.getBrandFile(ctx.projectId, 'brand-visual.md').catch(() => ''),
+      this.brandKnowledge.getBrandFile(ctx.projectId, 'brand-messaging.md').catch(() => ''),
+      this.brandKnowledge.getBrandFile(ctx.projectId, 'brand-story.md').catch(() => ''),
+    ]);
+
+    ctx.brandStrategyResult = strategy;
+    ctx.brandPositioningResult = positioning;
+    ctx.brandVoiceResult = voice;
+    ctx.brandVisualResult = visual;
+    ctx.brandMessagingResult = messaging;
+    ctx.brandStoryResult = story;
     
     ctx.designSystemResult = ctx.existingWebsiteData?.designTokens || null;
 
     if (!ctx.designSystemResult) {
-      const [brandIdentitySettled, brandVoiceSettled] = await Promise.allSettled([
-        this.executeWithRetries(this.brandIdentity, phase1Input),
-        this.executeWithRetries(this.brandVoice, phase1Input),
-      ]);
-
-      if (brandIdentitySettled.status === 'rejected') throw brandIdentitySettled.reason;
-      if (brandVoiceSettled.status === 'rejected') throw brandVoiceSettled.reason;
-
-      ctx.brandIdentityResult = brandIdentitySettled.value;
-      ctx.brandVoiceResult = brandVoiceSettled.value;
-
+      this.logger.log('Generating Design System and Global CSS...');
       ctx.designSystemResult = await this.executeWithRetries(this.designSystem, {
         projectId: ctx.projectId,
-        context: { businessContext: ctx.businessContext, brandIdentity: ctx.brandIdentityResult, themePreference: ctx.themePreference },
+        context: { businessContext: ctx.businessContext, brandIdentity: ctx.brandVisualResult, themePreference: ctx.themePreference },
         metadata: { phase: 'generation' }
       });
 
@@ -243,8 +253,6 @@ export class GenerationOrchestratorService {
       });
     } else {
         this.logger.log('Skipping Phase 1 - Design System already exists');
-        ctx.brandIdentityResult = await this.executeWithRetries(this.brandIdentity, phase1Input);
-        ctx.brandVoiceResult = await this.executeWithRetries(this.brandVoice, phase1Input);
     }
   }
 
@@ -402,7 +410,14 @@ export class GenerationOrchestratorService {
         } else {
           const structureResult = await this.executeWithRetries(this.pageStructure, {
             projectId: ctx.projectId,
-            context: { businessContext: ctx.businessContext, brandVoice: ctx.brandVoiceResult, pageSlug, isLocationServicePage },
+            context: { 
+              businessContext: ctx.businessContext, 
+              brandStrategy: ctx.brandStrategyResult,
+              brandPositioning: ctx.brandPositioningResult,
+              brandVoice: ctx.brandVoiceResult, 
+              pageSlug, 
+              isLocationServicePage 
+            },
             metadata: { phase: 'generation', pageSlug }
           });
           sectionTypes = structureResult.sections;
@@ -421,6 +436,10 @@ export class GenerationOrchestratorService {
               projectId: ctx.projectId,
               context: { 
                 businessContext: ctx.businessContext, 
+                brandStrategy: ctx.brandStrategyResult,
+                brandPositioning: ctx.brandPositioningResult,
+                brandMessaging: ctx.brandMessagingResult,
+                brandStory: ctx.brandStoryResult,
                 brandVoice: ctx.brandVoiceResult, 
                 seoMeta: seoResult, 
                 sectionType, 
@@ -435,7 +454,12 @@ export class GenerationOrchestratorService {
 
             sectionCopy = await this.executeWithRetries(this.uiDesigner, {
               projectId: ctx.projectId,
-              context: { sectionType, brandIdentity: ctx.brandIdentityResult, copyData: copyDataResult, pageSlug },
+              context: { 
+                sectionType, 
+                brandVisual: ctx.brandVisualResult, 
+                copyData: copyDataResult, 
+                pageSlug 
+              },
               metadata: { phase: 'generation', pageSlug, componentName }
             }, 2);
           } catch (error) {
@@ -451,7 +475,7 @@ export class GenerationOrchestratorService {
               projectId: ctx.projectId,
               context: { 
                 sectionType: componentName, 
-                brandIdentity: ctx.brandIdentityResult,
+                brandVisual: ctx.brandVisualResult,
                 sampleData: copyDataResult,
                 themePreference: ctx.themePreference,
                 designTokens: ctx.designSystemResult,

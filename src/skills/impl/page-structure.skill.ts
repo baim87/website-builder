@@ -61,7 +61,9 @@ export class PageStructureSkill implements Skill {
     
     const prompt = `Determine the layout for the "${pageSlug}" page of this contractor business.
 Business Context: ${JSON.stringify(input.context.businessContext)}
-Brand Voice: ${JSON.stringify(input.context.brandVoice)}
+Brand Voice: ${JSON.stringify(input.context.brandVoice || 'Not provided')}
+Brand Strategy: ${JSON.stringify(input.context.brandStrategy || 'Not provided')}
+Brand Positioning: ${JSON.stringify(input.context.brandPositioning || 'Not provided')}
 
 You MUST respond with ONLY a JSON object in this EXACT structure (no other text):
 {

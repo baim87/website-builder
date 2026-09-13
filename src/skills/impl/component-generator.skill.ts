@@ -18,7 +18,7 @@ export class ComponentGeneratorSkill implements Skill {
   ) { }
 
   async execute(input: SkillInput): Promise<SkillOutput> {
-    const { sectionType, brandIdentity, sampleData, themePreference, designTokens } = input.context;
+    const { sectionType, brandVisual, sampleData, themePreference, designTokens } = input.context;
 
     if (!sectionType) {
       throw new Error('ComponentGeneratorSkill requires sectionType in context.');
@@ -136,8 +136,8 @@ REQUIREMENTS:
 30. MOBILE RESPONSIVENESS RULE: You MUST ensure all components look perfect on mobile screens. Specifically for typography and drop caps: NEVER use un-prefixed \`first-letter:\` modifiers (like \`prose-p:first-letter:text-[64px]\`) because large drop caps break mobile layouts. If you use drop caps, you MUST use a responsive breakpoint (e.g. \`sm:prose-p:first-letter:\`). When in doubt, avoid drop caps entirely.
 
 BRAND TYPOGRAPHY CONTEXT:
-Heading Font: ${brandIdentity?.typography?.headingFont || designTokens?.typography?.headingFont || 'Inter'}
-Body Font: ${brandIdentity?.typography?.bodyFont || designTokens?.typography?.bodyFont || 'Inter'}
+Heading Font: ${designTokens?.typography?.headingFont || 'Inter'}
+Body Font: ${designTokens?.typography?.bodyFont || 'Inter'}
 
 Return the raw code now.
 `;

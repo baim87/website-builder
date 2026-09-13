@@ -3,7 +3,11 @@ import { COPYWRITING_RULES } from '../constants/copywriting.constants';
 export interface CopyWriterContext {
   sectionType: string;
   businessContext: any;
-  brandVoice?: any;
+  brandStrategy?: string;
+  brandPositioning?: string;
+  brandMessaging?: string;
+  brandStory?: string;
+  brandVoice?: string;
   seoMeta?: any;
   pageSlug: string;
   validRoutes?: string[];
@@ -12,7 +16,20 @@ export interface CopyWriterContext {
 }
 
 export function buildCopyWriterPrompt(context: CopyWriterContext, locationMetrics: any[] = [], projectId?: string): string {
-  const { sectionType, businessContext, brandVoice, seoMeta, pageSlug, validRoutes, isLocationServicePage, projectAssets } = context;
+  const { 
+    sectionType, 
+    businessContext, 
+    brandStrategy,
+    brandPositioning,
+    brandMessaging,
+    brandStory,
+    brandVoice, 
+    seoMeta, 
+    pageSlug, 
+    validRoutes, 
+    isLocationServicePage, 
+    projectAssets 
+  } = context;
 
   const keywordsContext = seoMeta?.keywords ? `TARGET SEO KEYWORDS TO INCLUDE: ${seoMeta.keywords.join(', ')}` : '';
   
@@ -133,8 +150,21 @@ Write the UI AST and copy for a "${sectionType}".
 BUSINESS CONTEXT:
 ${JSON.stringify(businessContext, null, 2)}
 
-BRAND VOICE:
-${JSON.stringify(brandVoice || {}, null, 2)}
+BRAND STRATEGY & IDENTITY (STRICTLY ADHERE TO THESE DIRECTIVES):
+--- Strategy ---
+${brandStrategy || 'Not provided.'}
+
+--- Positioning ---
+${brandPositioning || 'Not provided.'}
+
+--- Story ---
+${brandStory || 'Not provided.'}
+
+--- Messaging ---
+${brandMessaging || 'Not provided.'}
+
+--- Voice & Tone ---
+${typeof brandVoice === 'object' ? JSON.stringify(brandVoice, null, 2) : (brandVoice || 'Not provided.')}
 
 ${keywordsContext}
 ${locationMetricsStr}

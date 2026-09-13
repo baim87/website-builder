@@ -20,7 +20,7 @@ export class DesignSystemSkill implements Skill {
   ) {}
 
   async execute(input: SkillInput): Promise<SkillOutput> {
-    const { businessContext, brandIdentity, themePreference } = input.context;
+    const { businessContext, brandVisual, themePreference } = input.context;
     const theme = themePreference ? getThemeById(themePreference) : undefined;
     
     let themeHints = '';
@@ -37,7 +37,7 @@ export class DesignSystemSkill implements Skill {
 
     const prompt = `Analyze this contractor business and generate a complete design system (colors, typography, spacing) using the provided tool.
 Business Context: ${JSON.stringify(businessContext)}
-Brand Identity Constraints: ${JSON.stringify(brandIdentity)}${themeHints}
+Brand Identity Constraints: ${brandVisual || 'Not provided'}${themeHints}
 
 AESTHETICS RULE: The color palette MUST align perfectly with the brand's logo and identity. You may use dark colors if the logo/brand dictates it. You MUST ensure strict contrast (e.g., light text on dark backgrounds, or dark text on light backgrounds) for readability. Avoid generic SaaS defaults; focus on a professional, trustworthy contractor aesthetic. CRITICAL: If there is a conflict between the THEME AESTHETIC and the Brand Identity Constraints (e.g. the theme suggests a green primary color, but the brand identity dictates blue), the Brand Identity Constraints ALWAYS win for the primary and secondary colors. The Theme Aesthetic should strictly govern the backgrounds, dark surfaces, and overall vibe.
 

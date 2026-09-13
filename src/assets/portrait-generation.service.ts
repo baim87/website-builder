@@ -22,7 +22,7 @@ export class PortraitGenerationService {
     private readonly skillLogger: SkillLoggerService,
   ) {}
 
-  async generatePortrait(projectId: string, trade: string, localImagePath: string) {
+  async generatePortrait(projectId: string, trade: string, localImagePath: string, brandHints?: string) {
     let imageBuffer: Buffer;
     let mimeType = 'image/jpeg';
     
@@ -67,6 +67,7 @@ Dress the contractor in premium, realistic professional workwear appropriate for
 
 A clean, well-fitted dark canvas work shirt or premium polo. Ensure the clothing looks naturally worn and realistic, with authentic fabric texture, stitching, folds, and subtle imperfections. No logos or branding should be visible on the shirt.
 
+${brandHints ? `\nBRAND GUIDELINES TO INCORPORATE IF POSSIBLE:\n${brandHints}\n` : ''}
 Do not make the clothing look like a fashion model's outfit.
 
 POSE:

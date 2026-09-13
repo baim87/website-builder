@@ -1,11 +1,17 @@
 import { z } from 'zod';
 
+/**
+ * @deprecated Replaced by BrandKnowledgeService and brand-voice.md
+ */
 export const BrandVoiceSchema = z.object({
   tone: z.string(),
   vocabulary: z.array(z.string()),
   rules: z.array(z.string()),
 });
 
+/**
+ * @deprecated Replaced by BrandStrategySynthesisSkill and brand knowledge files
+ */
 export const BrandKitSchema = z.object({
   brandName: z.string().describe('Short, premium, original brand name'),
   slogan: z.string().describe('Short slogan focused on the trade'),
@@ -29,18 +35,25 @@ export const BrandKitSchema = z.object({
   suggestedSections: z.array(z.string()).describe('Suggest a clear section structure for the landing page'),
 });
 
-export const BrandIdentitySchema = z.object({
-  colors: z.object({
-    primary: z.string(),
-    secondary: z.string(),
-    accent: z.string(),
-    headerBg: z.string().optional(),
-    footerBg: z.string().optional(),
-  }),
-  typography: z.object({
-    headingFont: z.string(),
-    bodyFont: z.string(),
-  }),
+export const BrandVisualOutputSchema = z.object({
+  markdown: z.string().describe('Full markdown for brand-visual.md'),
+  recommendedTheme: z.enum([
+    'editorial-luxury', 'modern-minimalist', 'soft-organic', 'dark-bento',
+    'awesomic', 'mercury', 'hyer-aviation', 'superpower', '11x-editorial'
+  ]).describe('Best matching theme ID from THEME_DEFINITIONS'),
+});
+
+export const BrandKnowledgeSchema = z.object({
+  strategy: z.string().describe('Full markdown for brand-strategy.md'),
+  positioning: z.string().describe('Full markdown for brand-positioning.md'),
+  voice: z.string().describe('Full markdown for brand-voice.md'),
+  visual: z.string().describe('Full markdown for brand-visual.md'),
+  messaging: z.string().describe('Full markdown for brand-messaging.md'),
+  story: z.string().describe('Full markdown for brand-story.md'),
+  recommendedTheme: z.enum([
+    'editorial-luxury', 'modern-minimalist', 'soft-organic', 'dark-bento',
+    'awesomic', 'mercury', 'hyer-aviation', 'superpower', '11x-editorial'
+  ]).describe('Best matching theme ID from THEME_DEFINITIONS'),
 });
 
 export const DesignSystemSchema = z.object({

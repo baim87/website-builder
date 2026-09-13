@@ -6,9 +6,9 @@ import { AIModel } from '../../common/constants/ai-models.constant';
 import { AISkill } from '../../common/constants/ai-skills.constant';
 
 @Injectable()
-export class BrandVoiceSkill implements Skill {
-  readonly name = AISkill.BRAND_VOICE;
-  private readonly logger = new Logger(BrandVoiceSkill.name);
+export class BrandStorySkill implements Skill {
+  readonly name = AISkill.BRAND_STORY;
+  private readonly logger = new Logger(BrandStorySkill.name);
 
   constructor(
     private readonly aiGateway: AIGatewayService,
@@ -19,7 +19,8 @@ export class BrandVoiceSkill implements Skill {
 
     const prompt = `You are an elite Brand Strategist and Copywriter for US home service contractors.
 
-Generate a comprehensive Brand Voice profile based on the Business Context and Brand Strategy.
+Generate a comprehensive Brand Story document based on the Business Context and Brand Strategy.
+CRITICAL RULE: NEVER fabricate history. If the 'founderStory' is empty or not provided in the business context, omit the Origin & Founder Story section entirely. Do not make up a background.
 
 Business Context:
 ${JSON.stringify(businessContext, null, 2)}
@@ -27,14 +28,15 @@ ${JSON.stringify(businessContext, null, 2)}
 Brand Strategy:
 ${brandStrategy}
 
-Please generate a professional Markdown document titled "Brand Voice" that includes the following sections:
-- Voice Definition & Personality
-- Tone (We Sound Like / We Don't Sound Like)
-- Communication Principles
-- Writing Style (sentence style, vocabulary, preferred/avoided language)
-- Customer Communication (sales, website, service, complaints)
-- Examples (We Say / We Don't Say)
-- Voice North Star
+Please generate a professional Markdown document titled "Brand Story" that includes the following sections (if applicable):
+- Origin & Founder Story (ONLY if 'founderStory' is provided in context)
+- Why We Exist
+- What We Believe
+- Customer's Problem & Transformation
+- Brand Narrative
+- Story Themes
+- About Us Direction
+- Storytelling Principles
 
 Output ONLY the markdown content. No conversational wrapper or markdown fences wrapping the entire output.`;
 
@@ -45,7 +47,7 @@ Output ONLY the markdown content. No conversational wrapper or markdown fences w
       maxTokens: 8192,
     });
 
-    this.logger.debug(`BrandVoice generated markdown length: ${response.text.length}`);
+    this.logger.debug(`BrandStory generated markdown length: ${response.text.length}`);
 
     let raw = response.text.trim();
     if (raw.startsWith('```markdown')) {
