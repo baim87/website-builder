@@ -231,6 +231,13 @@ export class GenerationOrchestratorService {
     ctx.brandMessagingResult = messaging;
     ctx.brandStoryResult = story;
     
+    if (!strategy || !visual) {
+      this.logger.warn(
+        `[PROJECT-${ctx.projectId}] CRITICAL: Core Brand Knowledge (Strategy/Visual) is missing! ` +
+        `This is likely an old project generated before the Brand Knowledge flow. Skills will use fallback data.`
+      );
+    }
+    
     ctx.designSystemResult = ctx.existingWebsiteData?.designTokens || null;
 
     if (!ctx.designSystemResult) {
