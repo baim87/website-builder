@@ -1,9 +1,13 @@
 import { Injectable, NotFoundException, ForbiddenException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { RevalidationService } from './revalidation.service';
 
 @Injectable()
 export class WebsiteDataService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly revalidationService: RevalidationService
+  ) {}
 
   async findByProjectId(projectId: string, userId?: string) {
     if (userId) {
@@ -30,11 +34,16 @@ export class WebsiteDataService {
     });
     if (!project) throw new ForbiddenException(`Project ${projectId} not found or access denied`);
     
-    return this.prisma.websiteData.upsert({
+    const result = await this.prisma.websiteData.upsert({
       where: { projectId },
       update: { ...data },
       create: { projectId, ...data },
     });
+
+    // Trigger on-demand ISR revalidation
+    this.revalidationService.triggerRevalidation(projectId).catch(() => {});
+
+    return result;
   }
   
   async updateGenerationStatus(projectId: string, status: string, userId: string) {

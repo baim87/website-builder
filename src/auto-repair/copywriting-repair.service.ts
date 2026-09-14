@@ -107,6 +107,6 @@ export class CopywritingRepairService {
       metadata: { phase: 'repair', componentName }
     });
 
-    return (repairResult as any).fixedData || repairResult;
+    return repairResult?.fixedData || repairResult;
   }
 }

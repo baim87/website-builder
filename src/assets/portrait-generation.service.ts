@@ -10,8 +10,6 @@ import { SkillLoggerService } from '../skills/skill-logger.service';
 import { AIModel } from '../common/constants/ai-models.constant';
 import { AISkill } from '../common/constants/ai-skills.constant';
 import { SKILL_STATUS } from '../skills/constants/skill-status.constant';
-import { ASSET_PURPOSE } from './constants/asset-purpose.constant';
-
 @Injectable()
 export class PortraitGenerationService {
   private readonly logger = new Logger(PortraitGenerationService.name);
@@ -76,9 +74,11 @@ Use a subtle natural smile with genuine warmth. Relaxed facial muscles, natural 
 WARDROBE:
 Dress the contractor in premium, realistic professional workwear appropriate for a successful US home-services company.
 
-A clean, well-fitted dark canvas work shirt or premium polo. Ensure the clothing looks naturally worn and realistic, with authentic fabric texture, stitching, folds, and subtle imperfections. No logos or branding should be visible on the shirt.
+A clean, well-fitted canvas work shirt or premium polo. Ensure the clothing looks naturally worn and realistic, with authentic fabric texture, stitching, folds, and subtle imperfections. No logos or branding should be visible on the shirt. 
 
-${brandHints ? `\nBRAND GUIDELINES TO INCORPORATE IF POSSIBLE:\n${brandHints}\n` : ''}
+The color of the shirt MUST match or complement the primary brand colors provided below.
+
+${brandHints ? `\nBRAND GUIDELINES TO INCORPORATE STRICTLY:\n${brandHints}\n` : ''}
 Do not make the clothing look like a fashion model's outfit.
 
 POSE:
@@ -128,7 +128,8 @@ No plastic skin.
 BACKGROUND:
 Clean premium professional studio environment inspired by a high-end US home-services brand.
 
-Use a warm neutral architectural background with subtle visual references to residential construction, such as softly blurred wood, natural materials, workshop textures, or a modern residential interior.
+Use an architectural background with subtle visual references to residential construction, such as softly blurred wood, natural materials, workshop textures, or a modern residential interior. 
+The background colors and lighting MUST incorporate or subtly reflect the brand's secondary/accent colors provided in the guidelines above.
 
 The background should remain understated and secondary to the subject.
 
@@ -269,15 +270,8 @@ No AI-looking artifacts.`;
     const webpBuffer = await this.imageProcessor.convertToWebp(generatedBuffer);
     const uploadedWebpUrl = await this.storageService.upload(webpKey, webpBuffer, 'image/webp');
     
-    await this.prisma.asset.create({
-      data: {
-        projectId,
-        url: uploadedWebpUrl,
-        type: 'image',
-        purpose: ASSET_PURPOSE.PORTRAIT,
-        section: 'about',
-      },
-    });
+    // Removed Prisma asset creation here to avoid saving unselected variants.
+    // The asset will be saved in chat-flow.engine.ts when the user finalizes their choice.
     
     if (cost > 0) {
       await this.skillLogger.logInvocation({
@@ -291,7 +285,7 @@ No AI-looking artifacts.`;
       });
     }
 
-    this.logger.log(`Portrait saved to DB: ${uploadedWebpUrl}, Cost: $${cost}`);
+    this.logger.log(`Portrait variant generated and uploaded to storage: ${uploadedWebpUrl}, Cost: $${cost}`);
 
     return uploadedWebpUrl;
   }

@@ -67,9 +67,18 @@ export class SiteContentService {
    * Maps backend entities to the frontend SiteContent interface
    */
   private mapToSiteContent(businessContext: any, websiteData: any, pages: any[], assets: any[], projectAssets: any[] = [], siteAnalytics: any = null): any {
-    const logoAsset = assets.find(a => a.purpose === 'logo' || a.type === 'image');
+    const metaData = businessContext.interviewMetadata || {};
+    let finalLogoUrl = metaData.finalLogoUrl;
+    if (!finalLogoUrl) {
+      finalLogoUrl = assets.find(a => a.purpose === 'logo')?.url || '';
+    }
+    
+    let finalPortraitUrl = metaData.finalPortraitUrl;
+    if (!finalPortraitUrl) {
+      finalPortraitUrl = assets.find(a => a.purpose === 'portrait')?.url || '';
+    }
+
     const faviconAsset = assets.find(a => a.purpose === 'favicon');
-    const portraitAsset = assets.find(a => a.purpose === 'portrait');
     
     const seoData = websiteData.seoMetadata || {};
     const tokens = websiteData.designTokens || {};
@@ -121,9 +130,9 @@ export class SiteContentService {
         phone: businessContext.phone || "(555) 123-4567",
         email: businessContext.email || "contact@example.com",
         address: businessContext.businessAddress || "123 Main St, Anytown USA",
-        logoUrl: logoAsset?.url || "",
+        logoUrl: finalLogoUrl,
         faviconUrl: faviconAsset?.url || "",
-        contactPhotoUrl: portraitAsset?.url || ""
+        contactPhotoUrl: finalPortraitUrl
       },
       seo: {
         title: seoData.title || businessContext.businessName,
@@ -143,23 +152,24 @@ export class SiteContentService {
           const partnerBrands = assets.filter(a => a.purpose === 'partner_brand');
           
           sections = sections.map((s: any) => {
+            // Determine where the data lives (AST format vs legacy content format)
+            const hasAst = !!(s.ast && s.ast.props && s.ast.props.data);
+            const dataTarget = hasAst ? { ...s.ast.props.data } : { ...(s.content || {}) };
+            let modified = false;
+
             // Inject Portrait Asset into AboutSection
-            if ((s.id === 'about' || s.type === 'AboutSection') && portraitAsset) {
-              return { ...s, content: { ...s.content, image: portraitAsset.url } };
+            if ((s.id === 'about' || s.type === 'AboutSection') && finalPortraitUrl) {
+              dataTarget.image = finalPortraitUrl;
+              modified = true;
             }
             
             // Inject Partner Brands into BrandsSection
             if (s.type === 'BrandsSection' && partnerBrands.length > 0) {
-              return { 
-                ...s, 
-                content: { 
-                  ...s.content, 
-                  brands: partnerBrands.map(b => ({
-                    name: b.section || 'Partner Brand',  // section field stores the brand name
-                    logo: b.url
-                  }))
-                } 
-              };
+              dataTarget.brands = partnerBrands.map(b => ({
+                name: b.section || 'Partner Brand',
+                logo: b.url
+              }));
+              modified = true;
             }
 
             // Inject Hero/PageHeader images
@@ -167,10 +177,20 @@ export class SiteContentService {
               const bgImage = heroImages[heroImageIndex] || portfolio[heroImageIndex]?.image;
               if (bgImage) {
                 heroImageIndex++;
-                return { ...s, content: { ...s.content, backgroundImage: bgImage, image: bgImage } };
+                dataTarget.backgroundImage = bgImage;
+                dataTarget.image = bgImage;
+                modified = true;
               }
             }
             
+            if (modified) {
+              if (hasAst) {
+                return { ...s, ast: { ...s.ast, props: { ...s.ast.props, data: dataTarget } } };
+              } else {
+                return { ...s, content: dataTarget };
+              }
+            }
+
             return s;
           });
         }

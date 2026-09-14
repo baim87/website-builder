@@ -62,11 +62,17 @@ export class QualityControlService {
       const urls = websiteData.sitemapXml.match(/<loc>(.*?)<\/loc>/g)
         ?.map(m => m.replace(/<\/?loc>/g, '')) || [];
       // Replace placeholder domain with actual vercelUrl
-      const vercelOrigin = new URL(vercelUrl).origin;
+      let vercelOrigin = '';
+      try {
+        vercelOrigin = vercelUrl ? new URL(vercelUrl).origin : '';
+      } catch (e) {
+        this.logger.warn(`Invalid vercelUrl provided: ${vercelUrl}`);
+      }
+      
       sitemapUrls = urls.map(u => {
         try {
           const path = new URL(u).pathname;
-          return `${vercelOrigin}${path}`;
+          return vercelOrigin ? `${vercelOrigin}${path}` : u;
         } catch {
           return u;
         }

@@ -1,10 +1,14 @@
 import { Injectable, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpsertPageDto } from './dto/upsert-page.dto';
+import { RevalidationService } from './revalidation.service';
 
 @Injectable()
 export class PageService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly revalidationService: RevalidationService
+  ) {}
 
   async upsertPage(projectId: string, slug: string, pageData: UpsertPageDto, userId: string) {
     const project = await this.prisma.project.findUnique({
@@ -12,7 +16,7 @@ export class PageService {
     });
     if (!project) throw new ForbiddenException(`Project ${projectId} not found or access denied`);
 
-    return this.prisma.page.upsert({
+    const result = await this.prisma.page.upsert({
       where: {
         projectId_slug: {
           projectId,
@@ -36,6 +40,11 @@ export class PageService {
         status: pageData.status,
       },
     });
+
+    // Trigger on-demand ISR revalidation
+    this.revalidationService.triggerRevalidation(projectId).catch(() => {});
+
+    return result;
   }
 
   async getPagesByProjectId(projectId: string, userId?: string) {

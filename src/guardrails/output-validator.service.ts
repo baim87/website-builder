@@ -173,5 +173,16 @@ export class OutputValidatorService {
         throw new Error(`Grounding Validation Failed: Found placeholder contact info "${ph}"`);
       }
     }
+
+    // 4. Strict Array Count Validation
+    if (businessContext.services && Array.isArray(businessContext.services)) {
+      const plannedServiceCount = businessContext.services.length;
+      if (content.services && Array.isArray(content.services)) {
+        const generatedServiceCount = content.services.length;
+        if (generatedServiceCount > plannedServiceCount) {
+          throw new Error(`planned service = ${plannedServiceCount} but generated = ${generatedServiceCount}`);
+        }
+      }
+    }
   }
 }

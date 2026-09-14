@@ -39,7 +39,7 @@ export class ChatController {
         try {
           const project = await this.projectsService.findOne(projectId, req.user.id);
           
-          if (project.websiteData) {
+          if (project.status === 'PUBLISHED' && project.websiteData) {
             // Edit Flow
             subscriber.next({ type: 'token', data: JSON.stringify({ token: "Let me take a look at that and apply the changes..." }) } as MessageEvent);
             

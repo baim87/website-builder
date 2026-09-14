@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { UpdateBusinessContextDto } from './dto/update-business-context.dto';
 import { LocationMetricsService } from '../seo/location-metrics.service';
 import { parseRadiusToMiles } from '../utils/parse-radius.util';
+import { RevalidationService } from './revalidation.service';
 
 @Injectable()
 export class BusinessContextService {
@@ -11,6 +12,7 @@ export class BusinessContextService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly locationMetrics: LocationMetricsService,
+    private readonly revalidationService: RevalidationService
   ) {}
 
   async findByProjectId(projectId: string, userId?: string) {
@@ -98,6 +100,9 @@ export class BusinessContextService {
         });
       }
     }
+
+    // Trigger on-demand ISR revalidation
+    this.revalidationService.triggerRevalidation(projectId).catch(() => {});
 
     return finalContext;
   }

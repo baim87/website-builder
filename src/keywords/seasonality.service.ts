@@ -89,10 +89,10 @@ export class SeasonalityService {
   private async generateAnnouncementCopy(service: string): Promise<string> {
     const prompt = `
       Write a compelling, short announcement bar message offering a seasonal promotion for ${service}.
-      Keep it under 60 characters. Do not include quotes.
+      Keep it under 50 characters. It must be short, compact, and punchy enough for mobile view. Do not include quotes.
       Examples:
-      - Get 50% off labor on new decks until Sept 7th!
-      - Book your ${service} consultation today and save 20%!
+      - Get 50% off labor until Sept 7th!
+      - Book ${service} today and save 20%!
     `;
 
     try {

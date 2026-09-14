@@ -21,6 +21,7 @@ import { BrandVisualSkill } from '../skills/impl/brand-visual.skill';
 import { BrandMessagingSkill } from '../skills/impl/brand-messaging.skill';
 import { BrandStorySkill } from '../skills/impl/brand-story.skill';
 import { ChatService } from './chat.service';
+import { ColorSuggestionService } from '../interview/color-suggestion.service';
 
 @Injectable()
 export class ChatFlowEngine {
@@ -47,6 +48,7 @@ export class ChatFlowEngine {
     private readonly brandVisual: BrandVisualSkill,
     private readonly brandMessaging: BrandMessagingSkill,
     private readonly brandStory: BrandStorySkill,
+    private readonly colorSuggestionService: ColorSuggestionService,
   ) { }
 
   async *processMessage(projectId: string, content: string, displayText?: string): AsyncGenerator<any, void, unknown> {
@@ -279,7 +281,7 @@ export class ChatFlowEngine {
       yield { event: 'ui-options', data: { options: step.uiOptions } };
     } else if (state === 'choosing_has_gbp') {
       if (content === 'no' || content === 'skip') {
-        yield* this.advanceToNextStep(projectId, stepIndex, "[SYSTEM: Proceed directly to ask the first missing field without preamble.]");
+        yield* this.advanceToNextStep(projectId, stepIndex, "[SYSTEM: Proceed directly to ask the first missing field without preamble.]", true);
         return;
       } else if (content === 'yes') {
         await this.updateMeta(projectId, { [`${step.id}_state`]: 'searching' });
@@ -292,13 +294,13 @@ export class ChatFlowEngine {
       }
     } else if (state === 'searching') {
       if (content === 'skip') {
-        yield* this.advanceToNextStep(projectId, stepIndex, "[SYSTEM: Proceed directly to ask the first missing field without preamble.]");
+        yield* this.advanceToNextStep(projectId, stepIndex, "[SYSTEM: Proceed directly to ask the first missing field without preamble.]", true);
         return;
       }
       yield* this.doGbpSearch(projectId, content, meta, step, stepIndex);
     } else if (state === 'selecting') {
       if (content === 'none') {
-        yield* this.advanceToNextStep(projectId, stepIndex, "[SYSTEM: Proceed directly to ask the first missing field without preamble.]");
+        yield* this.advanceToNextStep(projectId, stepIndex, "[SYSTEM: Proceed directly to ask the first missing field without preamble.]", true);
       } else {
         const idx = parseInt(content, 10);
         const results = meta.gbpResults || [];
@@ -343,23 +345,27 @@ export class ChatFlowEngine {
   }
 
   private async *doGbpSearch(projectId: string, content: string, _meta: any, step: any, stepIndex: number): AsyncGenerator<any, void, unknown> {
-    yield { event: 'token', data: { token: "Searching Google Places..." } };
+    yield { event: 'thinking', data: { message: "Searching Google Places..." } };
     const results = await this.googlePlaces.scrapeGoogleBusinessProfile(content);
 
     if (results && results.length > 0) {
       await this.updateMeta(projectId, { [`${step.id}_state`]: 'selecting', gbpResults: results });
-      const text = "I found these businesses. Which one is yours?";
-      const options = results.map((r: any, idx: number) => ({
-        id: String(idx), label: r.businessName, description: r.businessAddress
+      
+      const options = results.map((r: any, i: number) => ({
+        id: String(i),
+        label: r.businessName,
+        description: r.businessAddress
       }));
-      options.push({ id: 'none', label: "None of these", description: "Enter details manually" });
+      options.push({ id: 'none', label: 'None of these' });
+
+      const text = "I found these businesses. Which one is yours?";
       await this.saveAssistantMsg(projectId, text, options);
-      yield { event: 'token', data: { token: "\n\n" + text } };
+      yield { event: 'token', data: { token: text } };
       yield { event: 'ui-options', data: { options } };
     } else {
       const text = "No matches found. No worries, we'll do it manually.";
-      yield { event: 'token', data: { token: "\n\n" + text } };
-      yield* this.advanceToNextStep(projectId, stepIndex, "Start manual entry.");
+      yield { event: 'token', data: { token: text } };
+      yield* this.advanceToNextStep(projectId, stepIndex, "Start manual entry.", true);
     }
   }
 
@@ -430,7 +436,55 @@ export class ChatFlowEngine {
   public async *handleBrandInterview(projectId: string, content: string, meta: any, step: any, stepIndex: number): AsyncGenerator<any, void, unknown> {
     const state = meta[`${step.id}_state`] || 'interviewing';
 
-    if (state === 'selecting_portrait') {
+    if (state === 'selecting_logo') {
+      if (content === 'upload_new') {
+        await this.updateMeta(projectId, { [`${step.id}_state`]: 'uploading_final_logo' });
+        const text = "Please upload your final logo:";
+        await this.saveAssistantMsg(projectId, text, undefined, { type: 'image', purpose: ASSET_PURPOSE.LOGO });
+        yield { event: 'token', data: { token: text } };
+        yield { event: 'ui-upload', data: { type: 'image', purpose: ASSET_PURPOSE.LOGO } };
+      } else if (content.startsWith('http')) {
+        await this.ensureAssetSaved(projectId, content, ASSET_PURPOSE.LOGO, 'header,footer');
+        const freshMeta = await this.updateMeta(projectId, { finalLogoUrl: content });
+        yield* this.triggerFaviconGeneration(projectId, freshMeta, step, stepIndex);
+      } else {
+        yield { event: 'token', data: { token: "Please select one of the options or upload your own." } };
+      }
+      return;
+    } else if (state === 'uploading_final_logo') {
+      if (content.startsWith('http')) {
+        await this.ensureAssetSaved(projectId, content, ASSET_PURPOSE.LOGO, 'header,footer');
+        const freshMeta = await this.updateMeta(projectId, { finalLogoUrl: content });
+        yield* this.triggerFaviconGeneration(projectId, freshMeta, step, stepIndex);
+      } else {
+        yield { event: 'token', data: { token: "Please upload an image." } };
+      }
+      return;
+    } else if (state === 'selecting_favicon') {
+      if (content === 'upload_new') {
+        await this.updateMeta(projectId, { [`${step.id}_state`]: 'uploading_final_favicon' });
+        const text = "Please upload your final favicon (square image):";
+        await this.saveAssistantMsg(projectId, text, undefined, { type: 'image', purpose: ASSET_PURPOSE.FAVICON });
+        yield { event: 'token', data: { token: text } };
+        yield { event: 'ui-upload', data: { type: 'image', purpose: ASSET_PURPOSE.FAVICON } };
+      } else if (content.startsWith('http')) {
+        await this.ensureAssetSaved(projectId, content, ASSET_PURPOSE.FAVICON, 'head');
+        const freshMeta = await this.updateMeta(projectId, { finalFaviconUrl: content });
+        yield* this.triggerPortraitGeneration(projectId, freshMeta, step, stepIndex);
+      } else {
+        yield { event: 'token', data: { token: "Please select one of the options or upload your own." } };
+      }
+      return;
+    } else if (state === 'uploading_final_favicon') {
+      if (content.startsWith('http')) {
+        await this.ensureAssetSaved(projectId, content, ASSET_PURPOSE.FAVICON, 'head');
+        const freshMeta = await this.updateMeta(projectId, { finalFaviconUrl: content });
+        yield* this.triggerPortraitGeneration(projectId, freshMeta, step, stepIndex);
+      } else {
+        yield { event: 'token', data: { token: "Please upload an image." } };
+      }
+      return;
+    } else if (state === 'selecting_portrait') {
       if (content === 'upload_new') {
         await this.updateMeta(projectId, { [`${step.id}_state`]: 'uploading_final_portrait' });
         const text = "Please upload your final portrait photo (I'll use it exactly as is, without any AI enhancement):";
@@ -438,6 +492,7 @@ export class ChatFlowEngine {
         yield { event: 'token', data: { token: text } };
         yield { event: 'ui-upload', data: { type: 'image', purpose: ASSET_PURPOSE.PORTRAIT } };
       } else if (content.startsWith('http')) {
+        await this.ensureAssetSaved(projectId, content, ASSET_PURPOSE.PORTRAIT, 'about');
         await this.updateMeta(projectId, { portraitStatus: 'AI Generated', finalPortraitUrl: content, [`${step.id}_state`]: 'done' });
         yield* this.advanceToNextStep(projectId, stepIndex);
       } else {
@@ -446,6 +501,7 @@ export class ChatFlowEngine {
       return;
     } else if (state === 'uploading_final_portrait') {
       if (content.startsWith('http')) {
+        await this.ensureAssetSaved(projectId, content, ASSET_PURPOSE.PORTRAIT, 'about');
         await this.updateMeta(projectId, { portraitStatus: 'Uploaded Direct', finalPortraitUrl: content, [`${step.id}_state`]: 'done' });
         yield* this.advanceToNextStep(projectId, stepIndex);
       } else {
@@ -464,7 +520,7 @@ export class ChatFlowEngine {
       const lowerContent = String(content).toLowerCase().trim();
       const needsHelp = ["not sure", "i'm not sure", "i am not sure", "idk", "i don't know", "suggest", "help", "what do you think", "any ideas"].some(phrase => lowerContent.includes(phrase)) || lowerContent.length < 3;
 
-      if (needsHelp && currentQ.type !== 'multi-select') {
+      if (needsHelp) {
         // Generate contextual suggestion and DO NOT increment qIndex
         yield { event: 'thinking-status', data: { message: 'Thinking of ideas...' } };
         const systemPrompt = `You are a helpful brand strategist for United States Local contractors. 
@@ -477,10 +533,15 @@ Keep your response under 3 sentences. End by asking them what they think, or tel
         for await (const event of stream) {
           if (event.event === 'internal-done') {
             // Re-yield the UI options for the current question so they can still see them
-            let options = undefined;
-            if (currentQ.options) {
-              options = currentQ.options;
-              yield { event: 'ui-options', data: { options } };
+            if (currentQ.type === 'multi-select' && currentQ.options) {
+              const multiSelect = {
+                options: currentQ.options,
+                allowCustom: currentQ.allowCustomInput,
+                customPlaceholder: currentQ.placeholder,
+              };
+              yield { event: 'ui-multi-select', data: multiSelect };
+            } else if (currentQ.options) {
+              yield { event: 'ui-options', data: { options: currentQ.options } };
             }
           } else {
             yield event;
@@ -532,7 +593,34 @@ Keep your response under 3 sentences. End by asking them what they think, or tel
       let options = undefined;
       let multiSelect = undefined;
 
-      if (q.type === 'multi-select' && q.options) {
+      if (q.fieldKey === 'colorPreferences') {
+        yield { event: 'thinking-status', data: { message: 'Curating brand color palettes...' } };
+        try {
+          const businessContext = await this.businessContext.findByProjectId(projectId);
+          const trade = businessContext.trade || 'Contractor';
+          const location = businessContext.location || 'United States';
+          const vibe = String(answers['visualDirection'] || 'Professional');
+          
+          const palettes = await this.colorSuggestionService.generateColorPalettes(trade, location, vibe);
+          
+          multiSelect = {
+            options: palettes.map(p => ({
+              id: p.name,
+              label: p.name,
+              meta: { colors: p.colors }
+            })),
+            allowCustom: q.allowCustomInput !== false,
+            customPlaceholder: q.placeholder || 'Add other (comma separated)',
+          };
+        } catch (e: any) {
+          this.logger.error(`Failed to generate color palettes: ${e.message}`);
+          multiSelect = {
+            options: [],
+            allowCustom: q.allowCustomInput !== false,
+            customPlaceholder: q.placeholder,
+          };
+        }
+      } else if (q.type === 'multi-select' && q.options) {
         multiSelect = {
           options: q.options,
           allowCustom: q.allowCustomInput,
@@ -601,74 +689,124 @@ Keep your response under 3 sentences. End by asking them what they think, or tel
           brandIdentityInputs: { ...answers, themePreference: recommendedTheme }
         });
 
-        // 5. Generate logo - MOVED to handleBrandRecap confirming state!
-
-        // 6. Generate portrait variants (if user uploaded a photo OR selected scratch)
-        const portraitImageUrl = answers['ownerPortrait'];
-        const isScratch = meta.brandStrategySelection === 'scratch';
-        
-        if ((portraitImageUrl && portraitImageUrl !== 'skip') || isScratch) {
-          yield { event: 'thinking', data: { message: "Generating 3 professional portrait options..." } };
-          try {
-            const referenceImage = (portraitImageUrl && portraitImageUrl !== 'skip') ? portraitImageUrl : undefined;
-            const variants = await this.portraitGeneration.generatePortraitVariants(projectId, fullContext.trade || 'contractor', referenceImage, visual.markdown);
-
-            await this.updateMeta(projectId, { [`${step.id}_state`]: 'selecting_portrait', generatedPortraits: variants });
-
-            const text = referenceImage 
-              ? `I've generated 3 professional portrait options based on your photo. Which one do you prefer?`
-              : `I've generated 3 synthetic professional portraits for your brand. Which one do you prefer?`;
-              
-            const options: any[] = variants.map((url, i) => ({
-              id: url,
-              label: `Option ${i + 1}`,
-              description: `![Option ${i + 1}](${url})`
-            }));
-            options.push({ id: 'upload_new', label: 'Upload my own photo instead', icon: 'upload' });
-
-            await this.saveAssistantMsg(projectId, text, options);
-            yield { event: 'token', data: { token: text } };
-            yield { event: 'ui-options', data: { options } };
-            return; // Pause interview flow to wait for selection
-          } catch (e: any) {
-            yield { event: 'token', data: { token: `Portrait generation failed: ${e.message}\n` } };
-          }
-        }
-
-        await this.updateMeta(projectId, { [`${step.id}_state`]: 'done' });
-        yield* this.advanceToNextStep(projectId, stepIndex);
+        // 5. Trigger Logo Generation
+        const freshMeta = await this.updateMeta(projectId, {});
+        yield* this.triggerLogoGeneration(projectId, freshMeta, step, stepIndex);
       } catch (e: any) {
         yield { event: 'token', data: { token: `Error generating brand kit: ${e.message}\n` } };
       }
     }
   }
 
+  public async *triggerLogoGeneration(projectId: string, meta: any, step: any, stepIndex: number): AsyncGenerator<any, void, unknown> {
+    const isScratch = meta.brandStrategySelection === 'scratch';
+    
+    if (isScratch) {
+      yield { event: 'thinking', data: { message: "Generating 3 premium logo options..." } };
+      try {
+        const ctx = await this.businessContext.findByProjectId(projectId);
+        const visualMd = await this.brandKnowledge.getBrandFile(projectId, 'brand-visual.md');
+        
+        const variants = await this.logoGeneration.generateLogoVariants(
+          projectId, 
+          ctx.businessName || 'business', 
+          ctx.trade || 'contractor', 
+          visualMd || ''
+        );
+
+        await this.updateMeta(projectId, { [`${step.id}_state`]: 'selecting_logo', generatedLogos: variants });
+
+        const text = `I've designed 3 premium logo options based on your brand strategy and colors. Which one do you prefer?`;
+        const options: any[] = variants.map((url, i) => ({ id: url, label: `Logo ${i + 1}`, description: `![Logo ${i + 1}](${url})` }));
+        options.push({ id: 'upload_new', label: 'Upload my own logo instead', icon: 'upload' });
+
+        await this.saveAssistantMsg(projectId, text, options);
+        yield { event: 'token', data: { token: text } };
+        yield { event: 'ui-options', data: { options } };
+        return; 
+      } catch (e: any) {
+        yield { event: 'token', data: { token: `Logo generation failed: ${e.message}\n` } };
+      }
+    }
+    // If not scratch (or if failed), proceed to favicon or portrait
+    yield* this.triggerFaviconGeneration(projectId, meta, step, stepIndex);
+  }
+
+  public async *triggerFaviconGeneration(projectId: string, meta: any, step: any, stepIndex: number): AsyncGenerator<any, void, unknown> {
+    if (meta.finalLogoUrl) {
+      yield { event: 'thinking', data: { message: "Extracting 3 matching favicon options..." } };
+      try {
+        const ctx = await this.businessContext.findByProjectId(projectId);
+        const variants = await this.logoGeneration.generateFaviconVariants(
+          projectId, 
+          ctx.businessName || 'business', 
+          ctx.trade || 'contractor', 
+          meta.finalLogoUrl
+        );
+
+        await this.updateMeta(projectId, { [`${step.id}_state`]: 'selecting_favicon', generatedFavicons: variants });
+
+        const text = `I've derived 3 perfect favicon options from your logo. Which one do you prefer?`;
+        const options: any[] = variants.map((url, i) => ({ id: url, label: `Favicon ${i + 1}`, description: `![Favicon ${i + 1}](${url})` }));
+        options.push({ id: 'upload_new', label: 'Upload my own favicon instead', icon: 'upload' });
+
+        await this.saveAssistantMsg(projectId, text, options);
+        yield { event: 'token', data: { token: text } };
+        yield { event: 'ui-options', data: { options } };
+        return; 
+      } catch (e: any) {
+        yield { event: 'token', data: { token: `Favicon generation failed: ${e.message}\n` } };
+      }
+    }
+    // If failed or no logo url, proceed to portrait
+    yield* this.triggerPortraitGeneration(projectId, meta, step, stepIndex);
+  }
+
+  public async *triggerPortraitGeneration(projectId: string, meta: any, step: any, stepIndex: number): AsyncGenerator<any, void, unknown> {
+    const answers = meta.brandAnswers || {};
+    const portraitImageUrl = answers['ownerPortrait'];
+    const isScratch = meta.brandStrategySelection === 'scratch';
+    
+    if ((portraitImageUrl && portraitImageUrl !== 'skip') || isScratch) {
+      yield { event: 'thinking', data: { message: "Generating 3 professional portrait options..." } };
+      try {
+        const ctx = await this.businessContext.findByProjectId(projectId);
+        const visualMd = await this.brandKnowledge.getBrandFile(projectId, 'brand-visual.md');
+        const referenceImage = (portraitImageUrl && portraitImageUrl !== 'skip') ? portraitImageUrl : undefined;
+        
+        const variants = await this.portraitGeneration.generatePortraitVariants(projectId, ctx.trade || 'contractor', referenceImage, visualMd || '');
+
+        await this.updateMeta(projectId, { [`${step.id}_state`]: 'selecting_portrait', generatedPortraits: variants });
+
+        const text = referenceImage 
+          ? `I've generated 3 professional portrait options based on your photo. Which one do you prefer?`
+          : `I've generated 3 synthetic professional portraits for your brand. Which one do you prefer?`;
+          
+        const options: any[] = variants.map((url, i) => ({ id: url, label: `Option ${i + 1}`, description: `![Option ${i + 1}](${url})` }));
+        options.push({ id: 'upload_new', label: 'Upload my own photo instead', icon: 'upload' });
+
+        await this.saveAssistantMsg(projectId, text, options);
+        yield { event: 'token', data: { token: text } };
+        yield { event: 'ui-options', data: { options } };
+        return; 
+      } catch (e: any) {
+        yield { event: 'token', data: { token: `Portrait generation failed: ${e.message}\n` } };
+      }
+    }
+
+    await this.updateMeta(projectId, { [`${step.id}_state`]: 'done' });
+    yield* this.advanceToNextStep(projectId, stepIndex);
+  }
+
   public async *handleBrandRecap(projectId: string, content: string, meta: any, step: any, stepIndex: number): AsyncGenerator<any, void, unknown> {
     const state = meta[`${step.id}_state`] || 'initial';
     const ctx = await this.businessContext.findByProjectId(projectId);
-    const self = this;
-
-    const triggerLogoGen = async function* () {
-      const hasExistingLogo = meta.brandStrategySelection === 'has-logo';
-      if (!hasExistingLogo) {
-        yield { event: 'token', data: { token: "Generating AI logo...\n" } };
-        try {
-          // Re-fetch visual.md data for logo hints since it was saved to R2
-          const visualMd = await self.brandKnowledge.getBrandFile(projectId, 'brand-visual.md');
-          await self.logoGeneration.generateLogoAndFavicon(projectId, ctx.businessName || 'business', ctx.trade || 'contractor', visualMd || '');
-          yield { event: 'token', data: { token: "Logo generated successfully!\n\n" } };
-        } catch (e: any) {
-          yield { event: 'token', data: { token: `Logo generation failed: ${e.message}\n\n` } };
-        }
-      }
-    };
 
     if (state === 'initial') {
       await this.updateMeta(projectId, { [`${step.id}_state`]: 'confirming' });
       yield* this.renderBrandRecap(projectId, meta, ctx);
     } else if (state === 'confirming') {
       if (content === 'yes') {
-        yield* triggerLogoGen();
         yield* this.advanceToNextStep(projectId, stepIndex);
       } else if (content === 'edit') {
         await this.updateMeta(projectId, { [`${step.id}_state`]: 'editing' });
@@ -679,19 +817,101 @@ Keep your response under 3 sentences. End by asking them what they think, or tel
         yield { event: 'token', data: { token: "Please select 'Yes' or 'No'." } };
       }
     } else if (state === 'editing') {
-      const answers = meta.brandAnswers || {};
-      answers['user_revisions'] = (answers['user_revisions'] ? answers['user_revisions'] + '\n' : '') + content;
-      await this.prisma.businessContext.update({ where: { projectId }, data: { brandIdentityInputs: answers } });
-      await this.updateMeta(projectId, { [`${step.id}_state`]: 'confirming' });
+      yield { event: 'token', data: { token: "Got it! Updating your brand blueprint...\n\n" } };
       
-      const text = "Got it, I've noted those changes down!\n\nDoes everything else look good?";
-      const options = [
-        { id: 'yes', label: 'Yes, proceed' },
-        { id: 'edit', label: 'No, I need to change more' }
-      ];
-      await this.saveAssistantMsg(projectId, text, options);
-      yield { event: 'token', data: { token: text } };
-      yield { event: 'ui-options', data: { options } };
+      const systemPrompt = `You are a contractor website builder assistant. 
+The user is at the final Brand Recap step.
+They just asked to edit their brand blueprint.
+Their message: "${content}"
+
+Currently, their brand answers are:
+${JSON.stringify(meta.brandAnswers || {}, null, 2)}
+
+Your task:
+1. If the user is specifically asking to change or regenerate their visual assets (e.g. "I want a different logo", "change the favicon", "I don't like the portrait"), output a special field called "asset_change_request" set to either "logo", "favicon", or "portrait".
+2. Otherwise, figure out which existing fields they want to change, if any, and output them as a JSON block.
+3. If they provide NEW information or instructions that don't fit into the existing fields (and it's NOT an asset change request), extract them into a JSON object called "additional_context".
+
+You MUST output ONLY a valid JSON object. Do not output any markdown, HTML comments, conversational text, or text outside the JSON.
+Example output format:
+{
+  "fieldName": "newValue",
+  "additional_context": {"customKey": "customValue"},
+  "asset_change_request": "logo"
+}`;
+
+      const stream = this.chatService.sendMessage(projectId, content, systemPrompt);
+      let fullResponse = '';
+      for await (const event of stream) {
+        if (event.event === 'internal-done') {
+          fullResponse = event.data.fullResponse;
+        }
+      }
+      
+      let extractedFields: any = {};
+      try {
+        // Strip markdown codeblocks if AI included them
+        const cleaned = fullResponse.replace(/```json/g, '').replace(/```/g, '').trim();
+        extractedFields = JSON.parse(cleaned);
+      } catch (e) {
+        // Fallback for older EXTRACT pattern
+        const match = fullResponse.match(/<!--\s*EXTRACT:\s*(?:```json)?\s*({.*?})\s*(?:```)?\s*-->/s);
+        if (match) {
+          try {
+            extractedFields = JSON.parse(match[1]);
+          } catch (e2) {}
+        }
+      }
+
+      if (extractedFields.asset_change_request) {
+        const assetType = extractedFields.asset_change_request;
+        yield { event: 'token', data: { token: `Got it! Let's get you a new ${assetType}.\n\n` } };
+        
+        // Find the brand-interview step
+        const brandInterviewStep = ONBOARDING_FLOW_CONFIG.find(s => s.id === 'brand-interview');
+        if (brandInterviewStep) {
+          // Rewind the flow state!
+          let nextState = `selecting_${assetType}`;
+          await this.updateMeta(projectId, { 
+            [`brand-interview_state`]: nextState,
+            [`${step.id}_state`]: 'initial' // Reset recap for later
+          });
+          
+          const freshMeta = await this.updateMeta(projectId, {});
+          
+          // Re-trigger the specific generation based on what they want to change
+          if (assetType === 'logo') {
+            yield* this.triggerLogoGeneration(projectId, freshMeta, brandInterviewStep, ONBOARDING_FLOW_CONFIG.indexOf(brandInterviewStep));
+          } else if (assetType === 'favicon') {
+            yield* this.triggerFaviconGeneration(projectId, freshMeta, brandInterviewStep, ONBOARDING_FLOW_CONFIG.indexOf(brandInterviewStep));
+          } else if (assetType === 'portrait') {
+            yield* this.triggerPortraitGeneration(projectId, freshMeta, brandInterviewStep, ONBOARDING_FLOW_CONFIG.indexOf(brandInterviewStep));
+          }
+          return;
+        }
+      }
+
+      const { additional_context, asset_change_request, ...dbFields } = extractedFields;
+      const brandAnswers = meta.brandAnswers || {};
+      const newBrandAnswers = { ...brandAnswers, ...dbFields };
+      if (additional_context) {
+        newBrandAnswers.additional_context = { ...(newBrandAnswers.additional_context || {}), ...additional_context };
+      }
+
+      // Preserve existing brandIdentityInputs (like themePreference) when updating!
+      const existingCtx = await this.businessContext.findByProjectId(projectId);
+      const existingBrandInputs = (existingCtx.brandIdentityInputs as any) || {};
+      const mergedBrandInputs = { ...existingBrandInputs, ...newBrandAnswers };
+
+      await this.prisma.businessContext.update({
+        where: { projectId },
+        data: { brandIdentityInputs: mergedBrandInputs }
+      });
+      await this.updateMeta(projectId, { brandAnswers: newBrandAnswers, [`${step.id}_state`]: 'confirming' });
+
+      // Re-render the recap table
+      const freshMeta = await this.updateMeta(projectId, {});
+      yield* this.renderBrandRecap(projectId, freshMeta, await this.businessContext.findByProjectId(projectId));
     }
   }
 
@@ -703,7 +923,21 @@ Keep your response under 3 sentences. End by asking them what they think, or tel
   // Core Engine Utilities
   // ==========================================
 
-  private async *advanceToNextStep(projectId: string, currentIndex: number, injectedContent?: string): AsyncGenerator<any, void, unknown> {
+  private async ensureAssetSaved(projectId: string, url: string, purpose: string, section: string) {
+    const existing = await this.prisma.asset.findFirst({ where: { projectId, url } });
+    if (!existing) {
+      await this.prisma.asset.create({
+        data: { projectId, url, type: 'image', purpose, section }
+      });
+    } else {
+      await this.prisma.asset.update({
+        where: { id: existing.id },
+        data: { purpose, section }
+      });
+    }
+  }
+
+  private async *advanceToNextStep(projectId: string, currentIndex: number, injectedContent?: string, suppressTransitionMsg: boolean = false): AsyncGenerator<any, void, unknown> {
     const currentStep = ONBOARDING_FLOW_CONFIG[currentIndex];
     const nextIndex = currentIndex + 1;
     await this.updateMeta(projectId, { stepIndex: nextIndex });
@@ -712,9 +946,11 @@ Keep your response under 3 sentences. End by asking them what they think, or tel
       const nextStep = ONBOARDING_FLOW_CONFIG[nextIndex];
       yield { event: 'flow-state', data: { state: nextStep.id } };
 
-      const transitionText = currentStep.transitionMessage ? `\n\n${currentStep.transitionMessage}\n\n` : `\n\nGreat! We have all the details for ${currentStep.frontendLabel}.\n\nLet's move on to ${nextStep.frontendLabel}.\n\n`;
-      yield { event: 'token', data: { token: transitionText } };
-      await this.saveAssistantMsg(projectId, transitionText.trim());
+      if (!suppressTransitionMsg) {
+        const transitionText = currentStep.transitionMessage ? `\n\n${currentStep.transitionMessage}\n\n` : `\n\nGreat! We have all the details for ${currentStep.frontendLabel}.\n\nLet's move on to ${nextStep.frontendLabel}.\n\n`;
+        yield { event: 'token', data: { token: transitionText } };
+        await this.saveAssistantMsg(projectId, transitionText.trim());
+      }
 
       // Trigger the next step automatically
       if (nextStep.customHandler) {
@@ -772,7 +1008,7 @@ Keep your response under 3 sentences. End by asking them what they think, or tel
     summaryText += `|---|---|\n`;
 
     const answers = meta.brandAnswers || {};
-    const themePref = ctx.brandIdentityInputs?.themePreference || 'Not Set';
+    const themePref = ctx.themePreference || ctx.brandIdentityInputs?.themePreference || 'Not Set';
     // Iterate over brand-interview questions to render what they answered
     const brandInterviewStep = ONBOARDING_FLOW_CONFIG.find(s => s.id === 'brand-interview');
     if (brandInterviewStep && brandInterviewStep.interviewQuestions) {
@@ -798,6 +1034,13 @@ Keep your response under 3 sentences. End by asking them what they think, or tel
 
     if (meta.finalPortraitUrl) {
       summaryText += `| Portrait | <img src="${meta.finalPortraitUrl}" width="80" style="border-radius:8px" /> |\n`;
+    }
+
+    if (answers.additional_context && Object.keys(answers.additional_context).length > 0) {
+      summaryText += `| **Additional Notes** | |\n`;
+      for (const [key, val] of Object.entries(answers.additional_context)) {
+        summaryText += `| *${key}* | **${val}** |\n`;
+      }
     }
 
     summaryText += `\nIs everything correct?`;

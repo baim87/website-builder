@@ -59,14 +59,21 @@ export class GenerationService {
         // 2. Fetch context
         const businessContext = await this.businessContextService.findByProjectId(projectId) as any;
       
-      const logoAsset = await this.prisma.asset.findFirst({
-        where: { projectId, OR: [{ purpose: ASSET_PURPOSE.LOGO }, { type: 'image' }] },
-      });
-      businessContext.logoUrl = logoAsset?.url || '';
+      const metaData = businessContext.interviewMetadata || {};
 
-      if (logoAsset?.url) {
+      let finalLogoUrl = metaData.finalLogoUrl;
+      if (!finalLogoUrl) {
+        const logoAsset = await this.prisma.asset.findFirst({
+          where: { projectId, purpose: ASSET_PURPOSE.LOGO },
+          orderBy: { createdAt: 'desc' }
+        });
+        finalLogoUrl = logoAsset?.url || '';
+      }
+      businessContext.logoUrl = finalLogoUrl;
+
+      if (finalLogoUrl) {
         try {
-          const extractedBrand = await this.brandExtractionService.extractBrandFromLogo(logoAsset.url);
+          const extractedBrand = await this.brandExtractionService.extractBrandFromLogo(finalLogoUrl);
           businessContext.extractedBrand = extractedBrand;
           this.logger.log(`Successfully extracted brand colors from logo: ${JSON.stringify(extractedBrand.colors)}`);
         } catch (error) {
@@ -74,10 +81,15 @@ export class GenerationService {
         }
       }
 
-      const portraitAsset = await this.prisma.asset.findFirst({
-        where: { projectId, purpose: ASSET_PURPOSE.PORTRAIT },
-      });
-      businessContext.ownerPortraitUrl = portraitAsset?.url || '';
+      let finalPortraitUrl = metaData.finalPortraitUrl;
+      if (!finalPortraitUrl) {
+        const portraitAsset = await this.prisma.asset.findFirst({
+          where: { projectId, purpose: ASSET_PURPOSE.PORTRAIT },
+          orderBy: { createdAt: 'desc' }
+        });
+        finalPortraitUrl = portraitAsset?.url || '';
+      }
+      businessContext.ownerPortraitUrl = finalPortraitUrl;
 
       // 3. Orchestrate skills & save pages incrementally
       const results = await this.orchestrator.generateWebsite(

@@ -55,6 +55,23 @@ export class DeploymentTrackerConsumer extends WorkerHost {
             where: { id: projectId },
             data: { status: PROJECT_STATUS.PUBLISHED },
           });
+
+          // Extract host without protocol just in case
+          const cleanDomain = latestDeploy.url.replace(/^https?:\/\//, '');
+
+          await this.prisma.domain.upsert({
+            where: { projectId },
+            create: {
+              projectId,
+              domainName: cleanDomain,
+              provider: 'vercel',
+              status: 'active'
+            },
+            update: {
+              domainName: cleanDomain
+            }
+          });
+
           return;
           
         } else if (latestDeploy.readyState === 'ERROR') {

@@ -24,7 +24,9 @@ export class InterviewExtractorService {
           const arrayFields = ['services', 'hours', 'serviceAreas', 'competitors'];
           for (const field of arrayFields) {
             if (parsed[field] !== undefined && parsed[field] !== null && !Array.isArray(parsed[field])) {
-               parsed[field] = typeof parsed[field] === 'string' ? [parsed[field]] : [];
+               parsed[field] = typeof parsed[field] === 'string' 
+                 ? parsed[field].split(',').map((s: string) => s.trim()).filter(Boolean) 
+                 : [];
             }
           }
           

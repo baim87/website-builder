@@ -70,7 +70,7 @@ export function buildCopyWriterPrompt(context: CopyWriterContext, locationMetric
   } else if (sectionType === 'BrandsSection') {
     sectionSpecificRules = `8. SECTION SPECIFIC RULES: Generate a list of partner brands using the logos provided in the AVAILABLE PROJECT ASSETS. You MUST use "ASSET:[id]" for their logos. If you absolutely must generate additional generic certifications (e.g., BBB, HomeAdvisor) that are not in the assets, you may fallback to "UNSPLASH:certification logo".`;
   } else if (sectionType === 'ServicesSection') {
-    sectionSpecificRules = `8. SECTION SPECIFIC RULES: Generate copy for EVERY service listed in the business context 'services' array.`;
+    sectionSpecificRules = `8. SECTION SPECIFIC RULES: Generate copy for EVERY service listed in the business context 'services' array. CRITICAL: Do NOT generate more services than provided in the array. Never hallucinate extra services.`;
   } else if (sectionType === 'LocationsSection') {
     const validRoutesStr = validRoutes
       ? `\nVALID PAGE ROUTES (use ONLY these exact slugs for links):\n${validRoutes.map((r: string) => `- /${r === 'home' ? '' : r}`).join('\n')}`

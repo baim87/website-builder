@@ -26,7 +26,7 @@ AVAILABLE IMAGES (for JSON-LD / og:image):
 ${availableAssets || 'No specific images available, use a generic placeholder.'}
 
 RULES:
-1. The title MUST be 30-60 characters and MUST contain the Primary Keyword.
+1. The title MUST be 30-75 characters (aim for ~60) and MUST contain the Primary Keyword.
 2. The description MUST be 120-160 characters.
 3. The H1 MUST contain the Primary Keyword.
 4. Make it compelling for a user searching for these services, leveraging the Brand Positioning and Messaging.
@@ -35,7 +35,7 @@ RULES:
 You MUST respond with ONLY a JSON object in this EXACT structure (no other text):
 {
   "slug": "${pageSlug}",
-  "title": "string (30-60 chars, includes primary keyword)",
+  "title": "string (30-75 chars, includes primary keyword)",
   "description": "string (120-160 chars)",
   "h1": "string (includes primary keyword)",
   "keywords": ["string (primary + secondaries)"],

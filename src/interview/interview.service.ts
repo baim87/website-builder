@@ -13,6 +13,7 @@ import { ASSET_PURPOSE } from '../assets/constants/asset-purpose.constant';
 export type InterviewEvent =
   | { event: 'field-update'; data: { field: string; value: any } }
   | { event: 'token'; data: { token: string } }
+  | { event: 'replace-message'; data: { content: string } }
   | { event: 'progress'; data: { stepComplete: boolean; complete: boolean; missingFields: string[]; progress: number } }
   | { event: 'done'; data: {} };
 
@@ -151,9 +152,30 @@ export class InterviewService {
             continue;
           }
 
-          const finalContext = await this.businessContextService.upsert(projectId, extractedFields);
-          for (const [field, value] of Object.entries(extractedFields)) {
-            yield { event: 'field-update', data: { field, value } };
+          const { additional_context, ...dbFields } = extractedFields as any;
+
+          if (additional_context) {
+            const brandInputs = (context.brandIdentityInputs as any) || {};
+            const existingAdditional = brandInputs.additional_context || {};
+            
+            const newBrandInputs = {
+              ...brandInputs,
+              additional_context: { ...existingAdditional, ...additional_context }
+            };
+            
+            await this.prisma.businessContext.update({
+              where: { projectId },
+              data: { brandIdentityInputs: newBrandInputs }
+            });
+            yield { event: 'field-update', data: { field: 'additional_context', value: additional_context } };
+          }
+
+          let finalContext: any = context;
+          if (Object.keys(dbFields).length > 0) {
+            finalContext = await this.businessContextService.upsert(projectId, dbFields);
+            for (const [field, value] of Object.entries(dbFields)) {
+              yield { event: 'field-update', data: { field, value } };
+            }
           }
 
           // Auto-fetch cities if location and radius are provided, but no service areas
@@ -171,22 +193,26 @@ export class InterviewService {
                 });
                 yield { event: 'field-update', data: { field: 'serviceAreas', value: cities } };
 
-                const appendedText = `\n\nI've automatically mapped your service area to include: ${cities.join(', ')}.`;
-                yield { event: 'token', data: { token: appendedText } };
-
+                const appendedText = `I've automatically mapped your service area to include: ${cities.join(', ')}.\n\n`;
+                
                 // Find the latest assistant message and append this text to persist it cleanly
                 const latestMsg = await this.prisma.chatMessage.findFirst({
                   where: { projectId, role: 'assistant' },
                   orderBy: { createdAt: 'desc' }
                 });
                 if (latestMsg) {
-                  // We remove the EXTRACT block from the saved message to keep the DB clean, 
-                  // and we place the appended text after the clean response.
                   const cleanResponseText = latestMsg.content.replace(/<!-- EXTRACT:.*?-->/gs, '').trim();
+                  const newContent = appendedText + cleanResponseText;
+                  
                   await this.prisma.chatMessage.update({
                     where: { id: latestMsg.id },
-                    data: { content: cleanResponseText + appendedText }
+                    data: { content: newContent }
                   });
+
+                  // Tell the frontend to replace the current streaming bubble with the correctly ordered text
+                  yield { event: 'replace-message', data: { content: newContent } };
+                } else {
+                  yield { event: 'token', data: { token: `\n\n${appendedText}` } };
                 }
               }
             }

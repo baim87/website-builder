@@ -274,8 +274,9 @@ Rules:
         id: 'colorPreferences',
         fieldKey: 'colorPreferences',
         question: 'Any colors you want or don\'t want?',
-        type: 'free-text',
+        type: 'multi-select',
         placeholder: 'e.g., I love navy blue, please no red.',
+        options: [],
         optional: true,
       },
       {

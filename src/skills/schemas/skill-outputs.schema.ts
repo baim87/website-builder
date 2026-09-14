@@ -98,8 +98,8 @@ export const KeywordStrategySchema = z.object({
 
 export const PageSeoSchema = z.object({
   slug: z.string(),
-  title: z.string().min(30).max(60),        // Google truncates at ~60 chars
-  description: z.string().min(120).max(160), // Google truncates at ~160 chars
+  title: z.string().describe('SEO Title. Try to keep around 60 chars.'),
+  description: z.string().describe('Meta description. Try to keep around 160 chars.'),
   h1: z.string(),
   keywords: z.array(z.string()),
   ogTitle: z.string(),

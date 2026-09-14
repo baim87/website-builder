@@ -271,9 +271,12 @@ export class NextjsBuilderService {
       this.logger.log(`Preparing environment variables for deployment...`);
       const envVars = [
         { key: 'NEXT_PUBLIC_API_URL', value: process.env.API_URL || 'http://localhost:3000', target: ['production', 'preview', 'development'], type: 'plain' },
-        { key: 'NEXT_PUBLIC_PROJECT_ID', value: projectId, target: ['production', 'preview', 'development'], type: 'plain' },
-        { key: 'BUILDER_API_SECRET', value: process.env.BUILDER_API_SECRET || '', target: ['production', 'preview', 'development'], type: 'plain' }
+        { key: 'NEXT_PUBLIC_PROJECT_ID', value: projectId, target: ['production', 'preview', 'development'], type: 'plain' }
       ];
+
+      if (process.env.BUILDER_API_SECRET) {
+        envVars.push({ key: 'BUILDER_API_SECRET', value: process.env.BUILDER_API_SECRET, target: ['production', 'preview', 'development'], type: 'plain' });
+      }
 
       // 5. Create GitHub Repository and Push
       const repoName = generateRepoName(businessContext.businessName, projectId);

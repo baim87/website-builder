@@ -70,11 +70,18 @@ const producers = [
     AIGatewayModule,
     BullModule.forRootAsync({
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        connection: {
-          url: config.get<string>('REDIS_URL'),
-        },
-      }),
+      useFactory: (config: ConfigService) => {
+        const redisUrl = config.get<string>('REDIS_URL') || 'redis://localhost:6379';
+        const urlObj = new URL(redisUrl);
+        return {
+          connection: {
+            host: urlObj.hostname,
+            port: parseInt(urlObj.port) || 6379,
+            password: urlObj.password || undefined,
+            family: 4, // Force IPv4 to prevent Docker network timeouts
+          },
+        };
+      },
     }),
     BullModule.registerQueue({
       name: QUEUE_NAMES.SITE_GENERATION,

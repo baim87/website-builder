@@ -405,18 +405,22 @@ export class GenerationOrchestratorService {
 
         let seoResult = null;
         if (pageSlug !== 'layout') {
-          seoResult = await this.executeWithRetries(this.seoMetadata, {
-            projectId: ctx.projectId,
-            context: { 
-              businessContext: ctx.businessContext, 
-              pageSlug, 
-              keywordTarget, 
-              projectAssets: combinedAssets,
-              brandPositioning: ctx.brandPositioningResult,
-              brandMessaging: ctx.brandMessagingResult
-            },
-            metadata: { phase: 'generation', pageSlug }
-          });
+          try {
+            seoResult = await this.executeWithRetries(this.seoMetadata, {
+              projectId: ctx.projectId,
+              context: { 
+                businessContext: ctx.businessContext, 
+                pageSlug, 
+                keywordTarget, 
+                projectAssets: combinedAssets,
+                brandPositioning: ctx.brandPositioningResult,
+                brandMessaging: ctx.brandMessagingResult
+              },
+              metadata: { phase: 'generation', pageSlug }
+            });
+          } catch (error) {
+            this.logger.warn(`[${pageSlug}] Failed to generate SEO metadata: ${error.message}. Proceeding without SEO.`);
+          }
         }
 
         const isLocationServicePage = ctx.isLocationServicePageMap.has(pageSlug);

@@ -56,20 +56,8 @@ export class AnalyticsService {
         await this.ga4Client.grantAdminAccess(propertyId, adminEmail);
         await this.gtmClient.grantAdminAccess(gtmInternalId, adminEmail);
       }
-      
-      // Attempt GSC Verification
-      let gscStatus = 'PENDING';
-      try {
-        await this.gscClient.verifySite(domainName);
-        gscStatus = 'VERIFIED';
-      } catch (e) {
-        this.logger.warn(`GSC Provisioning delayed for ${domainName} (DNS likely not propagated). Will retry via BullMQ. Error: ${getErrorMessage(e)}`);
-        // Throwing error causes BullMQ to retry the job according to the backoff strategy
-        throw new Error(`GSC Verification failed: ${getErrorMessage(e)}`);
-      }
-
-      // Persist to database (upsert to handle retries cleanly)
-      const analyticsRecord = await this.prisma.siteAnalytics.upsert({
+      // Persist to database immediately (upsert to handle retries cleanly)
+      await this.prisma.siteAnalytics.upsert({
         where: { projectId },
         create: {
           projectId,
@@ -77,19 +65,34 @@ export class AnalyticsService {
           ga4MeasurementId: measurementId!,
           gtmContainerId: gtmContainerId!,
           gscSiteUrl: `https://${domainName}`,
-          gscVerificationStatus: gscStatus,
+          gscVerificationStatus: 'PENDING',
         },
         update: {
           ga4PropertyId: propertyId!,
           ga4MeasurementId: measurementId!,
           gtmContainerId: gtmContainerId!,
           gscSiteUrl: `https://${domainName}`,
-          gscVerificationStatus: gscStatus,
         }
       });
 
+      // Attempt GSC Verification
+      let gscStatus = 'PENDING';
+      try {
+        await this.gscClient.verifySite(domainName);
+        gscStatus = 'VERIFIED';
+        
+        await this.prisma.siteAnalytics.update({
+          where: { projectId },
+          data: { gscVerificationStatus: gscStatus }
+        });
+      } catch (e) {
+        this.logger.warn(`GSC Provisioning delayed for ${domainName} (DNS likely not propagated). Will retry via BullMQ. Error: ${getErrorMessage(e)}`);
+        // Throwing error causes BullMQ to retry the job according to the backoff strategy
+        throw new Error(`GSC Verification failed: ${getErrorMessage(e)}`);
+      }
+
       this.logger.log(`Successfully provisioned all analytics for ${projectId}`);
-      return analyticsRecord;
+      return await this.prisma.siteAnalytics.findUnique({ where: { projectId } });
     } catch (error) {
       this.logger.error(`Analytics provisioning job failed: ${getErrorMessage(error)}`);
       throw error; // Rethrow so BullMQ knows it failed and will retry
