@@ -29,23 +29,6 @@ services:
       retries: 10
     restart: unless-stopped
 
-  minio:
-    image: minio/minio
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
-    ports:
-      - '9000:9000'
-      - '9001:9001'
-    volumes:
-      - miniodata:/data
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-    restart: unless-stopped
 
   browserless:
     image: browserless/chrome:latest
@@ -85,8 +68,6 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
-      minio:
-        condition: service_healthy
     restart: unless-stopped
 
   worker:
@@ -102,11 +83,8 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
-      minio:
-        condition: service_healthy
     restart: unless-stopped
 
 volumes:
   pgdata:
-  miniodata:
   redisdata:

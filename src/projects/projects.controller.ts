@@ -8,6 +8,7 @@ import type { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateBusinessContextSchema } from './dto/update-business-context.dto';
 import type { UpdateBusinessContextDto } from './dto/update-business-context.dto';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
+import { BrandKnowledgeService } from '../brand/brand-knowledge.service';
 
 import { GenerationProducer } from '../queue/producers/generation.producer';
 
@@ -18,6 +19,7 @@ export class ProjectsController {
     private readonly projectsService: ProjectsService,
     private readonly businessContextService: BusinessContextService,
     private readonly generationProducer: GenerationProducer,
+    private readonly brandKnowledgeService: BrandKnowledgeService,
   ) {}
 
   @Post()
@@ -64,6 +66,37 @@ export class ProjectsController {
     @Body() updateDto: UpdateBusinessContextDto,
   ) {
     return this.businessContextService.upsert(id, updateDto, userId);
+  }
+
+  @Get(':id/brand-documents/:documentId')
+  async getBrandDocument(
+    @Param('id') id: string,
+    @Param('documentId') documentId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    // Verify project belongs to user
+    await this.projectsService.findOne(id, userId);
+
+    const mapping: Record<string, string> = {
+      'visual': 'brand-visual.md',
+      'competitor-analysis': 'brand-positioning.md',
+      'competitor-watchlist': 'brand-messaging.md', // Fallback mapped to messaging for now
+      'site-crawl': 'brand-story.md', // Fallback mapped to story for now
+      'voice': 'brand-voice.md',
+      'market-strategy': 'brand-strategy.md',
+    };
+
+    const fileName = mapping[documentId];
+    if (!fileName) {
+      return { content: `# Document Not Found\nNo mapping for document ID: ${documentId}` };
+    }
+
+    const content = await this.brandKnowledgeService.getBrandFile(id, fileName);
+    if (!content) {
+      return { content: `# Document Pending\nThe ${documentId} document is still being generated or is not available yet.` };
+    }
+
+    return { content };
   }
 
   @Post(':id/generate')

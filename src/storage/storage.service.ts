@@ -15,8 +15,12 @@ export class StorageService implements StorageProvider {
 
   constructor(configService: ConfigService) {
     this.client = createS3Client(configService);
-    this.bucket = configService.get<string>('R2_BUCKET_NAME') || 'local-bucket';
-    this.publicUrl = configService.get<string>('R2_PUBLIC_URL') || 'http://localhost:9000/local-bucket';
+    this.bucket = configService.get<string>('R2_BUCKET_NAME')!;
+    this.publicUrl = configService.get<string>('R2_PUBLIC_URL')!;
+
+    if (!this.bucket || !this.publicUrl) {
+      throw new Error('R2_BUCKET_NAME and R2_PUBLIC_URL must be configured');
+    }
   }
 
   async upload(key: string, body: Buffer | Uint8Array | string, contentType?: string): Promise<string> {

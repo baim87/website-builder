@@ -3,27 +3,18 @@ import { OnboardingStep, getFieldKeys } from './constants/onboarding-flow.config
 
 @Injectable()
 export class InterviewPromptBuilder {
-  buildPrompt(businessContext: any, missingFields: string[], step: OnboardingStep, lastAskedField?: string, graceAlreadyUsedFor?: string): string {
-    // Only grant the "assume current message answers this" pass ONCE per field.
-    // If we already gave this exact field a pass last turn and it's STILL missing,
-    // stop hiding it — ask it plainly instead of skipping it again.
-    const shouldFilter = lastAskedField && lastAskedField !== graceAlreadyUsedFor;
-    
-    const fieldsToAsk = shouldFilter 
-      ? missingFields.filter(f => f !== lastAskedField) 
-      : missingFields;
-      
-    const isLastField = fieldsToAsk.length === 0;
-    
-    // Fallback to original missingFields to keep it in activeFields for extraction context
-    const activeFields = isLastField ? missingFields : fieldsToAsk;
+  buildPrompt(businessContext: any, missingFields: string[], step: OnboardingStep, lastAskedField?: string): string {
+    const activeFields = missingFields;
+    const isLastField = activeFields.length === 0;
 
     const nextFieldKey = activeFields[0];
     const nextFieldDef = step.fields.find(f => f.key === nextFieldKey);
     const nextFieldQuestion = nextFieldDef?.question || `What is your ${nextFieldKey}?`;
     
     let customQuestionHint = "";
-    if (!isLastField && nextFieldKey === 'location' && businessContext.gbpData?.inferredLocation) {
+    if (lastAskedField === nextFieldKey) {
+        customQuestionHint = `\n   CRITICAL HINT: The user did NOT answer this question in their previous message (perhaps they typed gibberish or changed the subject). You MUST re-ask this question, but do it conversationally. Start your response with something like "I'm sorry, I didn't quite catch that." or "Could you clarify?" before repeating the question.`;
+    } else if (!isLastField && nextFieldKey === 'location' && businessContext.gbpData?.inferredLocation) {
         customQuestionHint = `\n   CRITICAL HINT: The user's Google Business Profile indicates they are based in ${businessContext.gbpData.inferredLocation}. You MUST frame your question to ask them to confirm this, e.g. "I see your business is based in ${businessContext.gbpData.inferredLocation}. Is this your primary service area, or do you serve a different location?"`;
     }
 
@@ -43,10 +34,10 @@ export class InterviewPromptBuilder {
 
     let extractionHint = lastAskedField ? `\nCRITICAL EXTRACTION HINT: The user was just asked about "${lastAskedField}". Their message is likely the answer to this field. EXAMINE THEIR MESSAGE CAREFULLY AND EXTRACT THIS FIELD IF APPLICABLE!` : '';
     if (lastAskedField === 'location' && businessContext.gbpData?.inferredLocation) {
-        extractionHint += `\n   -> If the user simply confirms their location (e.g. "yes", "yup"), you MUST extract {"location": "${businessContext.gbpData.inferredLocation}"}.`;
+        extractionHint += `\n   -> FATAL INSTRUCTION: If the user's message is an affirmation (e.g., "yes", "yup", "yeah", "uh-huh", "correct", "sure", "ok"), you MUST STRICTLY EXTRACT: {"location": "${businessContext.gbpData.inferredLocation}"}.`;
     }
     if (lastAskedField === 'radius') {
-        extractionHint += `\n   -> If the user replies with a time or distance (e.g. "2 hours", "50 miles"), you MUST extract it exactly as written {"radius": "2 hours"}.`;
+        extractionHint += `\n   -> FATAL INSTRUCTION: If the user replies with a time or distance (e.g. "2 hours", "50 miles", "2 hr", "25 mi"), you MUST STRICTLY EXTRACT exactly what they said: {"radius": "2 hours"}.`;
     }
 
     return `You are a contractor website builder assistant. You ONLY help build contractor websites.

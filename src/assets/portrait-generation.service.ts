@@ -22,35 +22,44 @@ export class PortraitGenerationService {
     private readonly skillLogger: SkillLoggerService,
   ) {}
 
-  async generatePortrait(projectId: string, trade: string, localImagePath: string, brandHints?: string) {
-    let imageBuffer: Buffer;
+  async generatePortrait(projectId: string, trade: string, localImagePath?: string, brandHints?: string) {
+    let imageBuffer: Buffer | null = null;
     let mimeType = 'image/jpeg';
     
-    if (localImagePath.startsWith('http://') || localImagePath.startsWith('https://')) {
-      this.logger.log(`Fetching remote reference image from ${localImagePath}`);
-      const res = await axios.get(localImagePath, { 
-        responseType: 'arraybuffer',
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' }
-      });
-      imageBuffer = Buffer.from(res.data);
-      mimeType = (res.headers['content-type'] as string) || mimeType;
-    } else {
-      if (!fs.existsSync(localImagePath)) {
-        throw new Error(`File not found at ${localImagePath}`);
+    if (localImagePath && localImagePath !== 'skip') {
+      if (localImagePath.startsWith('http://') || localImagePath.startsWith('https://')) {
+        this.logger.log(`Fetching remote reference image from ${localImagePath}`);
+        const res = await axios.get(localImagePath, { 
+          responseType: 'arraybuffer',
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' }
+        });
+        imageBuffer = Buffer.from(res.data);
+        mimeType = (res.headers['content-type'] as string) || mimeType;
+      } else {
+        if (!fs.existsSync(localImagePath)) {
+          throw new Error(`File not found at ${localImagePath}`);
+        }
+        imageBuffer = fs.readFileSync(localImagePath);
+        if (localImagePath.endsWith('.png')) mimeType = 'image/png';
+        else if (localImagePath.endsWith('.webp')) mimeType = 'image/webp';
       }
-      imageBuffer = fs.readFileSync(localImagePath);
-      if (localImagePath.endsWith('.png')) mimeType = 'image/png';
-      else if (localImagePath.endsWith('.webp')) mimeType = 'image/webp';
     }
 
-    const base64Image = `data:${mimeType};base64,${imageBuffer.toString('base64')}`;
+    const base64Image = imageBuffer ? `data:${mimeType};base64,${imageBuffer.toString('base64')}` : null;
 
-    const prompt = `Create a world-class professional commercial portrait of a US home-service contractor, using the provided reference photo as the primary identity and appearance reference.
+    const basePrompt = base64Image 
+      ? `Create a world-class professional commercial portrait of a US home-service contractor, using the provided reference photo as the primary identity and appearance reference.
 
 SUBJECT:
 A confident, approachable American home contractor specializing in ${trade}.
 
-Preserve the person's recognizable facial structure, approximate age, hairstyle, skin tone, facial hair, and overall appearance from the reference image. The person should look like the same real individual, not a generic model.
+Preserve the person's recognizable facial structure, approximate age, hairstyle, skin tone, facial hair, and overall appearance from the reference image. The person should look like the same real individual, not a generic model.`
+      : `Create a world-class professional commercial portrait of a US home-service contractor.
+
+SUBJECT:
+A confident, approachable American home contractor specializing in ${trade}. Create a realistic, diverse, authentic individual who looks like they have years of hands-on experience. They should not look like a generic model.`;
+
+    const prompt = `${basePrompt}
 
 The expression should communicate:
 - trustworthy
@@ -191,9 +200,11 @@ No AI-looking artifacts.`;
     this.logger.log(`Calling OpenRouter for portrait generation using ${AIModel.SEEDREAM_4_5}...`);
     
     const contentBlocks: any[] = [
-      { type: "text", text: prompt },
-      { type: "image_url", image_url: { url: base64Image } }
+      { type: "text", text: prompt }
     ];
+    if (base64Image) {
+      contentBlocks.push({ type: "image_url", image_url: { url: base64Image } });
+    }
 
     const messages = [
       {
@@ -283,7 +294,7 @@ No AI-looking artifacts.`;
     return uploadedWebpUrl;
   }
 
-  async generatePortraitVariants(projectId: string, trade: string, localImagePath: string, brandHints?: string): Promise<string[]> {
+  async generatePortraitVariants(projectId: string, trade: string, localImagePath?: string, brandHints?: string): Promise<string[]> {
     this.logger.log(`Generating 3 portrait variants for project ${projectId}...`);
     // Run 3 generations in parallel to give the user 3 distinct options
     const variants = await Promise.all([

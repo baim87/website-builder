@@ -12,7 +12,7 @@ export class AssetsService {
     private readonly storage: StorageService,
     private readonly pathResolver: AssetPathResolverService,
     @Inject(forwardRef(() => AssetConversionProducer)) private readonly conversionProducer: AssetConversionProducer,
-  ) {}
+  ) { }
 
   async uploadAsset(projectId: string, userId: string, file: Express.Multer.File, purpose: string, section?: string) {
     const isImage = file.mimetype.startsWith('image/');
@@ -23,7 +23,7 @@ export class AssetsService {
     const assetId = randomUUID();
     const assetType = purpose ? purpose.toUpperCase() : 'GENERAL';
     const serviceName = section ? section.toLowerCase().replace(/[^a-z0-9]+/g, '-') : 'general';
-    
+
     const paths = this.pathResolver.resolveStoragePath(userId, projectId, assetType, serviceName, assetId);
     const extension = file.originalname?.split('.').pop() || mimeType.split('/')[1] || 'bin';
     const originalKey = `${paths.folderPath}/${paths.fileNameBase}-original.${extension}`;
@@ -64,10 +64,33 @@ export class AssetsService {
   }
 
   async getAssets(projectId: string) {
-    return this.prisma.asset.findMany({
+    const uploadedAssets = await this.prisma.asset.findMany({
       where: { projectId },
       orderBy: { sortOrder: 'asc' },
     });
+
+    // Make sure we only pull successfully completed generated assets
+    const generatedAssets = await this.prisma.projectAsset.findMany({
+      where: { projectId, status: 'completed' },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const combined = [
+      ...uploadedAssets.map(a => ({
+        id: a.id,
+        url: a.convertedUrl || a.url,
+        purpose: a.purpose || 'Uploaded Image',
+        source: 'upload',
+      })),
+      ...generatedAssets.map(a => ({
+        id: a.id,
+        url: a.webpUrl || a.originalUrl,
+        purpose: a.type || 'Generated Asset',
+        source: 'generated',
+      }))
+    ];
+
+    return combined.filter(a => a.url);
   }
 
   async getAsset(projectId: string, assetId: string) {
@@ -87,20 +110,46 @@ export class AssetsService {
   }
 
   async deleteAsset(projectId: string, assetId: string) {
-    const asset = await this.getAsset(projectId, assetId);
-
-    // Best effort delete from storage
-    try {
-      const originalKey = asset.url.split('/').pop();
-      if (originalKey) await this.storage.delete(`projects/${asset.projectId}/assets/${originalKey}`);
-      
-      if (asset.convertedUrl) {
-        const convertedKey = asset.convertedUrl.split('/').pop();
-        if (convertedKey) await this.storage.delete(`projects/${asset.projectId}/assets/${convertedKey}`);
+    // 1. Try finding in standard user-uploaded Assets first
+    const asset = await this.prisma.asset.findFirst({ where: { id: assetId, projectId } });
+    
+    if (asset) {
+      // Best effort delete from storage
+      try {
+        const originalKey = asset.url.split('/').pop();
+        if (originalKey) await this.storage.delete(`projects/${asset.projectId}/assets/${originalKey}`);
+        
+        if (asset.convertedUrl) {
+          const convertedKey = asset.convertedUrl.split('/').pop();
+          if (convertedKey) await this.storage.delete(`projects/${asset.projectId}/assets/${convertedKey}`);
+        }
+      } catch (e) {
+        console.warn('Failed to delete asset from storage', e);
       }
-    } catch (e) {}
+      await this.prisma.asset.delete({ where: { id: assetId } });
+      return { success: true };
+    }
 
-    await this.prisma.asset.delete({ where: { id: assetId } });
-    return { success: true };
+    // 2. Try finding in ProjectAssets (AI generated)
+    const projectAsset = await this.prisma.projectAsset.findFirst({ where: { id: assetId, projectId } });
+    
+    if (projectAsset) {
+      try {
+        if (projectAsset.originalUrl) {
+          const originalKey = projectAsset.originalUrl.split('/').pop();
+          if (originalKey) await this.storage.delete(`projects/${projectAsset.projectId}/assets/${originalKey}`);
+        }
+        if (projectAsset.webpUrl) {
+          const webpKey = projectAsset.webpUrl.split('/').pop();
+          if (webpKey) await this.storage.delete(`projects/${projectAsset.projectId}/assets/${webpKey}`);
+        }
+      } catch (e) {
+        console.warn('Failed to delete project asset from storage', e);
+      }
+      await this.prisma.projectAsset.delete({ where: { id: assetId } });
+      return { success: true };
+    }
+
+    throw new NotFoundException(`Asset ${assetId} not found`);
   }
 }

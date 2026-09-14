@@ -9,9 +9,10 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { QueueModule } from '../queue/queue.module';
 import { SeoModule } from '../seo/seo.module';
 import { StorageModule } from '../storage/storage.module';
+import { BrandModule } from '../brand/brand.module';
 
 @Module({
-  imports: [PrismaModule, forwardRef(() => QueueModule), SeoModule, StorageModule],
+  imports: [PrismaModule, forwardRef(() => QueueModule), SeoModule, StorageModule, BrandModule],
   controllers: [ProjectsController],
   providers: [ProjectsService, BusinessContextService, WebsiteDataService, PageService, GooglePlacesService],
   exports: [ProjectsService, BusinessContextService, WebsiteDataService, PageService, GooglePlacesService],

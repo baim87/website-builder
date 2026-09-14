@@ -27,7 +27,7 @@ export function parseJsonFromLlm(raw: string): any {
     if (start !== -1 && end > start) {
       text = text.substring(start, end + 1);
     }
-  } else if (!text.startsWith('[') && text.includes('[')) {
+  } else if (!text.startsWith('{') && !text.startsWith('[') && text.includes('[')) {
      // Attempt to extract the first [ to the last ] for array root
     const start = text.indexOf('[');
     const end = text.lastIndexOf(']');
@@ -36,11 +36,21 @@ export function parseJsonFromLlm(raw: string): any {
     }
   }
 
+  // Attempt to sanitize unescaped newlines within strings if necessary
+  // A simple heuristic is to try parsing, and if it fails due to newlines, we can try to escape them.
   try {
     return JSON.parse(text);
-  } catch (e) {
-    logger.error(`Failed to parse JSON. Raw snippet: ${raw.substring(0, 200)}...`);
-    throw new Error('Invalid JSON received from LLM');
+  } catch (e: any) {
+    // Basic attempt to fix unescaped newlines in JSON strings (common LLM hallucination)
+    const sanitized = text.replace(/(?<=:\s*"(?:[^"\\]|\\.)*)(?<!\\)\n(?=(?:[^"\\]|\\.)*")/g, '\\n');
+    try {
+      return JSON.parse(sanitized);
+    } catch (e2: any) {
+      require('fs').writeFileSync('/tmp/raw-json-debug.txt', raw);
+      require('fs').writeFileSync('/tmp/invalid-json-debug.txt', text);
+      logger.error(`Failed to parse JSON. Error: ${e.message}. Raw snippet: ${raw.substring(0, 200)}... (Full text saved to /tmp/invalid-json-debug.txt)`);
+      throw new Error('Invalid JSON received from LLM');
+    }
   }
 }
 

@@ -19,9 +19,7 @@ import { BrandVoiceSkill } from '../skills/impl/brand-voice.skill';
 import { BrandVisualSkill } from '../skills/impl/brand-visual.skill';
 import { BrandMessagingSkill } from '../skills/impl/brand-messaging.skill';
 import { BrandStorySkill } from '../skills/impl/brand-story.skill';
-
-
-
+import { ChatService } from './chat.service';
 
 @Injectable()
 export class ChatFlowEngine {
@@ -29,6 +27,7 @@ export class ChatFlowEngine {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly chatService: ChatService,
     private readonly interviewService: InterviewService,
     private readonly businessContext: BusinessContextService,
     private readonly googlePlaces: GooglePlacesService,
@@ -138,10 +137,8 @@ export class ChatFlowEngine {
     }
 
     const lastAskedField = meta[`${currentStep.id}_lastAskedField`];
-    const graceUsedFor = meta[`${currentStep.id}_graceUsedFor`];
-    const usedGraceFilter = lastAskedField && status.missingFields.includes(lastAskedField) && lastAskedField !== graceUsedFor;
 
-    const stream = this.interviewService.processMessage(projectId, content, status.missingFields, currentStep, state === 'editing', lastAskedField, graceUsedFor);
+    const stream = this.interviewService.processMessage(projectId, content, status.missingFields, currentStep, state === 'editing', lastAskedField);
     let latestMissingFields = status.missingFields;
     for await (const event of stream) {
       if (event.event === 'progress') {
@@ -150,9 +147,8 @@ export class ChatFlowEngine {
       yield event;
     }
 
-    await this.updateMeta(projectId, { 
+    await this.updateMeta(projectId, {
       [`${currentStep.id}_lastAskedField`]: latestMissingFields[0] ?? null,
-      [`${currentStep.id}_graceUsedFor`]: usedGraceFilter ? lastAskedField : null,
     });
 
     const finalStatus = await this.interviewService.checkCompleteness(projectId, getFieldKeys(currentStep));
@@ -187,7 +183,7 @@ export class ChatFlowEngine {
             where: { projectId, role: 'assistant' },
             orderBy: { createdAt: 'desc' }
           });
-          
+
           if (latestMsg) {
             await this.prisma.chatMessage.update({
               where: { id: latestMsg.id },
@@ -210,7 +206,7 @@ export class ChatFlowEngine {
         yield* this.advanceToNextStep(projectId, stepIndex);
       } else {
         // We just completed everything, show summary
-        
+
         // Trigger background keyword metrics fetch for all surrounding cities (Fire 2)
         // This is done here so it includes any custom services the user might have just typed.
         if (currentStep.id === 'business') {
@@ -223,7 +219,7 @@ export class ChatFlowEngine {
             ).catch(e => this.logger.error(`Failed to process background location metrics for project ${projectId}`, e.stack));
           }
         }
-        
+
         yield* this.showConfirmationSummary(projectId, currentStep);
       }
     } else if (state === 'editing') {
@@ -432,7 +428,7 @@ export class ChatFlowEngine {
 
   public async *handleBrandInterview(projectId: string, content: string, meta: any, step: any, stepIndex: number): AsyncGenerator<any, void, unknown> {
     const state = meta[`${step.id}_state`] || 'interviewing';
-    
+
     if (state === 'selecting_portrait') {
       if (content === 'upload_new') {
         await this.updateMeta(projectId, { [`${step.id}_state`]: 'uploading_final_portrait' });
@@ -464,8 +460,36 @@ export class ChatFlowEngine {
     // Save answer if not the first display
     if (content && meta[`${step.id}_asked`]) {
       const currentQ = questions[qIndex];
+      const lowerContent = String(content).toLowerCase().trim();
+      const needsHelp = ["not sure", "i'm not sure", "i am not sure", "idk", "i don't know", "suggest", "help", "what do you think", "any ideas"].some(phrase => lowerContent.includes(phrase)) || lowerContent.length < 3;
+
+      if (needsHelp && currentQ.type !== 'multi-select') {
+        // Generate contextual suggestion and DO NOT increment qIndex
+        yield { event: 'thinking-status', data: { message: 'Thinking of ideas...' } };
+        const systemPrompt = `You are a helpful brand strategist for United States Local contractors. 
+The user is filling out a branding questionnaire and was asked: "${currentQ.question}". 
+They replied: "${content}". 
+Please provide 3 short, friendly suggestions or examples they could use for their brand. 
+Keep your response under 3 sentences. End by asking them what they think, or tell them they can just pick one of the ideas.`;
+
+        const stream = this.chatService.sendMessage(projectId, content, systemPrompt);
+        for await (const event of stream) {
+          if (event.event === 'internal-done') {
+            // Re-yield the UI options for the current question so they can still see them
+            let options = undefined;
+            if (currentQ.options) {
+              options = currentQ.options;
+              yield { event: 'ui-options', data: { options } };
+            }
+          } else {
+            yield event;
+          }
+        }
+        return; // Halt here so the user can answer the question again
+      }
+
       let finalContent = content;
-      
+
       // Enforce maxSelections on the backend and convert to array
       if (currentQ.type === 'multi-select') {
         const parts = String(finalContent).split(',').map((s: string) => s.trim()).filter(Boolean);
@@ -476,7 +500,7 @@ export class ChatFlowEngine {
           finalContent = parts as any;
         }
       }
-      
+
       answers[currentQ.fieldKey] = finalContent;
       await this.updateMeta(projectId, { brandAnswers: answers, [`${step.id}_qIndex`]: qIndex + 1 });
       qIndex++;
@@ -500,10 +524,10 @@ export class ChatFlowEngine {
 
     if (qIndex < questions.length) {
       const q = questions[qIndex];
-      
+
       const text = q.question;
       await this.updateMeta(projectId, { [`${step.id}_asked`]: true });
-      
+
       let options = undefined;
       let multiSelect = undefined;
 
@@ -518,76 +542,82 @@ export class ChatFlowEngine {
       }
 
       await this.saveAssistantMsg(projectId, text, options, q.uploadConfig, multiSelect);
-      
+
       yield { event: 'token', data: { token: text } };
       if (options) yield { event: 'ui-options', data: { options } };
       if (multiSelect) yield { event: 'ui-multi-select', data: multiSelect };
       if (q.uploadConfig) yield { event: 'ui-upload', data: q.uploadConfig };
     } else {
       await this.updateMeta(projectId, { [`${step.id}_asked`]: false });
-      
+
       // All questions answered, generate brand knowledge files!
       yield { event: 'thinking', data: { message: "Synthesizing your brand strategy..." } };
-      
+
       try {
         const businessContext = await this.businessContext.findByProjectId(projectId);
         // Include interview answers into business context for the skills
         const fullContext = { ...businessContext, brandIdentityInputs: answers };
-        
+
         // 1. Run brand-strategy.skill FIRST (foundation)
         const strategyResult = await this.executor.executeSkill(this.brandStrategy, {
           projectId, context: { businessContext: fullContext }
         });
-        await this.brandKnowledge.saveBrandFile(projectId, 'brand-strategy.md', strategyResult.data);
-        
+        await this.brandKnowledge.saveBrandFile(projectId, 'brand-strategy.md', strategyResult);
+
         yield { event: 'thinking', data: { message: "Developing brand positioning, messaging, and visual direction..." } };
-        
+
         // 2. Run the other 5 skills IN PARALLEL (all read strategy)
         const [positioning, voice, visual, messaging, story] = await Promise.all([
           this.executor.executeSkill(this.brandPositioning, {
-            projectId, context: { businessContext: fullContext, brandStrategy: strategyResult.data }
+            projectId, context: { businessContext: fullContext, brandStrategy: strategyResult }
           }),
           this.executor.executeSkill(this.brandVoice, {
-            projectId, context: { businessContext: fullContext, brandStrategy: strategyResult.data }
+            projectId, context: { businessContext: fullContext, brandStrategy: strategyResult }
           }),
           this.executor.executeSkill(this.brandVisual, {
-            projectId, context: { businessContext: fullContext, brandStrategy: strategyResult.data, extractedBrand: meta.extractedBrand }
+            projectId, context: { businessContext: fullContext, brandStrategy: strategyResult, extractedBrand: meta.extractedBrand }
           }),
           this.executor.executeSkill(this.brandMessaging, {
-            projectId, context: { businessContext: fullContext, brandStrategy: strategyResult.data }
+            projectId, context: { businessContext: fullContext, brandStrategy: strategyResult }
           }),
           this.executor.executeSkill(this.brandStory, {
-            projectId, context: { businessContext: fullContext, brandStrategy: strategyResult.data }
+            projectId, context: { businessContext: fullContext, brandStrategy: strategyResult }
           }),
         ]);
-        
+
         // 3. Save all files to R2
         await Promise.all([
-          this.brandKnowledge.saveBrandFile(projectId, 'brand-positioning.md', positioning.data),
-          this.brandKnowledge.saveBrandFile(projectId, 'brand-voice.md', voice.data),
-          this.brandKnowledge.saveBrandFile(projectId, 'brand-visual.md', visual.data),
-          this.brandKnowledge.saveBrandFile(projectId, 'brand-messaging.md', messaging.data),
-          this.brandKnowledge.saveBrandFile(projectId, 'brand-story.md', story.data),
+          this.brandKnowledge.saveBrandFile(projectId, 'brand-positioning.md', positioning),
+          this.brandKnowledge.saveBrandFile(projectId, 'brand-voice.md', voice),
+          this.brandKnowledge.saveBrandFile(projectId, 'brand-visual.md', visual.markdown),
+          this.brandKnowledge.saveBrandFile(projectId, 'brand-messaging.md', messaging),
+          this.brandKnowledge.saveBrandFile(projectId, 'brand-story.md', story),
         ]);
-        
+
         // 4. Auto-select theme from brand-visual.skill output
-        const recommendedTheme = visual.metadata?.recommendedTheme || 'modern-minimalist';
+        const recommendedTheme = visual.recommendedTheme || 'modern-minimalist';
         await this.businessContext.upsert(projectId, {
           brandIdentityInputs: { ...answers, themePreference: recommendedTheme }
         });
-        
+
         // 5. Generate logo - MOVED to handleBrandRecap confirming state!
-        
-        // 6. Generate portrait variants (if user uploaded a photo in Q14)
+
+        // 6. Generate portrait variants (if user uploaded a photo OR selected scratch)
         const portraitImageUrl = answers['ownerPortrait'];
-        if (portraitImageUrl && portraitImageUrl !== 'skip') {
+        const isScratch = meta.brandStrategySelection === 'scratch';
+        
+        if ((portraitImageUrl && portraitImageUrl !== 'skip') || isScratch) {
           yield { event: 'thinking', data: { message: "Generating 3 professional portrait options..." } };
           try {
-            const variants = await this.portraitGeneration.generatePortraitVariants(projectId, fullContext.trade || 'contractor', portraitImageUrl, visual.data);
-            
+            const referenceImage = (portraitImageUrl && portraitImageUrl !== 'skip') ? portraitImageUrl : undefined;
+            const variants = await this.portraitGeneration.generatePortraitVariants(projectId, fullContext.trade || 'contractor', referenceImage, visual.markdown);
+
             await this.updateMeta(projectId, { [`${step.id}_state`]: 'selecting_portrait', generatedPortraits: variants });
-            
-            const text = `I've generated 3 professional portrait options based on your photo. Which one do you prefer?`;
+
+            const text = referenceImage 
+              ? `I've generated 3 professional portrait options based on your photo. Which one do you prefer?`
+              : `I've generated 3 synthetic professional portraits for your brand. Which one do you prefer?`;
+              
             const options: any[] = variants.map((url, i) => ({
               id: url,
               label: `Option ${i + 1}`,
@@ -603,7 +633,7 @@ export class ChatFlowEngine {
             yield { event: 'token', data: { token: `Portrait generation failed: ${e.message}\n` } };
           }
         }
-        
+
         await this.updateMeta(projectId, { [`${step.id}_state`]: 'done' });
         yield* this.advanceToNextStep(projectId, stepIndex);
       } catch (e: any) {
@@ -617,19 +647,19 @@ export class ChatFlowEngine {
     const ctx = await this.businessContext.findByProjectId(projectId);
     const self = this;
 
-    const triggerLogoGen = async function*() {
-        const hasExistingLogo = meta.brandStrategySelection === 'has-logo';
-        if (!hasExistingLogo) {
-          yield { event: 'token', data: { token: "Generating AI logo...\n" } };
-          try {
-            // Re-fetch visual.md data for logo hints since it was saved to R2
-            const visualMd = await self.brandKnowledge.getBrandFile(projectId, 'brand-visual.md');
-            await self.logoGeneration.generateLogoAndFavicon(projectId, ctx.businessName || 'business', ctx.trade || 'contractor', visualMd || '');
-            yield { event: 'token', data: { token: "Logo generated successfully!\n\n" } };
-          } catch (e: any) {
-            yield { event: 'token', data: { token: `Logo generation failed: ${e.message}\n\n` } };
-          }
+    const triggerLogoGen = async function* () {
+      const hasExistingLogo = meta.brandStrategySelection === 'has-logo';
+      if (!hasExistingLogo) {
+        yield { event: 'token', data: { token: "Generating AI logo...\n" } };
+        try {
+          // Re-fetch visual.md data for logo hints since it was saved to R2
+          const visualMd = await self.brandKnowledge.getBrandFile(projectId, 'brand-visual.md');
+          await self.logoGeneration.generateLogoAndFavicon(projectId, ctx.businessName || 'business', ctx.trade || 'contractor', visualMd || '');
+          yield { event: 'token', data: { token: "Logo generated successfully!\n\n" } };
+        } catch (e: any) {
+          yield { event: 'token', data: { token: `Logo generation failed: ${e.message}\n\n` } };
         }
+      }
     };
 
     if (state === 'initial') {
@@ -649,11 +679,18 @@ export class ChatFlowEngine {
       }
     } else if (state === 'editing') {
       const answers = meta.brandAnswers || {};
-      answers['user_revisions'] = content;
+      answers['user_revisions'] = (answers['user_revisions'] ? answers['user_revisions'] + '\n' : '') + content;
       await this.prisma.businessContext.update({ where: { projectId }, data: { brandIdentityInputs: answers } });
-      yield { event: 'token', data: { token: "Got it, I've noted those changes down!\n\n" } };
-      yield* triggerLogoGen();
-      yield* this.advanceToNextStep(projectId, stepIndex);
+      await this.updateMeta(projectId, { [`${step.id}_state`]: 'confirming' });
+      
+      const text = "Got it, I've noted those changes down!\n\nDoes everything else look good?";
+      const options = [
+        { id: 'yes', label: 'Yes, proceed' },
+        { id: 'edit', label: 'No, I need to change more' }
+      ];
+      await this.saveAssistantMsg(projectId, text, options);
+      yield { event: 'token', data: { token: text } };
+      yield { event: 'ui-options', data: { options } };
     }
   }
 
@@ -721,14 +758,14 @@ export class ChatFlowEngine {
     const getSwatch = (hex: string) => `<span style="display:inline-block;width:16px;height:16px;background-color:${hex};border-radius:50%;border:1px solid rgba(255,255,255,0.2);vertical-align:-3px;margin-right:6px;"></span>${hex}`;
 
     let summaryText = `**Awesome. Let's recap your brand before we generate the website:**\n\n`;
-    
+
     // Quick attempt to load the actual generated brand files to prove it worked
     try {
       const visualMd = await this.brandKnowledge.getBrandFile(projectId, 'brand-visual.md');
       if (visualMd) {
         summaryText += `*We successfully built your strategic Brand Knowledge Base (Strategy, Positioning, Voice, Visuals, Messaging, and Story) from your interview answers!*\n\n`;
       }
-    } catch (e) {}
+    } catch (e) { }
 
     summaryText += `| Brand Element | Details |\n`;
     summaryText += `|---|---|\n`;
@@ -749,7 +786,7 @@ export class ChatFlowEngine {
         }
       }
     }
-    
+
     summaryText += `| Recommended Theme | **${themePref}** |\n`;
 
     if (meta.extractedBrand) {

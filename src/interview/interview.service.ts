@@ -47,9 +47,9 @@ export class InterviewService {
     };
   }
 
-  async *processMessage(projectId: string, content: string, missingFields: string[], step: OnboardingStep, isEditing: boolean = false, lastAskedField?: string, graceAlreadyUsedFor?: string): AsyncGenerator<InterviewEvent, void, unknown> {
+  async *processMessage(projectId: string, content: string, missingFields: string[], step: OnboardingStep, isEditing: boolean = false, lastAskedField?: string): AsyncGenerator<InterviewEvent, void, unknown> {
     const context = await this.businessContextService.findByProjectId(projectId);
-    const systemPrompt = this.promptBuilder.buildPrompt(context, missingFields, step, lastAskedField, graceAlreadyUsedFor);
+    const systemPrompt = this.promptBuilder.buildPrompt(context, missingFields, step, lastAskedField);
 
     // Check for logo
     const logoAsset = await this.prisma.asset.findFirst({

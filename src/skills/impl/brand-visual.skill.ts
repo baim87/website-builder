@@ -52,8 +52,10 @@ export class BrandVisualSkill implements Skill {
     const validatedData = this.validator.validate(parsed, BrandVisualOutputSchema);
 
     return {
-      data: validatedData.markdown,
-      metadata: { recommendedTheme: validatedData.recommendedTheme },
+      data: {
+        markdown: validatedData.markdown,
+        recommendedTheme: validatedData.recommendedTheme,
+      },
       hash: 'brand-visual-' + Date.now(),
       model: AIModel.CLAUDE_FABLE_5,
       usage: result.usage,
