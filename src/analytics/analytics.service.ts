@@ -4,6 +4,7 @@ import { Ga4Client } from './clients/ga4.client';
 import { GtmClient } from './clients/gtm.client';
 import { GscClient } from './clients/gsc.client';
 import { getErrorMessage } from '../common/utils/error.util';
+import { ANALYTICS_STATUS } from './constants/analytics-status.constant';
 
 @Injectable()
 export class AnalyticsService {
@@ -107,11 +108,11 @@ export class AnalyticsService {
     });
 
     if (!analytics) {
-      return { status: 'NOT_PROVISIONED' };
+      return { status: ANALYTICS_STATUS.NOT_PROVISIONED };
     }
 
     return {
-      status: 'ACTIVE',
+      status: ANALYTICS_STATUS.ACTIVE,
       gtmContainerId: analytics.gtmContainerId,
       ga4MeasurementId: analytics.ga4MeasurementId,
       gscStatus: analytics.gscVerificationStatus,

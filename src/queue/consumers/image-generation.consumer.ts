@@ -11,6 +11,8 @@ import { AssetPathResolverService } from '../../assets/asset-path-resolver.servi
 import { ImageCritiqueService } from '../../quality-control/image-critique.service';
 import { AIModel } from '../../common/constants/ai-models.constant';
 import { AISkill } from '../../common/constants/ai-skills.constant';
+import { ASSET_STATUS } from '../../assets/constants/asset-status.constant';
+import { SKILL_STATUS } from '../../skills/constants/skill-status.constant';
 
 @Processor(QUEUE_NAMES.IMAGE_GENERATION, {
   concurrency: 2, // process 2 at a time to prevent memory/cpu exhaustion from sharp
@@ -40,7 +42,7 @@ export class ImageGenerationConsumer extends WorkerHost {
     // Get total and completed counts for progress tracking
     const [totalAssets, completedAssets] = await Promise.all([
       this.prisma.projectAsset.count({ where: { projectId } }),
-      this.prisma.projectAsset.count({ where: { projectId, status: 'completed' } }),
+      this.prisma.projectAsset.count({ where: { projectId, status: ASSET_STATUS.COMPLETED } }),
     ]);
     const currentNum = completedAssets + 1;
     const progressTag = `[${currentNum}/${totalAssets}]`;
@@ -61,7 +63,7 @@ export class ImageGenerationConsumer extends WorkerHost {
 
       await this.prisma.projectAsset.update({
         where: { id: projectAssetId },
-        data: { status: 'generating' },
+        data: { status: ASSET_STATUS.GENERATING },
       });
 
       let referenceBase64: string | undefined;
@@ -164,7 +166,7 @@ export class ImageGenerationConsumer extends WorkerHost {
           originalUrl,
           webpUrl,
           cost: totalCost,
-          status: 'completed',
+          status: ASSET_STATUS.COMPLETED,
         },
       });
 
@@ -175,7 +177,7 @@ export class ImageGenerationConsumer extends WorkerHost {
           inputHash: projectAssetId,
           model: AIModel.SEEDREAM_4_5,
           cost: totalCost,
-          status: 'success',
+          status: SKILL_STATUS.SUCCESS,
           metadata: { projectAssetId, type: asset.type }
         }
       });
@@ -187,7 +189,7 @@ export class ImageGenerationConsumer extends WorkerHost {
       
       await this.prisma.projectAsset.update({
         where: { id: projectAssetId },
-        data: { status: 'failed' },
+        data: { status: ASSET_STATUS.FAILED },
       });
 
       await this.prisma.skillInvocation.create({
@@ -196,7 +198,7 @@ export class ImageGenerationConsumer extends WorkerHost {
           skillType: AISkill.IMAGE_GENERATION,
           inputHash: projectAssetId,
           model: AIModel.SEEDREAM_4_5,
-          status: 'failed',
+          status: SKILL_STATUS.FAILED,
           error: error.message,
           metadata: { projectAssetId }
         }

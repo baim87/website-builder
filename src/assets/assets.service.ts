@@ -4,7 +4,8 @@ import { StorageService } from '../storage/storage.service';
 import { AssetConversionProducer } from '../queue/producers/asset-conversion.producer';
 import { AssetPathResolverService } from './asset-path-resolver.service';
 import { randomUUID } from 'crypto';
-
+import { ASSET_STATUS } from './constants/asset-status.constant';
+import { ASSET_PURPOSE } from './constants/asset-purpose.constant';
 @Injectable()
 export class AssetsService {
   constructor(
@@ -71,7 +72,7 @@ export class AssetsService {
 
     // Make sure we only pull successfully completed generated assets
     const generatedAssets = await this.prisma.projectAsset.findMany({
-      where: { projectId, status: 'completed' },
+      where: { projectId, status: ASSET_STATUS.COMPLETED },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -79,13 +80,13 @@ export class AssetsService {
       ...uploadedAssets.map(a => ({
         id: a.id,
         url: a.convertedUrl || a.url,
-        purpose: a.purpose || 'Uploaded Image',
+        purpose: a.purpose || ASSET_PURPOSE.UPLOADED_IMAGE,
         source: 'upload',
       })),
       ...generatedAssets.map(a => ({
         id: a.id,
         url: a.webpUrl || a.originalUrl,
-        purpose: a.type || 'Generated Asset',
+        purpose: a.type || ASSET_PURPOSE.GENERATED_ASSET,
         source: 'generated',
       }))
     ];

@@ -8,6 +8,7 @@ import { ChatService } from '../chat/chat.service';
 import { PrismaService } from '../prisma/prisma.service';
 import * as fs from 'fs';
 import { parseRadiusToMiles } from '../utils/parse-radius.util';
+import { ASSET_PURPOSE } from '../assets/constants/asset-purpose.constant';
 
 export type InterviewEvent =
   | { event: 'field-update'; data: { field: string; value: any } }
@@ -53,7 +54,7 @@ export class InterviewService {
 
     // Check for logo
     const logoAsset = await this.prisma.asset.findFirst({
-      where: { projectId, purpose: 'logo' },
+      where: { projectId, purpose: ASSET_PURPOSE.LOGO },
       orderBy: { createdAt: 'desc' }
     });
 

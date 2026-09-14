@@ -1,3 +1,5 @@
+import { ASSET_PURPOSE } from '../../assets/constants/asset-purpose.constant';
+
 // ─── Types ──────────────────────────────────────────────────────────────
 
 export interface OnboardingField {
@@ -290,7 +292,7 @@ Rules:
         question: 'Got a photo of the owner or team? We\'ll create a professional portrait that matches your brand.',
         type: 'upload',
         optional: true,
-        uploadConfig: { type: 'image', purpose: 'portrait' },
+        uploadConfig: { type: 'image', purpose: ASSET_PURPOSE.PORTRAIT },
       },
     ],
   },

@@ -5,6 +5,7 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { QUEUE_NAMES } from '../common/constants/queue-names.constant';
 import { AssetRepairSkill } from '../skills/impl/asset-repair.skill';
+import { ASSET_STATUS } from '../assets/constants/asset-status.constant';
 
 @Injectable()
 export class AssetRepairService {
@@ -75,7 +76,7 @@ export class AssetRepairService {
         where: { id: targetAsset.id },
         data: { 
           prompt: newPrompt,
-          status: 'pending' // reset status so the worker picks it up properly
+          status: ASSET_STATUS.PENDING // reset status so the worker picks it up properly
         }
       });
 

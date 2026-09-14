@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import * as crypto from 'crypto';
 import { PinoLogger } from 'nestjs-pino';
 import { ClsService } from 'nestjs-cls';
+import { SKILL_STATUS, SkillStatus } from './constants/skill-status.constant';
 
 @Injectable()
 export class SkillExecutorService {
@@ -28,7 +29,7 @@ export class SkillExecutorService {
         projectId: input.projectId,
         skillType: skill.name,
         inputHash,
-        status: 'success'
+        status: SKILL_STATUS.SUCCESS
       },
       orderBy: { createdAt: 'desc' }
     });
@@ -39,7 +40,7 @@ export class SkillExecutorService {
     }
 
     const startTime = Date.now();
-    let status: 'success' | 'failed' = 'success';
+    let status: SkillStatus = SKILL_STATUS.SUCCESS;
     let outputHash: string | undefined;
     let outputData: any | undefined;
     let errorStr: string | undefined;
@@ -54,7 +55,7 @@ export class SkillExecutorService {
       usage = result.usage;
       return outputData;
     } catch (error: any) {
-      status = 'failed';
+      status = SKILL_STATUS.FAILED;
       errorStr = error.message;
       this.logger.error({ err: error }, `Skill ${skill.name} failed`);
       throw error;

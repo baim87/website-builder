@@ -8,6 +8,9 @@ import { VisualQAService, VisualCritique } from './visual-qa.service';
 import { BrowserlessService } from './browserless.service';
 
 import * as crypto from 'crypto';
+import { AISkill } from '../common/constants/ai-skills.constant';
+import { SKILL_STATUS } from '../skills/constants/skill-status.constant';
+import { JOB_STATUS } from '../generation/constants/job-status.constant';
 
 export interface QCReport {
   sitemapUrls: string[];
@@ -44,7 +47,7 @@ export class QualityControlService {
 
     // Check Cache
     const cachedAudit = await this.prisma.skillInvocation.findFirst({
-      where: { projectId, skillType: 'QA_AUDIT', inputHash, status: 'success' },
+      where: { projectId, skillType: AISkill.QA_AUDIT, inputHash, status: SKILL_STATUS.SUCCESS },
       orderBy: { createdAt: 'desc' }
     });
 
@@ -113,7 +116,7 @@ export class QualityControlService {
       // Mobile Pass
       let mobileRetries = 3;
       const mobileHash = crypto.createHash('sha256').update(`${projectId}-mobile-${pageUrl}-${projectStateTimestamp}`).digest('hex');
-      const cachedMobile = await this.prisma.skillInvocation.findFirst({ where: { skillType: 'QA_PAGE_AUDIT', inputHash: mobileHash, status: 'success' }, orderBy: { createdAt: 'desc' } });
+      const cachedMobile = await this.prisma.skillInvocation.findFirst({ where: { skillType: AISkill.QA_PAGE_AUDIT, inputHash: mobileHash, status: SKILL_STATUS.SUCCESS }, orderBy: { createdAt: 'desc' } });
       
       if (cachedMobile && cachedMobile.outputData) {
         this.logger.log(`[CHECKPOINT HIT] Mobile QA for ${pageUrl} loaded from cache.`);
@@ -132,7 +135,7 @@ export class QualityControlService {
             );
             visualCritiques.push(mobileCritique);
             await this.prisma.skillInvocation.create({
-              data: { projectId, skillType: 'QA_PAGE_AUDIT', model: 'system', inputHash: mobileHash, outputData: mobileCritique as any, status: 'success' }
+              data: { projectId, skillType: AISkill.QA_PAGE_AUDIT, model: 'system', inputHash: mobileHash, outputData: mobileCritique as any, status: SKILL_STATUS.SUCCESS }
             });
             break;
           } catch (err: any) {
@@ -148,7 +151,7 @@ export class QualityControlService {
       // Desktop Pass
       let desktopRetries = 3;
       const desktopHash = crypto.createHash('sha256').update(`${projectId}-desktop-${pageUrl}-${projectStateTimestamp}`).digest('hex');
-      const cachedDesktop = await this.prisma.skillInvocation.findFirst({ where: { skillType: 'QA_PAGE_AUDIT', inputHash: desktopHash, status: 'success' }, orderBy: { createdAt: 'desc' } });
+      const cachedDesktop = await this.prisma.skillInvocation.findFirst({ where: { skillType: AISkill.QA_PAGE_AUDIT, inputHash: desktopHash, status: SKILL_STATUS.SUCCESS }, orderBy: { createdAt: 'desc' } });
 
       if (cachedDesktop && cachedDesktop.outputData) {
         this.logger.log(`[CHECKPOINT HIT] Desktop QA for ${pageUrl} loaded from cache.`);
@@ -167,7 +170,7 @@ export class QualityControlService {
             );
             visualCritiques.push(desktopCritique);
             await this.prisma.skillInvocation.create({
-              data: { projectId, skillType: 'QA_PAGE_AUDIT', model: 'system', inputHash: desktopHash, outputData: desktopCritique as any, status: 'success' }
+              data: { projectId, skillType: AISkill.QA_PAGE_AUDIT, model: 'system', inputHash: desktopHash, outputData: desktopCritique as any, status: SKILL_STATUS.SUCCESS }
             });
             break;
           } catch (err: any) {
@@ -189,7 +192,7 @@ export class QualityControlService {
     const hasBrokenLinks = linkReport.brokenLinks.length > 0;
     const hasPoorPerformance = lighthouseReports.some(r => r.performance < 90);
     const hasVisualIssues = visualCritiques.some(c => c.overallScore < 9);
-    const status = (hasBrokenLinks || hasPoorPerformance || hasVisualIssues) ? 'failed' : 'passed';
+    const status = (hasBrokenLinks || hasPoorPerformance || hasVisualIssues) ? JOB_STATUS.FAILED : JOB_STATUS.COMPLETED;
     
     this.logger.log(`QC completed for project ${projectId}. Status: ${status}`);
 
@@ -201,11 +204,11 @@ export class QualityControlService {
     await this.prisma.skillInvocation.create({
       data: {
         projectId,
-        skillType: 'QA_AUDIT',
+        skillType: AISkill.QA_AUDIT,
         model: 'system',
         inputHash,
         outputData: finalReport as any,
-        status: 'success',
+        status: SKILL_STATUS.SUCCESS,
         latencyMs: Date.now() - startTime
       }
     });

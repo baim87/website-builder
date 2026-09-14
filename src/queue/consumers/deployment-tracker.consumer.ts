@@ -4,6 +4,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { QUEUE_NAMES } from '../../common/constants/queue-names.constant';
 import { PrismaService } from '../../prisma/prisma.service';
 import { VercelClient } from '../../vercel/vercel.client';
+import { PROJECT_STATUS } from '../../projects/constants/project-status.constant';
 
 export interface DeploymentTrackerJobData {
   projectId: string;
@@ -52,7 +53,7 @@ export class DeploymentTrackerConsumer extends WorkerHost {
           
           await this.prisma.project.update({
             where: { id: projectId },
-            data: { status: 'PUBLISHED' },
+            data: { status: PROJECT_STATUS.PUBLISHED },
           });
           return;
           
@@ -60,7 +61,7 @@ export class DeploymentTrackerConsumer extends WorkerHost {
           this.logger.error(`[${projectId}] Vercel deployment failed with ERROR state.`);
           await this.prisma.project.update({
             where: { id: projectId },
-            data: { status: 'FAILED' },
+            data: { status: PROJECT_STATUS.FAILED },
           });
           return;
         } else {
@@ -80,7 +81,7 @@ export class DeploymentTrackerConsumer extends WorkerHost {
       this.logger.warn(`[${projectId}] Timed out waiting for Vercel deployment.`);
       await this.prisma.project.update({
         where: { id: projectId },
-        data: { status: 'PUBLISHED' }, // Fallback to published so the UI unblocks
+        data: { status: PROJECT_STATUS.PUBLISHED }, // Fallback to published so the UI unblocks
       });
       return;
     }

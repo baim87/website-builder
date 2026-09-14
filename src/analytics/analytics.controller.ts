@@ -2,6 +2,7 @@ import { Controller, Get, Post, Param, UseGuards, Request, Body, HttpStatus, Htt
 import { AnalyticsService } from './analytics.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { AnalyticsProvisioningProducer } from '../queue/producers/analytics-provisioning.producer';
+import { ANALYTICS_STATUS } from './constants/analytics-status.constant';
 
 @UseGuards(JwtAuthGuard)
 @Controller('projects/:projectId/analytics')
@@ -32,6 +33,6 @@ export class AnalyticsController {
     // Add job to BullMQ via the producer
     await this.analyticsProducer.provisionAnalytics(projectId, domainName, req.user.id);
     
-    return { status: 'ACCEPTED', message: 'Analytics provisioning has been queued and will complete in the background.' };
+    return { status: ANALYTICS_STATUS.ACCEPTED, message: 'Analytics provisioning has been queued and will complete in the background.' };
   }
 }

@@ -11,6 +11,7 @@ import { CopyWriterSkill } from '../skills/impl/copy-writer.skill';
 import { UIDesignerSkill } from '../skills/impl/ui-designer.skill';
 import { ComponentGeneratorSkill } from '../skills/impl/component-generator.skill';
 import { PrismaService } from '../prisma/prisma.service';
+import { ASSET_PURPOSE } from '../assets/constants/asset-purpose.constant';
 import { UnsplashService } from '../assets/unsplash.service';
 
 import { ImagePlannerSkill } from '../skills/impl/image-planner.skill';
@@ -18,7 +19,9 @@ import { ImageGenerationProducer } from '../queue/producers/image-generation.pro
 import { PartnerBrandService } from '../assets/partner-brand.service';
 import { ServiceRankingService } from '../keywords/service-ranking.service';
 import { SeasonalityService } from '../keywords/seasonality.service';
-
+import { JOB_STATUS } from './constants/job-status.constant';
+import { GENERATION_STATUS } from './constants/generation-status.constant';
+import { ASSET_STATUS } from '../assets/constants/asset-status.constant';
 export interface GenerationContext {
   projectId: string;
   businessContext: any;
@@ -88,20 +91,20 @@ export class GenerationOrchestratorService {
 
     const ctx = await this.initializeContext(projectId, businessContext);
     
-    if (job) await job.updateProgress({ phase: 'Analyzing Market Data', status: 'in_progress' });
+    if (job) await job.updateProgress({ phase: 'Analyzing Market Data', status: JOB_STATUS.IN_PROGRESS });
     await this.executePhase0Intelligence(ctx);
     
-    if (job) await job.updateProgress({ phase: 'Applying Brand Styles', status: 'in_progress' });
+    if (job) await job.updateProgress({ phase: 'Applying Brand Styles', status: JOB_STATUS.IN_PROGRESS });
     await this.executePhase1BrandDesign(ctx);
     
-    if (job) await job.updateProgress({ phase: 'Generating SEO Content', status: 'in_progress' });
+    if (job) await job.updateProgress({ phase: 'Generating SEO Content', status: JOB_STATUS.IN_PROGRESS });
     await this.executePhase2KeywordStrategy(ctx);
     await this.executePhase2_5ImagePlanning(ctx);
     
-    if (job) await job.updateProgress({ phase: 'Optimizing Performance', status: 'in_progress' });
+    if (job) await job.updateProgress({ phase: 'Optimizing Performance', status: JOB_STATUS.IN_PROGRESS });
     const successfulPages = await this.executePhase3To5PageLoop(ctx, onPageGenerated);
     
-    if (job) await job.updateProgress({ phase: 'Optimizing Performance', status: 'completed' });
+    if (job) await job.updateProgress({ phase: 'Optimizing Performance', status: JOB_STATUS.COMPLETED });
 
     return {
       designTokens: ctx.designSystemResult,
@@ -256,7 +259,7 @@ export class GenerationOrchestratorService {
       
       await this.prisma.websiteData.update({
         where: { projectId: ctx.projectId },
-        data: { designTokens: ctx.designSystemResult ? (ctx.designSystemResult as any) : undefined, generationStatus: 'components' }
+        data: { designTokens: ctx.designSystemResult ? (ctx.designSystemResult as any) : undefined, generationStatus: GENERATION_STATUS.COMPONENTS }
       });
     } else {
         this.logger.log('Skipping Phase 1 - Design System already exists');
@@ -280,7 +283,7 @@ export class GenerationOrchestratorService {
         });
         await this.prisma.websiteData.update({
             where: { projectId: ctx.projectId },
-            data: { seoMetadata: ctx.keywordStrategyResult, generationStatus: 'pages' }
+            data: { seoMetadata: ctx.keywordStrategyResult, generationStatus: GENERATION_STATUS.PAGES }
         });
     } else {
         this.logger.log('Skipping Phase 2 - Keyword Strategy already exists');
@@ -289,7 +292,7 @@ export class GenerationOrchestratorService {
 
   private async executePhase2_5ImagePlanning(ctx: GenerationContext) {
     this.logger.log('Phase 2.25: Extracting and Caching Partner Brands');
-    const existingBrands = await this.prisma.asset.count({ where: { projectId: ctx.projectId, purpose: 'partner_brand' } });
+    const existingBrands = await this.prisma.asset.count({ where: { projectId: ctx.projectId, purpose: ASSET_PURPOSE.PARTNER_BRAND } });
     if (existingBrands === 0 && ctx.businessContext.trade) {
       await this.partnerBrandService.processPartnerBrands(ctx.projectId, ctx.businessContext.trade, ctx.businessContext.services || []);
     }
@@ -325,16 +328,16 @@ export class GenerationOrchestratorService {
         this.logger.warn(`Image generation polling timed out after 10 minutes. Proceeding with remaining completed images.`);
         // Fail any remaining pending images
         await this.prisma.projectAsset.updateMany({
-          where: { projectId: ctx.projectId, status: { in: ['pending', 'generating'] } },
-          data: { status: 'failed' },
+          where: { projectId: ctx.projectId, status: { in: [ASSET_STATUS.PENDING, ASSET_STATUS.GENERATING] } },
+          data: { status: ASSET_STATUS.FAILED },
         });
         break;
       }
 
       const [pendingAssets, completedAssets, failedAssets, totalAssets] = await Promise.all([
-        this.prisma.projectAsset.count({ where: { projectId: ctx.projectId, status: { in: ['pending', 'generating'] } } }),
-        this.prisma.projectAsset.count({ where: { projectId: ctx.projectId, status: 'completed' } }),
-        this.prisma.projectAsset.count({ where: { projectId: ctx.projectId, status: 'failed' } }),
+        this.prisma.projectAsset.count({ where: { projectId: ctx.projectId, status: { in: [ASSET_STATUS.PENDING, ASSET_STATUS.GENERATING] } } }),
+        this.prisma.projectAsset.count({ where: { projectId: ctx.projectId, status: ASSET_STATUS.COMPLETED } }),
+        this.prisma.projectAsset.count({ where: { projectId: ctx.projectId, status: ASSET_STATUS.FAILED } }),
         this.prisma.projectAsset.count({ where: { projectId: ctx.projectId } }),
       ]);
       
@@ -361,7 +364,7 @@ export class GenerationOrchestratorService {
     });
 
     const partnerBrandAssets = await this.prisma.asset.findMany({
-      where: { projectId: ctx.projectId, purpose: 'partner_brand' },
+      where: { projectId: ctx.projectId, purpose: ASSET_PURPOSE.PARTNER_BRAND },
       select: { id: true, url: true }
     });
 
@@ -384,7 +387,7 @@ export class GenerationOrchestratorService {
           where: { projectId_slug: { projectId: ctx.projectId, slug: pageSlug } }
         });
         
-        if (existingPage && existingPage.status === 'completed') {
+        if (existingPage && existingPage.status === GENERATION_STATUS.COMPLETED) {
            this.logger.log(`\n[${pageSlug}] Skipping - already completed`);
            successfulPages.push({
                slug: existingPage.slug,
@@ -537,7 +540,7 @@ export class GenerationOrchestratorService {
           componentCode: Object.keys(generatedComponents).length > 0 ? generatedComponents : null,
           seoMeta: seoResult,
           keywordTarget,
-          status: 'completed'
+          status: GENERATION_STATUS.COMPLETED
         };
         
         successfulPages.push(pagePayload);
@@ -610,7 +613,7 @@ export class GenerationOrchestratorService {
         } else if (val.startsWith('ASSET:')) {
           const assetId = val.replace('ASSET:', '').trim();
           const asset = await this.prisma.projectAsset.findUnique({ where: { id: assetId } });
-          if (asset && asset.status === 'completed' && asset.webpUrl) {
+          if (asset && asset.status === ASSET_STATUS.COMPLETED && asset.webpUrl) {
             obj[key] = asset.webpUrl;
           } else {
             obj[key] = `/api/assets/${assetId}`;

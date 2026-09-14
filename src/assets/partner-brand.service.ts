@@ -5,6 +5,7 @@ import { StorageService } from '../storage/storage.service';
 import { AssetPathResolverService } from './asset-path-resolver.service';
 import { ImageProcessorService } from './image-processor.service';
 import axios from 'axios';
+import { ASSET_PURPOSE } from './constants/asset-purpose.constant';
 import { z } from 'zod';
 import { zodToJsonSchema } from '@alcyone-labs/zod-to-json-schema';
 import { AIModel } from '../common/constants/ai-models.constant';
@@ -139,7 +140,7 @@ CRITICAL CONSTRAINTS:
 
     if (globalUrl) {
       const existing = await this.prisma.asset.findFirst({
-        where: { projectId, purpose: 'partner_brand', url: globalUrl }
+        where: { projectId, purpose: ASSET_PURPOSE.PARTNER_BRAND, url: globalUrl }
       });
 
       if (!existing) {
@@ -148,7 +149,7 @@ CRITICAL CONSTRAINTS:
             projectId,
             url: globalUrl,
             type: 'image',
-            purpose: 'partner_brand',
+            purpose: ASSET_PURPOSE.PARTNER_BRAND,
             section: brandName,  // store brandName here — Asset has no name column
           }
         });

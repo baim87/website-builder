@@ -11,6 +11,7 @@ import { JwtTokenService } from '../auth/jwt/jwt.service';
 import { QueueEvents } from 'bullmq';
 import { QUEUE_NAMES } from '../common/constants/queue-names.constant';
 import { ConfigService } from '@nestjs/config';
+import { JOB_STATUS } from './constants/job-status.constant';
 
 @WebSocketGateway({
   cors: { origin: '*' },
@@ -44,11 +45,11 @@ export class GenerationGateway implements OnGatewayConnection, OnGatewayDisconne
     });
 
     this.queueEvents.on('completed', (args: { jobId: string; returnvalue: any; prev?: string }) => {
-      this.server.to(`job_${args.jobId}`).emit('progress', { status: 'completed' });
+      this.server.to(`job_${args.jobId}`).emit('progress', { status: JOB_STATUS.COMPLETED });
     });
 
     this.queueEvents.on('failed', (args: { jobId: string; failedReason: string }) => {
-      this.server.to(`job_${args.jobId}`).emit('progress', { status: 'failed', reason: args.failedReason });
+      this.server.to(`job_${args.jobId}`).emit('progress', { status: JOB_STATUS.FAILED, reason: args.failedReason });
     });
   }
 

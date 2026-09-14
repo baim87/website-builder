@@ -26,4 +26,6 @@ export enum AISkill {
   SECTION_CONTENT = 'SectionContent',
   BRAND_KIT_GENERATOR = 'brand_kit_generator',
   IMAGE_GENERATION = 'ImageGeneration',
+  QA_AUDIT = 'QA_AUDIT',
+  QA_PAGE_AUDIT = 'QA_PAGE_AUDIT',
 }

@@ -5,6 +5,7 @@ import { ComponentRepairService } from '../auto-repair/component-repair.service'
 import { CopywritingRepairService } from '../auto-repair/copywriting-repair.service';
 import { BrandRepairService } from '../auto-repair/brand-repair.service';
 import { GithubService } from '../deployment/github.service';
+import { QC_STATUS } from './constants/qc-status.constant';
 import { PrismaService } from '../prisma/prisma.service';
 import { CostAggregatorService } from '../skills/cost-aggregator.service';
 import { generateRepoName } from '../common/utils/repo.util';
@@ -65,7 +66,7 @@ export class QCOrchestratorService {
     if (attempt === 1 && qcState === 'AUDIT') {
       await this.prisma.websiteData.updateMany({
         where: { projectId, project: { userId } },
-        data: { qcStatus: 'running' }
+        data: { qcStatus: QC_STATUS.RUNNING }
       });
     }
 
@@ -242,7 +243,7 @@ export class QCOrchestratorService {
     await this.prisma.websiteData.updateMany({
       where: { projectId, project: { userId } },
       data: { 
-        qcStatus: isSuccess ? 'passed' : 'failed',
+        qcStatus: isSuccess ? QC_STATUS.COMPLETED : QC_STATUS.FAILED,
         qcReport: finalReport as any 
       }
     });

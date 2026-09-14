@@ -7,6 +7,8 @@ import sharp from 'sharp';
 import { SkillLoggerService } from '../skills/skill-logger.service';
 import { AIModel } from '../common/constants/ai-models.constant';
 import { AISkill } from '../common/constants/ai-skills.constant';
+import { SKILL_STATUS } from '../skills/constants/skill-status.constant';
+import { ASSET_PURPOSE } from './constants/asset-purpose.constant';
 
 @Injectable()
 export class LogoGenerationService {
@@ -75,7 +77,7 @@ The background MUST be transparent (no background).`;
         skillType: AISkill.LOGO_GENERATION,
         model: AIModel.RECRAFT_VECTOR,
         inputHash: 'logo-gen',
-        status: 'success',
+        status: SKILL_STATUS.SUCCESS,
         cost: cost,
         metadata: { phase: 'generation', componentName: 'Logo' }
       });
@@ -94,7 +96,7 @@ The background MUST be transparent (no background).`;
         projectId,
         url: uploadedLogoUrl,
         type: 'image',
-        purpose: 'logo',
+        purpose: ASSET_PURPOSE.LOGO,
         section: 'header,footer',
       },
     });
@@ -113,7 +115,7 @@ The background MUST be transparent (no background).`;
           projectId,
           url: uploadedFaviconUrl,
           type: 'image',
-          purpose: 'favicon',
+          purpose: ASSET_PURPOSE.FAVICON,
           section: 'head',
         },
       });

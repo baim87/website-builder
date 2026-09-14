@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { SKILL_STATUS } from './constants/skill-status.constant';
 
 @Injectable()
 export class CostAggregatorService {
@@ -9,7 +10,7 @@ export class CostAggregatorService {
 
   async printCostReport(projectId: string, phase: 'generation' | 'repair' = 'generation', totalWallClockTimeMs?: number) {
     const invocations = await this.prisma.skillInvocation.findMany({
-      where: { projectId, status: 'success' },
+      where: { projectId, status: SKILL_STATUS.SUCCESS },
     });
 
     if (invocations.length === 0) {

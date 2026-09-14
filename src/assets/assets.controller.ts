@@ -4,6 +4,7 @@ import { AssetsService } from './assets.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { BrandAssetIngestionService } from './brand-asset-ingestion.service';
 import { BrandExportService } from './brand-export.service';
+import { ASSET_PURPOSE } from './constants/asset-purpose.constant';
 
 @UseGuards(JwtAuthGuard)
 @Controller('projects/:projectId/assets')
@@ -30,7 +31,7 @@ export class AssetsController {
     @UploadedFile() file: Express.Multer.File,
     @Request() req: any,
   ) {
-    return this.brandAssetIngestionService.processAsset(projectId, req.user.id, 'logo', file.buffer, file.mimetype);
+    return this.brandAssetIngestionService.processAsset(projectId, req.user.id, ASSET_PURPOSE.LOGO, file.buffer, file.mimetype);
   }
 
   @Post('favicon/upload')
@@ -40,7 +41,7 @@ export class AssetsController {
     @UploadedFile() file: Express.Multer.File,
     @Request() req: any,
   ) {
-    return this.brandAssetIngestionService.processAsset(projectId, req.user.id, 'favicon', file.buffer, file.mimetype);
+    return this.brandAssetIngestionService.processAsset(projectId, req.user.id, ASSET_PURPOSE.FAVICON, file.buffer, file.mimetype);
   }
 
   @Post('logo/url')
@@ -49,7 +50,7 @@ export class AssetsController {
     @Body('url') url: string,
     @Request() req: any,
   ) {
-    return this.brandAssetIngestionService.processAsset(projectId, req.user.id, 'logo', url);
+    return this.brandAssetIngestionService.processAsset(projectId, req.user.id, ASSET_PURPOSE.LOGO, url);
   }
 
   @Post('favicon/url')
@@ -58,7 +59,7 @@ export class AssetsController {
     @Body('url') url: string,
     @Request() req: any,
   ) {
-    return this.brandAssetIngestionService.processAsset(projectId, req.user.id, 'favicon', url);
+    return this.brandAssetIngestionService.processAsset(projectId, req.user.id, ASSET_PURPOSE.FAVICON, url);
   }
 
   @Post()

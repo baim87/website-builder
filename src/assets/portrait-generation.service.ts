@@ -9,6 +9,8 @@ import { ImageProcessorService } from './image-processor.service';
 import { SkillLoggerService } from '../skills/skill-logger.service';
 import { AIModel } from '../common/constants/ai-models.constant';
 import { AISkill } from '../common/constants/ai-skills.constant';
+import { SKILL_STATUS } from '../skills/constants/skill-status.constant';
+import { ASSET_PURPOSE } from './constants/asset-purpose.constant';
 
 @Injectable()
 export class PortraitGenerationService {
@@ -272,7 +274,7 @@ No AI-looking artifacts.`;
         projectId,
         url: uploadedWebpUrl,
         type: 'image',
-        purpose: 'portrait',
+        purpose: ASSET_PURPOSE.PORTRAIT,
         section: 'about',
       },
     });
@@ -283,7 +285,7 @@ No AI-looking artifacts.`;
         skillType: AISkill.PORTRAIT_GENERATION,
         model: AIModel.SEEDREAM_4_5,
         inputHash: 'portrait-gen',
-        status: 'success',
+        status: SKILL_STATUS.SUCCESS,
         cost: cost,
         metadata: { phase: 'generation', componentName: 'Portrait' }
       });

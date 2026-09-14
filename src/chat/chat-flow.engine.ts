@@ -13,6 +13,7 @@ import { SecondaryKeywordWorker } from '../keywords/secondary-keyword.worker';
 import { GenerationProducer } from '../queue/producers/generation.producer';
 import { SkillExecutorService } from '../skills/skill-executor.service';
 import { BrandKnowledgeService } from '../brand/brand-knowledge.service';
+import { ASSET_PURPOSE } from '../assets/constants/asset-purpose.constant';
 import { BrandStrategySkill } from '../skills/impl/brand-strategy.skill';
 import { BrandPositioningSkill } from '../skills/impl/brand-positioning.skill';
 import { BrandVoiceSkill } from '../skills/impl/brand-voice.skill';
@@ -374,9 +375,9 @@ export class ChatFlowEngine {
       if (content === 'has-logo') {
         await this.updateMeta(projectId, { brandStrategySelection: 'has-logo', [`${step.id}_state`]: 'uploading-logo' });
         const text = "Awesome. Please upload your logo:";
-        await this.saveAssistantMsg(projectId, text, undefined, { type: 'image', purpose: 'logo' });
+        await this.saveAssistantMsg(projectId, text, undefined, { type: 'image', purpose: ASSET_PURPOSE.LOGO });
         yield { event: 'token', data: { token: text } };
-        yield { event: 'ui-upload', data: { type: 'image', purpose: 'logo' } };
+        yield { event: 'ui-upload', data: { type: 'image', purpose: ASSET_PURPOSE.LOGO } };
       } else if (content === 'no-logo') {
         await this.updateMeta(projectId, { brandStrategySelection: 'no-logo', brandBranch: 'B' });
         yield* this.advanceToNextStep(projectId, stepIndex);
@@ -398,17 +399,17 @@ export class ChatFlowEngine {
           await this.updateMeta(projectId, { extractedBrand, brandBranch: 'A', [`${step.id}_state`]: 'uploading-favicon' });
 
           const text = "Great! Please upload your favicon (the small icon that appears in the browser tab), or type 'skip':";
-          await this.saveAssistantMsg(projectId, text, undefined, { type: 'image', purpose: 'favicon' });
+          await this.saveAssistantMsg(projectId, text, undefined, { type: 'image', purpose: ASSET_PURPOSE.FAVICON });
           yield { event: 'token', data: { token: text } };
-          yield { event: 'ui-upload', data: { type: 'image', purpose: 'favicon' } };
+          yield { event: 'ui-upload', data: { type: 'image', purpose: ASSET_PURPOSE.FAVICON } };
         } catch (e: any) {
           yield { event: 'token', data: { token: `Failed to extract logo: ${e.message}\n\n` } };
           await this.updateMeta(projectId, { brandBranch: 'A', [`${step.id}_state`]: 'uploading-favicon' });
 
           const text = "Please upload your favicon (the small icon that appears in the browser tab), or type 'skip':";
-          await this.saveAssistantMsg(projectId, text, undefined, { type: 'image', purpose: 'favicon' });
+          await this.saveAssistantMsg(projectId, text, undefined, { type: 'image', purpose: ASSET_PURPOSE.FAVICON });
           yield { event: 'token', data: { token: text } };
-          yield { event: 'ui-upload', data: { type: 'image', purpose: 'favicon' } };
+          yield { event: 'ui-upload', data: { type: 'image', purpose: ASSET_PURPOSE.FAVICON } };
         }
       } else {
         yield { event: 'token', data: { token: "Please provide a valid logo URL or upload a file." } };
@@ -433,9 +434,9 @@ export class ChatFlowEngine {
       if (content === 'upload_new') {
         await this.updateMeta(projectId, { [`${step.id}_state`]: 'uploading_final_portrait' });
         const text = "Please upload your final portrait photo (I'll use it exactly as is, without any AI enhancement):";
-        await this.saveAssistantMsg(projectId, text, undefined, { type: 'image', purpose: 'portrait' });
+        await this.saveAssistantMsg(projectId, text, undefined, { type: 'image', purpose: ASSET_PURPOSE.PORTRAIT });
         yield { event: 'token', data: { token: text } };
-        yield { event: 'ui-upload', data: { type: 'image', purpose: 'portrait' } };
+        yield { event: 'ui-upload', data: { type: 'image', purpose: ASSET_PURPOSE.PORTRAIT } };
       } else if (content.startsWith('http')) {
         await this.updateMeta(projectId, { portraitStatus: 'AI Generated', finalPortraitUrl: content, [`${step.id}_state`]: 'done' });
         yield* this.advanceToNextStep(projectId, stepIndex);

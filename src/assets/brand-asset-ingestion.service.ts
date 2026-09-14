@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { StorageService } from '../storage/storage.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AssetPathResolverService } from './asset-path-resolver.service';
+import { ASSET_PURPOSE, AssetPurpose } from './constants/asset-purpose.constant';
 import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 import * as fs from 'fs';
@@ -25,7 +26,7 @@ export class BrandAssetIngestionService {
   async processAsset(
     projectId: string,
     userId: string,
-    purpose: 'logo' | 'favicon',
+    purpose: AssetPurpose,
     input: string | Buffer,
     providedMimeType?: string
   ): Promise<{ url: string; buffer: Buffer }> {
@@ -119,7 +120,7 @@ export class BrandAssetIngestionService {
         projectId,
         url: uploadedUrl,
         type: 'image',
-        purpose: 'favicon',
+        purpose: ASSET_PURPOSE.FAVICON,
         section: 'head',
       },
     });

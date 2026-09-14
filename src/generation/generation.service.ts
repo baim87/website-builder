@@ -10,10 +10,12 @@ import { NextjsBuilderService } from './nextjs-builder.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { DeploymentService } from '../deployment/deployment.service';
 import { CostAggregatorService } from '../skills/cost-aggregator.service';
+import { ASSET_PURPOSE } from '../assets/constants/asset-purpose.constant';
 import { BrandExtractionService } from '../assets/brand-extraction.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Job } from 'bullmq';
-
+import { GENERATION_STATUS } from './constants/generation-status.constant';
+import { PROJECT_STATUS } from '../projects/constants/project-status.constant';
 @Injectable()
 export class GenerationService {
   private readonly logger = new Logger(GenerationService.name);
@@ -58,7 +60,7 @@ export class GenerationService {
         const businessContext = await this.businessContextService.findByProjectId(projectId) as any;
       
       const logoAsset = await this.prisma.asset.findFirst({
-        where: { projectId, OR: [{ purpose: 'logo' }, { type: 'image' }] },
+        where: { projectId, OR: [{ purpose: ASSET_PURPOSE.LOGO }, { type: 'image' }] },
       });
       businessContext.logoUrl = logoAsset?.url || '';
 
@@ -73,7 +75,7 @@ export class GenerationService {
       }
 
       const portraitAsset = await this.prisma.asset.findFirst({
-        where: { projectId, purpose: 'portrait' },
+        where: { projectId, purpose: ASSET_PURPOSE.PORTRAIT },
       });
       businessContext.ownerPortraitUrl = portraitAsset?.url || '';
 
@@ -111,7 +113,7 @@ export class GenerationService {
         robotsTxt,
         jsonLdSchemas,
         internalLinkMap,
-        generationStatus: 'deploying',
+        generationStatus: GENERATION_STATUS.DEPLOYING,
         lastGeneratedAt: new Date(),
       }, userId);
 
@@ -146,7 +148,7 @@ export class GenerationService {
       // 8. Mark project as published
       await this.prisma.project.update({
         where: { id: projectId },
-        data: { status: 'PUBLISHED' },
+        data: { status: PROJECT_STATUS.PUBLISHED },
       });
 
       // 9. Update generation status and clear lock

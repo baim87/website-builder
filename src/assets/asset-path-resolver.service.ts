@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { AssetPurpose } from './constants/asset-purpose.constant';
 
 @Injectable()
 export class AssetPathResolverService {
@@ -42,7 +43,7 @@ export class AssetPathResolverService {
   resolveBrandAssetPath(
     userId: string,
     projectId: string,
-    purpose: 'logo' | 'favicon',
+    purpose: AssetPurpose,
     extension: string,
     projectAssetId: string
   ): { folderPath: string; key: string } {

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { PinoLogger } from 'nestjs-pino';
+import { SkillStatus } from './constants/skill-status.constant';
 
 @Injectable()
 export class SkillLoggerService {
@@ -23,7 +24,7 @@ export class SkillLoggerService {
     latencyMs?: number;
     outputHash?: string;
     outputData?: any;
-    status: 'success' | 'failed';
+    status: SkillStatus;
     error?: string;
   }) {
     this.logger.info(`Logging skill invocation for ${params.skillType} on project ${params.projectId}`);
