@@ -1,5 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
+import { Injectable, Logger } from '@nestjs/common';
 import { SkillExecutorService } from '../skills/skill-executor.service';
 import { BrandKnowledgeService } from '../brand/brand-knowledge.service';
 import { DesignSystemSkill } from '../skills/impl/design-system.skill';
@@ -102,7 +102,7 @@ export class GenerationOrchestratorService {
     await this.executePhase2_5ImagePlanning(ctx);
     
     if (job) await job.updateProgress({ phase: 'Optimizing Performance', status: JOB_STATUS.IN_PROGRESS });
-    const successfulPages = await this.executePhase3To5PageLoop(ctx, onPageGenerated);
+    const successfulPages = await this.executePhase3To5PageLoop(ctx, onPageGenerated, job);
     
     if (job) await job.updateProgress({ phase: 'Optimizing Performance', status: JOB_STATUS.COMPLETED });
 
@@ -354,7 +354,7 @@ export class GenerationOrchestratorService {
     }
   }
 
-  private async executePhase3To5PageLoop(ctx: GenerationContext, onPageGenerated?: (page: any) => Promise<void>) {
+  private async executePhase3To5PageLoop(ctx: GenerationContext, onPageGenerated?: (page: any) => Promise<void>, job?: Job) {
     const successfulPages: any[] = [];
 
     // Pre-fetch assets to avoid N+1 queries inside the loop
@@ -400,11 +400,13 @@ export class GenerationOrchestratorService {
         }
 
         this.logger.log(`\n[${pageSlug}] Starting Generation Loop`);
+        if (job) await job.updateProgress({ phase: `Generating ${pageSlug} page`, status: JOB_STATUS.IN_PROGRESS });
 
         const keywordTarget = ctx.keywordStrategyResult.pages.find((p: any) => p.slug === pageSlug);
 
         let seoResult = null;
         if (pageSlug !== 'layout') {
+          if (job) await job.updateProgress({ phase: `Generating SEO for ${pageSlug}`, status: JOB_STATUS.IN_PROGRESS });
           try {
             seoResult = await this.executeWithRetries(this.seoMetadata, {
               projectId: ctx.projectId,
@@ -432,8 +434,9 @@ export class GenerationOrchestratorService {
 
         let sectionTypes: string[] = [];
         if (pageSlug === 'layout') {
-          sectionTypes = ['HeaderSection', 'FooterSection'];
+          sectionTypes = ['AnnouncementBarSection', 'HeaderSection', 'FooterSection'];
         } else {
+          if (job) await job.updateProgress({ phase: `Structuring layout for ${pageSlug}`, status: JOB_STATUS.IN_PROGRESS });
           const structureResult = await this.executeWithRetries(this.pageStructure, {
             projectId: ctx.projectId,
             context: { 
@@ -452,7 +455,9 @@ export class GenerationOrchestratorService {
         const generatedSections: any[] = [];
         const generatedComponents: Record<string, string> = {};
 
+        let index = 0;
         for (const sectionType of sectionTypes) {
+          if (job) await job.updateProgress({ phase: `Writing copy for ${sectionType.replace(/([A-Z])/g, ' $1').trim()}`, status: JOB_STATUS.IN_PROGRESS });
           const componentName = sectionType;
           
           let copyDataResult = null;
@@ -497,6 +502,7 @@ export class GenerationOrchestratorService {
           
           try {
             this.logger.log(`[${pageSlug}] Generating new component: ${componentName}`);
+            if (job) await job.updateProgress({ phase: `Building ${componentName} UI code`, status: JOB_STATUS.IN_PROGRESS });
             const componentResult = await this.executeWithRetries(this.componentGenerator, {
               projectId: ctx.projectId,
               context: { 
@@ -532,12 +538,14 @@ export class GenerationOrchestratorService {
           }
 
           generatedSections.push(sectionCopy);
+          index++;
         }
         
         if (seoResult && seoResult.data) {
           await this.resolveImages(seoResult.data);
         }
 
+        if (job) await job.updateProgress({ phase: `Saving ${pageSlug} page`, status: JOB_STATUS.IN_PROGRESS });
         const pagePayload = {
           slug: pageSlug,
           sections: generatedSections,

@@ -17,8 +17,8 @@ model User {
   updatedAt         DateTime          @updatedAt
   payments          Payment[]
   projects          Project[]
-  subscription      Subscription?
   skillInvocations  SkillInvocation[]
+  subscription      Subscription?
 }
 
 model Project {
@@ -32,15 +32,15 @@ model Project {
   businessContext        BusinessContext?
   chatMessages           ChatMessage[]
   domain                 Domain?
+  leads                  Lead[]
   locationKeywordMetrics LocationKeywordMetrics[]
   pages                  Page[]
   user                   User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
   projectAssets          ProjectAsset[]
+  serviceKeywordMetrics  ServiceKeywordMetrics[]
   siteAnalytics          SiteAnalytics?
   skillInvocations       SkillInvocation[]
   websiteData            WebsiteData?
-  serviceKeywordMetrics  ServiceKeywordMetrics[]
-  leads                  Lead[]
 }
 
 model BusinessContext {
@@ -84,11 +84,11 @@ model WebsiteData {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
   customComponents Json?
-  serviceRanking   Json?
-  seasonalConfig   Json?
+  generationJobId  String?
   qcReport         Json?
   qcStatus         String?   @default("standby")
-  generationJobId  String?
+  seasonalConfig   Json?
+  serviceRanking   Json?
   project          Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }
 
@@ -114,13 +114,13 @@ model Asset {
   type         String
   purpose      String?
   convertedUrl String?
-  fallbackUrl  String?
   mimeType     String?
   source       String   @default("upload")
   sortOrder    Int      @default(0)
   section      String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  fallbackUrl  String?
   project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }
 
@@ -145,11 +145,11 @@ model ChatMessage {
   projectId          String
   role               String
   content            String
-  metadata           Json?
   voiceTranscript    Boolean  @default(false)
   skillInvocationRef String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
+  metadata           Json?
   project            Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }
 
@@ -169,14 +169,12 @@ model SkillInvocation {
   completionTokens Int?
   cost             Float?
   metadata         Json?
-  promptTokens     Int?
   outputData       Json?
-
-  traceId String?
-  userId  String?
-
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user    User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+  promptTokens     Int?
+  traceId          String?
+  userId           String?
+  project          Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user             User?    @relation(fields: [userId], references: [id])
 
   @@index([traceId])
   @@index([userId])
@@ -227,11 +225,11 @@ model Page {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   componentCode  Json?
+  contentVersion Int      @default(1)
   customCSS      String?
   keywordTarget  Json?
   seoMeta        Json?
   status         String   @default("pending")
-  contentVersion Int      @default(1)
   project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, slug])
@@ -275,24 +273,20 @@ model LocationKeywordMetrics {
 }
 
 model GlobalKeywordCache {
-  id      String  @id @default(uuid())
-  city    String
-  state   String?
-  trade   String? // Optional: The broad trade category (e.g. "Decking")
-  service String // The specific service (e.g. "Deck Building")
-  keyword String // The actual search query (e.g. "deck building omaha")
-
-  // Google Ads Metrics
+  id             String   @id @default(uuid())
+  city           String
+  state          String?
+  trade          String?
+  service        String
+  keyword        String
   searchVolume   Int
   monthlyVolumes Json?
   competition    String?
   cpc            Float?
-  geoScope       String  @default("national_proxy")
+  geoScope       String   @default("national_proxy")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // A city and a specific service should be globally unique
   @@unique([city, service])
 }
 
@@ -301,16 +295,16 @@ model ServiceKeywordMetrics {
   projectId        String
   city             String
   service          String
-  keyword          String // Best transactional keyword for this (city, service)
+  keyword          String
   searchVolume     Int
-  monthlyVolumes   Json? // 12-month breakdown from Google Ads
-  competition      String? // LOW / MEDIUM / HIGH
+  monthlyVolumes   Json?
+  competition      String?
   cpc              Float?
-  rank             Int // 1 = main, 2 = secondary, etc.
-  geoScope         String   @default("city") // "city" | "county" | "ai_inferred"
-  avgTicketPrice   Float? // Future: from user interview
-  revenuePotential Float? // Future: volume × ticket
-  userOverrideRank Int? // Future: manual user preference
+  rank             Int
+  geoScope         String   @default("city")
+  avgTicketPrice   Float?
+  revenuePotential Float?
+  userOverrideRank Int?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
   project          Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)

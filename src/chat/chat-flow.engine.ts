@@ -397,12 +397,13 @@ export class ChatFlowEngine {
       if (content.startsWith('http')) {
         yield { event: 'token', data: { token: "Logo received! Extracting brand colors and fonts...\n" } };
         try {
+          await this.ensureAssetSaved(projectId, content, ASSET_PURPOSE.LOGO, 'header,footer');
           const extractedBrand = await this.brandExtraction.extractBrandFromLogo(content);
 
           const getSwatch = (hex: string) => `<span style="display:inline-block;width:16px;height:16px;background-color:${hex};border-radius:50%;border:1px solid rgba(255,255,255,0.2);vertical-align:-3px;margin-right:6px;"></span>${hex}`;
 
           yield { event: 'token', data: { token: `Extracted Details:\n- **Primary Color:** ${getSwatch(extractedBrand.colors.primary)}\n- **Secondary Color:** ${getSwatch(extractedBrand.colors.secondary)}\n- **Fonts:** ${extractedBrand.typography.headingFont} & ${extractedBrand.typography.bodyFont}\n\n` } };
-          await this.updateMeta(projectId, { extractedBrand, brandBranch: 'A', [`${step.id}_state`]: 'uploading-favicon' });
+          await this.updateMeta(projectId, { finalLogoUrl: content, extractedBrand, brandBranch: 'A', [`${step.id}_state`]: 'uploading-favicon' });
 
           const text = "Great! Please upload your favicon (the small icon that appears in the browser tab), or type 'skip':";
           await this.saveAssistantMsg(projectId, text, undefined, { type: 'image', purpose: ASSET_PURPOSE.FAVICON });
@@ -410,7 +411,8 @@ export class ChatFlowEngine {
           yield { event: 'ui-upload', data: { type: 'image', purpose: ASSET_PURPOSE.FAVICON } };
         } catch (e: any) {
           yield { event: 'token', data: { token: `Failed to extract logo: ${e.message}\n\n` } };
-          await this.updateMeta(projectId, { brandBranch: 'A', [`${step.id}_state`]: 'uploading-favicon' });
+          await this.ensureAssetSaved(projectId, content, ASSET_PURPOSE.LOGO, 'header,footer');
+          await this.updateMeta(projectId, { finalLogoUrl: content, brandBranch: 'A', [`${step.id}_state`]: 'uploading-favicon' });
 
           const text = "Please upload your favicon (the small icon that appears in the browser tab), or type 'skip':";
           await this.saveAssistantMsg(projectId, text, undefined, { type: 'image', purpose: ASSET_PURPOSE.FAVICON });
@@ -421,8 +423,11 @@ export class ChatFlowEngine {
         yield { event: 'token', data: { token: "Please provide a valid logo URL or upload a file." } };
       }
     } else if (state === 'uploading-favicon') {
-      if (content.startsWith('http')) {
-        yield { event: 'token', data: { token: "Favicon received!\n\n" } };
+      if (content.startsWith('http') || content.toLowerCase() === 'skip') {
+        if (content !== 'skip') {
+          await this.ensureAssetSaved(projectId, content, ASSET_PURPOSE.FAVICON, 'head');
+          await this.updateMeta(projectId, { finalFaviconUrl: content });
+        }
         yield* this.advanceToNextStep(projectId, stepIndex);
       } else if (content.toLowerCase() === 'skip') {
         yield { event: 'token', data: { token: "Skipping favicon.\n\n" } };
@@ -699,9 +704,9 @@ Keep your response under 3 sentences. End by asking them what they think, or tel
   }
 
   public async *triggerLogoGeneration(projectId: string, meta: any, step: any, stepIndex: number): AsyncGenerator<any, void, unknown> {
-    const isScratch = meta.brandStrategySelection === 'scratch';
+    const needsLogoGen = meta.brandStrategySelection === 'scratch' || meta.brandStrategySelection === 'no-logo';
     
-    if (isScratch) {
+    if (needsLogoGen) {
       yield { event: 'thinking', data: { message: "Generating 3 premium logo options..." } };
       try {
         const ctx = await this.businessContext.findByProjectId(projectId);
@@ -733,7 +738,8 @@ Keep your response under 3 sentences. End by asking them what they think, or tel
   }
 
   public async *triggerFaviconGeneration(projectId: string, meta: any, step: any, stepIndex: number): AsyncGenerator<any, void, unknown> {
-    if (meta.finalLogoUrl) {
+    const needsFaviconGen = meta.brandStrategySelection === 'scratch' || meta.brandStrategySelection === 'no-logo';
+    if (meta.finalLogoUrl && needsFaviconGen) {
       yield { event: 'thinking', data: { message: "Extracting 3 matching favicon options..." } };
       try {
         const ctx = await this.businessContext.findByProjectId(projectId);
@@ -1032,6 +1038,12 @@ Example output format:
       summaryText += `| Fonts | **${meta.extractedBrand.typography.headingFont} & ${meta.extractedBrand.typography.bodyFont}** |\n`;
     }
 
+    if (meta.finalLogoUrl) {
+      summaryText += `| Logo | <img src="${meta.finalLogoUrl}" width="80" style="border-radius:8px" /> |\n`;
+    }
+    if (meta.finalFaviconUrl) {
+      summaryText += `| Favicon | <img src="${meta.finalFaviconUrl}" width="32" style="border-radius:4px" /> |\n`;
+    }
     if (meta.finalPortraitUrl) {
       summaryText += `| Portrait | <img src="${meta.finalPortraitUrl}" width="80" style="border-radius:8px" /> |\n`;
     }
@@ -1075,7 +1087,7 @@ Example output format:
       if (job && job.id) jobId = job.id;
     }
 
-    const text = "All done! I am now generating your high-converting website in the background...";
+    const text = "Please wait while I build your high-converting website...";
     await this.prisma.chatMessage.create({ data: { projectId, role: 'assistant', content: text, metadata: { uiGeneration: { jobId } } } });
     yield { event: 'ui-generation', data: { jobId } };
 

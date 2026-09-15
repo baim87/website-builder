@@ -78,12 +78,12 @@ export class ProjectsController {
     await this.projectsService.findOne(id, userId);
 
     const mapping: Record<string, string> = {
-      'visual': 'brand-visual.md',
-      'competitor-analysis': 'brand-positioning.md',
-      'competitor-watchlist': 'brand-messaging.md', // Fallback mapped to messaging for now
-      'site-crawl': 'brand-story.md', // Fallback mapped to story for now
-      'voice': 'brand-voice.md',
-      'market-strategy': 'brand-strategy.md',
+      'brand-visual': 'brand-visual.md',
+      'brand-positioning': 'brand-positioning.md',
+      'brand-messaging': 'brand-messaging.md',
+      'brand-story': 'brand-story.md',
+      'brand-voice': 'brand-voice.md',
+      'brand-strategy': 'brand-strategy.md',
     };
 
     const fileName = mapping[documentId];

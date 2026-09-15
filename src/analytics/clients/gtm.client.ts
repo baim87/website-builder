@@ -19,18 +19,18 @@ export class GtmClient {
     }
   }
 
-  async createContainer(domainName: string) {
+  async createContainer(domainName: string, businessName: string) {
     const accountId = this.configService.get<string>('GOOGLE_TAG_MANAGER_ACCOUNT_ID');
     if (!accountId) throw new Error('Missing GTM Account ID in env');
 
     if (!this.gtmApi) throw new Error('GTM API client not initialized');
 
-    this.logger.log(`Creating GTM Container for ${domainName}`);
+    this.logger.log(`Creating GTM Container for ${domainName} (${businessName})`);
     
     const containerRes = await this.gtmApi.accounts.containers.create({
       parent: `accounts/${accountId}`,
       requestBody: {
-        name: `Local Empire - ${domainName}`,
+        name: `LE - ${businessName}`,
         usageContext: ['WEB'],
       },
     });
@@ -97,6 +97,25 @@ export class GtmClient {
     });
     const formSubmitTriggerId = formSubmitRes.data.triggerId!;
 
+    // 5.1 Create Email Click Trigger
+    const emailClickRes = await this.gtmApi.accounts.containers.workspaces.triggers.create({
+      parent: workspacePath,
+      requestBody: {
+        name: 'Email Click',
+        type: 'linkClick',
+        filter: [
+          {
+            type: 'startsWith',
+            parameter: [
+              { type: 'template', key: 'arg0', value: '{{Click URL}}' },
+              { type: 'template', key: 'arg1', value: 'mailto:' },
+            ],
+          },
+        ],
+      },
+    });
+    const emailClickTriggerId = emailClickRes.data.triggerId!;
+
     // 6. Create GA4 Configuration Tag
     await this.gtmApi.accounts.containers.workspaces.tags.create({
       parent: workspacePath,
@@ -135,6 +154,20 @@ export class GtmClient {
           { type: 'template', key: 'eventName', value: 'form_submit' },
         ],
         firingTriggerId: [formSubmitTriggerId],
+      },
+    });
+
+    // 8.1 Create Email Click Event Tag
+    await this.gtmApi.accounts.containers.workspaces.tags.create({
+      parent: workspacePath,
+      requestBody: {
+        name: 'GA4 Event - Email Click',
+        type: 'gaawe',
+        parameter: [
+          { type: 'template', key: 'measurementIdOverride', value: ga4MeasurementId },
+          { type: 'template', key: 'eventName', value: 'email_click' },
+        ],
+        firingTriggerId: [emailClickTriggerId],
       },
     });
 

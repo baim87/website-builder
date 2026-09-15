@@ -16,6 +16,8 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Job } from 'bullmq';
 import { GENERATION_STATUS } from './constants/generation-status.constant';
 import { PROJECT_STATUS } from '../projects/constants/project-status.constant';
+import { AnalyticsProvisioningProducer } from '../queue/producers/analytics-provisioning.producer';
+
 @Injectable()
 export class GenerationService {
   private readonly logger = new Logger(GenerationService.name);
@@ -33,6 +35,7 @@ export class GenerationService {
     private readonly brandExtractionService: BrandExtractionService,
     private readonly eventEmitter: EventEmitter2,
     private readonly cls: ClsService,
+    private readonly analyticsProducer: AnalyticsProvisioningProducer,
   ) {}
 
   async generateProject(projectId: string, userId: string, jobId: string, job?: Job) {
@@ -157,13 +160,25 @@ export class GenerationService {
       this.logger.log(`🚀 Deployment Time: ${deployLatencySeconds}s`);
       this.logger.log(`========================================================================`);
 
-      // 8. Mark project as published
+      // 9. Provision Analytics
+      try {
+        this.logger.log(`Queueing Analytics Provisioning for ${liveUrl}...`);
+        await this.analyticsProducer.provisionAnalytics(projectId, liveUrl, userId);
+      } catch (err) {
+        this.logger.warn(`Failed to queue analytics provisioning: ${err.message}`);
+      }
+
+      // 10. Mark project as published
       await this.prisma.project.update({
         where: { id: projectId },
         data: { status: PROJECT_STATUS.PUBLISHED },
       });
 
-      // 9. Update generation status and clear lock
+      await this.websiteDataService.upsert(projectId, {
+        generationStatus: GENERATION_STATUS.COMPLETED,
+        publishedUrl: `https://${liveUrl}`,
+      }, userId);
+
       await this.websiteDataService.releaseGenerationLock(projectId, userId, 'completed');
 
       // 10. Trigger Quality Control via event emission

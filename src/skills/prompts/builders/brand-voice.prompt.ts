@@ -18,5 +18,7 @@ Please generate a professional Markdown document titled "Brand Voice" that inclu
 - Examples (We Say / We Don't Say)
 - Voice North Star
 
+IMPORTANT VISUAL FORMATTING: You MUST use rich markdown formatting for readability. Use \`###\` for section headings, \`-\` for bulleted lists, and \`**bold text**\` for key terms or labels. DO NOT just output a wall of text. DO NOT mash words together. Ensure blank lines between sections.
+
 Output ONLY the markdown content. No conversational wrapper or markdown fences wrapping the entire output.`;
 }

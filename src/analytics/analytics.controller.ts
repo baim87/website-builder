@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, UseGuards, Request, Body, HttpStatus, HttpException } from '@nestjs/common';
+import { Controller, Get, Post, Param, UseGuards, Request, Body, HttpStatus, HttpException, Query } from '@nestjs/common';
 import { AnalyticsService } from './analytics.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { AnalyticsProvisioningProducer } from '../queue/producers/analytics-provisioning.producer';
@@ -15,9 +15,11 @@ export class AnalyticsController {
   @Get('summary')
   async getSummary(
     @Param('projectId') projectId: string,
+    @Query('period') period: string,
     @Request() req: any,
   ) {
-    return this.analyticsService.getAnalyticsSummary(projectId, req.user.id);
+    const timePeriod = period || '30d';
+    return this.analyticsService.getAnalyticsSummary(projectId, req.user.id, timePeriod);
   }
 
   @Post('provision')

@@ -83,7 +83,8 @@ ${jsonSchemaStr}
 ${sampleDataStr}${themeHints}
 REQUIREMENTS:
 1. The component MUST be named "${sectionType}".
-2. It MUST be exported as default: \`export default function ${sectionType}({ data }: any) { ... }\`
+2. It MUST be exported as default: \`export default function ${sectionType}({ data, ...rest }: any) { ... }\`
+   - CRITICAL: You MUST spread \`{...rest}\` onto the outermost root DOM element (e.g. \`<section {...rest} className="...">\`). This is required for our website builder to attach data-block-id for hover selections.
 3. It must accept a single \`data\` prop which contains all the text, copy, and image content. 
    - CRITICAL: Assume \`data\` EXACTLY matches the JSON Schema contract above. DO NOT invent props like \`data.headline\` or \`data.items\` unless they exist in the schema. For example, if the schema specifies \`data.sectionTitle\` and \`data.services\`, you MUST map over \`data.services\`, NOT \`data.items\`.
 4. Use Tailwind CSS aggressively for styling. Make it look responsive and tailored to the selected theme's tone (whether modern, rugged, traditional, or playful), with hover states and transitions. HOVER RULE: When implementing hover states on colored backgrounds, ensure the hover color maintains high contrast with the text. Do not hardcode completely different background colors that might conflict. Instead, use opacity or slight brightness adjustments (e.g., \`hover:opacity-80\` or \`hover:brightness-110\`). TYPOGRAPHY RULE: You MUST use the \`text-balance\` class on all major headlines (e.g., \`h1\`, \`h2\`, \`h3\`) to prevent orphaned words on new lines, and use \`text-pretty\` on long paragraphs.

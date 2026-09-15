@@ -15,7 +15,7 @@ async function bootstrap() {
   app.enableCors({
     origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
       const allowedOrigin = process.env.FRONTEND_URL || 'http://localhost:3001';
-      if (!origin || origin === allowedOrigin || /\.vercel\.app$/.test(origin)) {
+      if (!origin || origin === allowedOrigin || /\.vercel\.app$/.test(origin) || /\.ngrok-free\.app$/.test(origin) || /\.ngrok\.app$/.test(origin) || /\.loca\.lt$/.test(origin)) {
         callback(null, true);
       } else {
         callback(new Error('Not allowed by CORS'));

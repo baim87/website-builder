@@ -78,7 +78,10 @@ export class SiteContentService {
       finalPortraitUrl = assets.find(a => a.purpose === 'portrait')?.url || '';
     }
 
-    const faviconAsset = assets.find(a => a.purpose === 'favicon');
+    let finalFaviconUrl = metaData.finalFaviconUrl;
+    if (!finalFaviconUrl) {
+      finalFaviconUrl = assets.find(a => a.purpose === 'favicon')?.url || '';
+    }
     
     const seoData = websiteData.seoMetadata || {};
     const tokens = websiteData.designTokens || {};
@@ -116,6 +119,7 @@ export class SiteContentService {
     const layoutPage = pages.find(p => p.slug === 'layout');
     const headerSection = Array.isArray(layoutPage?.content) ? layoutPage.content.find((s: any) => s.type === 'HeaderSection') : null;
     const footerSection = Array.isArray(layoutPage?.content) ? layoutPage.content.find((s: any) => s.type === 'FooterSection') : null;
+    const announcementBarSection = Array.isArray(layoutPage?.content) ? layoutPage.content.find((s: any) => s.type === 'AnnouncementBarSection') : null;
 
     return {
       designTokens: tokens,
@@ -123,6 +127,7 @@ export class SiteContentService {
       layout: {
         header: headerSection || null,
         footer: footerSection || null,
+        announcementBar: announcementBarSection || null,
       },
       business: {
         name: businessContext.businessName || "Contractor Pro",
@@ -131,7 +136,7 @@ export class SiteContentService {
         email: businessContext.email || "contact@example.com",
         address: businessContext.businessAddress || "123 Main St, Anytown USA",
         logoUrl: finalLogoUrl,
-        faviconUrl: faviconAsset?.url || "",
+        faviconUrl: finalFaviconUrl,
         contactPhotoUrl: finalPortraitUrl
       },
       seo: {

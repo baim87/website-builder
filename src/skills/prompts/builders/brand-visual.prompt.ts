@@ -59,6 +59,7 @@ RULES:
 1. If EXTRACTED COLORS FROM LOGO exist, you MUST preserve them in your Color Direction.
 2. The visual style must align with the brand personality.
 3. Recommend the theme that best matches the Visual Strategy.
+4. IMPORTANT VISUAL FORMATTING: You MUST use rich markdown formatting for readability. Use \`###\` for section headings, \`-\` for bulleted lists, and \`**bold text**\` for key terms or labels. DO NOT just output a wall of text. DO NOT mash words together (e.g., avoid "Brand TraitVisual Expression"). Ensure blank lines between sections.
 
 Return ONLY the raw JSON object without any code blocks or wrapper JSON.`;
 }

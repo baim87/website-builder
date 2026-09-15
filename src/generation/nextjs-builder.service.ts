@@ -167,6 +167,43 @@ export class NextjsBuilderService {
       }
       await fs.writeFile(path.join(generatedDir, 'index.ts'), indexTsContent);
 
+      // 4.1. Inject AnnouncementBarSection into layout.tsx
+      if (customComponents['AnnouncementBarSection']) {
+        const layoutTsxPath = path.join(tempDir, 'src/app/layout.tsx');
+        try {
+          let layoutTsxContent = await fs.readFile(layoutTsxPath, 'utf-8');
+          
+          if (!layoutTsxContent.includes('AnnouncementBarSection')) {
+            const lastImportIndex = layoutTsxContent.lastIndexOf('import ');
+            const nextLineIndex = layoutTsxContent.indexOf('\n', lastImportIndex);
+            
+            const importStmt = `\nimport { AnnouncementBarSection } from '@/components/generated';`;
+            if (nextLineIndex !== -1) {
+              layoutTsxContent = layoutTsxContent.slice(0, nextLineIndex) + importStmt + layoutTsxContent.slice(nextLineIndex);
+            } else {
+              layoutTsxContent = importStmt + '\n' + layoutTsxContent;
+            }
+
+            if (layoutTsxContent.includes('<HeaderSection')) {
+              layoutTsxContent = layoutTsxContent.replace(
+                /<HeaderSection/g, 
+                `{content?.layout?.announcementBar && <AnnouncementBarSection data={content.layout.announcementBar} />}\n        <HeaderSection`
+              );
+            } else if (layoutTsxContent.includes('<main')) {
+              layoutTsxContent = layoutTsxContent.replace(
+                /<main/g, 
+                `{content?.layout?.announcementBar && <AnnouncementBarSection data={content.layout.announcementBar} />}\n        <main`
+              );
+            }
+
+            await fs.writeFile(layoutTsxPath, layoutTsxContent);
+            this.logger.log('Injected AnnouncementBarSection into layout.tsx');
+          }
+        } catch (err) {
+          this.logger.warn(`Could not inject AnnouncementBarSection into layout.tsx: ${err.message}`);
+        }
+      }
+
       this.logger.log(`Running build in ${tempDir} to verify generated code...`);
       
       let buildSuccess = false;

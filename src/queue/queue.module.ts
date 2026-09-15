@@ -31,12 +31,15 @@ import { ImageGenerationConsumer } from './consumers/image-generation.consumer';
 
 import { GithubSyncConsumer } from './consumers/github-sync.consumer';
 import { DeploymentTrackerConsumer } from './consumers/deployment-tracker.consumer';
+import { AnalyticsUpdateProducer } from './producers/analytics-update.producer';
+import { AnalyticsUpdateConsumer } from './consumers/analytics-update.consumer';
 
 const consumers = process.env.APP_MODE !== 'api'
   ? [
       GenerationConsumer,
       AssetConversionConsumer,
       AnalyticsProvisioningConsumer,
+      AnalyticsUpdateConsumer,
       BillingReconciliationConsumer,
       TestJobConsumer,
       QualityControlConsumer,
@@ -50,6 +53,7 @@ const producers = [
   GenerationProducer,
   AssetConversionProducer,
   AnalyticsProvisioningProducer,
+  AnalyticsUpdateProducer,
   BillingReconciliationProducer,
   TestJobProducer,
   QualityControlProducer,
@@ -91,6 +95,9 @@ const producers = [
     }),
     BullModule.registerQueue({
       name: QUEUE_NAMES.ANALYTICS_PROVISIONING,
+    }),
+    BullModule.registerQueue({
+      name: QUEUE_NAMES.ANALYTICS_UPDATE,
     }),
     BullModule.registerQueue({
       name: QUEUE_NAMES.BILLING_RECONCILIATION,

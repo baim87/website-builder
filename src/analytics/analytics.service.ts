@@ -27,6 +27,9 @@ export class AnalyticsService {
       return existing;
     }
 
+    const businessContext = await this.prisma.businessContext.findUnique({ where: { projectId } });
+    const businessName = businessContext?.businessName || 'Business';
+
     try {
       let propertyId = existing?.ga4PropertyId;
       let measurementId = existing?.ga4MeasurementId;
@@ -36,13 +39,13 @@ export class AnalyticsService {
 
       // Only create if they don't exist yet (idempotency)
       if (!propertyId || !measurementId) {
-        const ga4 = await this.ga4Client.createPropertyAndStream(domainName);
+        const ga4 = await this.ga4Client.createPropertyAndStream(domainName, businessName);
         propertyId = ga4.propertyId;
         measurementId = ga4.measurementId;
       }
 
       if (!gtmContainerId) {
-        const gtm = await this.gtmClient.createContainer(domainName);
+        const gtm = await this.gtmClient.createContainer(domainName, businessName);
         gtmContainerId = gtm.publicId || undefined;
         gtmInternalId = gtm.containerId || undefined;
       }
@@ -99,7 +102,7 @@ export class AnalyticsService {
     }
   }
 
-  async getAnalyticsSummary(projectId: string, userId: string) {
+  async getAnalyticsSummary(projectId: string, userId: string, period: string = '30d') {
     const project = await this.prisma.project.findUnique({
       where: { id: projectId, userId },
     });
@@ -110,9 +113,104 @@ export class AnalyticsService {
       where: { projectId },
     });
 
-    if (!analytics) {
+    if (!analytics || !analytics.ga4PropertyId) {
       return { status: ANALYTICS_STATUS.NOT_PROVISIONED };
     }
+
+    const ga4Data = await this.ga4Client.getAnalyticsReport(analytics.ga4PropertyId, period);
+
+    // Initialize default zeroes
+    let totalVisitors = 0;
+    let totalPageViews = 0;
+    let avgBounceRate = 0;
+    let avgConvRate = 0;
+    let totalDuration = 0;
+    let totalConversions = 0;
+    
+    // Aggregation maps
+    const trafficOverTimeMap: Record<string, { visitors: number; pageViews: number }> = {};
+    const trafficSourcesMap: Record<string, number> = {};
+    const devicesMap: Record<string, number> = {};
+    const trafficByStateMap: Record<string, number> = {};
+    const conversionsByTypeMap: Record<string, number> = {};
+
+    let rowCount = 0;
+
+    if (ga4Data && ga4Data.rows) {
+      ga4Data.rows.forEach(row => {
+        const date = row.dimensionValues?.[0]?.value || 'Unknown';
+        const rawChannel = row.dimensionValues?.[1]?.value || 'Unknown';
+        const device = row.dimensionValues?.[2]?.value || 'Unknown';
+        const region = row.dimensionValues?.[3]?.value || 'Unknown';
+        const rawEventName = row.dimensionValues?.[4]?.value || 'Unknown';
+
+        const activeUsers = parseInt(row.metricValues?.[0]?.value || '0', 10);
+        const pageViews = parseInt(row.metricValues?.[1]?.value || '0', 10);
+        const bounceRate = parseFloat(row.metricValues?.[2]?.value || '0');
+        const convRate = parseFloat(row.metricValues?.[3]?.value || '0');
+        const avgDuration = parseFloat(row.metricValues?.[4]?.value || '0');
+        const conversions = parseInt(row.metricValues?.[5]?.value || '0', 10);
+
+        totalVisitors += activeUsers;
+        totalPageViews += pageViews;
+        avgBounceRate += bounceRate;
+        avgConvRate += convRate;
+        totalDuration += avgDuration;
+        totalConversions += conversions;
+        rowCount++;
+
+        // Format Date (YYYYMMDD to readable)
+        const dateKey = date.length === 8 ? `${date.substring(4, 6)}/${date.substring(6, 8)}` : date;
+        if (!trafficOverTimeMap[dateKey]) trafficOverTimeMap[dateKey] = { visitors: 0, pageViews: 0 };
+        trafficOverTimeMap[dateKey].visitors += activeUsers;
+        trafficOverTimeMap[dateKey].pageViews += pageViews;
+
+        // Channel
+        if (activeUsers > 0) {
+          // Normalize channel to match exact requested values
+          let displayChannel = rawChannel;
+          if (rawChannel.includes('Social')) displayChannel = 'Social';
+          else if (rawChannel === 'Organic Search' || rawChannel === 'Direct' || rawChannel === 'Referral') {
+            displayChannel = rawChannel;
+          } else if (rawChannel !== 'Unknown') {
+            displayChannel = 'Other'; // Group others, but ideally we stick to the requested 4
+          }
+
+          if (displayChannel !== 'Unknown') {
+            trafficSourcesMap[displayChannel] = (trafficSourcesMap[displayChannel] || 0) + activeUsers;
+          }
+          devicesMap[device] = (devicesMap[device] || 0) + activeUsers;
+          
+          if (region && region !== '(not set)' && region !== 'Unknown') {
+             const regionCode = region.substring(0, 2).toUpperCase(); 
+             trafficByStateMap[regionCode] = (trafficByStateMap[regionCode] || 0) + activeUsers;
+          }
+        }
+
+        // Conversions
+        if (conversions > 0 && rawEventName !== 'Unknown' && rawEventName !== '(not set)') {
+          let displayEventName = rawEventName;
+          if (rawEventName === 'form_submit') displayEventName = 'Form Fill';
+          if (rawEventName === 'phone_click') displayEventName = 'Phone Call';
+          if (rawEventName === 'email_click') displayEventName = 'Email Click';
+
+          conversionsByTypeMap[displayEventName] = (conversionsByTypeMap[displayEventName] || 0) + conversions;
+        }
+      });
+    }
+
+    if (rowCount > 0) {
+      avgBounceRate = avgBounceRate / rowCount;
+      avgConvRate = avgConvRate / rowCount;
+      totalDuration = totalDuration / rowCount;
+    }
+
+    const formatDuration = (seconds: number) => {
+      if (!seconds) return '0s';
+      const m = Math.floor(seconds / 60);
+      const s = Math.floor(seconds % 60);
+      return m > 0 ? `${m}m ${s}s` : `${s}s`;
+    };
 
     return {
       status: ANALYTICS_STATUS.ACTIVE,
@@ -120,45 +218,57 @@ export class AnalyticsService {
       ga4MeasurementId: analytics.ga4MeasurementId,
       gscStatus: analytics.gscVerificationStatus,
       overview: {
-        totalVisitors: 12450,
-        visitorsTrend: 12.5,
-        bounceRate: 42.3,
-        bounceRateTrend: -2.1,
-        conversionRate: 3.8,
-        conversionRateTrend: 0.5,
-        avgSessionDuration: '2m 15s',
+        totalVisitors,
+        visitorsTrend: 0, // Need historical query for trends
+        bounceRate: parseFloat((avgBounceRate * 100).toFixed(1)),
+        bounceRateTrend: 0,
+        conversionRate: parseFloat((avgConvRate * 100).toFixed(1)),
+        conversionRateTrend: 0,
+        avgSessionDuration: formatDuration(totalDuration),
       },
-      trafficOverTime: [
-        { name: 'Mon', visitors: 400, pageViews: 600 },
-        { name: 'Tue', visitors: 300, pageViews: 450 },
-        { name: 'Wed', visitors: 550, pageViews: 800 },
-        { name: 'Thu', visitors: 450, pageViews: 700 },
-        { name: 'Fri', visitors: 600, pageViews: 950 },
-        { name: 'Sat', visitors: 800, pageViews: 1200 },
-        { name: 'Sun', visitors: 750, pageViews: 1100 },
-      ],
-      trafficSources: [
-        { name: 'Organic Search', value: 45 },
-        { name: 'Direct', value: 25 },
-        { name: 'Social', value: 20 },
-        { name: 'Referral', value: 10 },
-      ],
-      devices: [
-        { name: 'Mobile', value: 65 },
-        { name: 'Desktop', value: 30 },
-        { name: 'Tablet', value: 5 },
-      ],
-      trafficByState: [
-        { id: 'CA', value: 1250 },
-        { id: 'TX', value: 980 },
-        { id: 'NY', value: 850 },
-        { id: 'FL', value: 720 },
-      ],
-      conversionsByType: [
-        { name: 'Form Fill', value: 450 },
-        { name: 'Phone Call', value: 320 },
-        { name: 'Email Click', value: 150 },
-      ]
+      trafficOverTime: Object.entries(trafficOverTimeMap).map(([name, data]) => ({ name, ...data })).sort((a,b) => a.name.localeCompare(b.name)),
+      trafficSources: Object.entries(trafficSourcesMap).map(([name, value]) => ({ name, value })),
+      devices: Object.entries(devicesMap).map(([name, value]) => ({ name, value })),
+      trafficByState: Object.entries(trafficByStateMap).map(([id, value]) => ({ id, value })),
+      conversionsByType: Object.entries(conversionsByTypeMap).map(([name, value]) => ({ name, value })),
     };
+  }
+
+  async updateAnalyticsDomain(projectId: string, newDomainName: string) {
+    this.logger.log(`Updating analytics domain for project ${projectId} to ${newDomainName}`);
+
+    const existing = await this.prisma.siteAnalytics.findUnique({ where: { projectId } });
+    if (!existing || !existing.ga4PropertyId) {
+      this.logger.warn(`No analytics found for project ${projectId}. Skipping update.`);
+      return;
+    }
+
+    try {
+      await this.ga4Client.updateDataStreamUrl(existing.ga4PropertyId, newDomainName);
+
+      // We should also update the GSC Site URL and reset verification if needed
+      await this.prisma.siteAnalytics.update({
+        where: { projectId },
+        data: {
+          gscSiteUrl: `https://${newDomainName}`,
+          gscVerificationStatus: 'PENDING',
+        }
+      });
+      
+      try {
+        await this.gscClient.verifySite(newDomainName);
+        await this.prisma.siteAnalytics.update({
+          where: { projectId },
+          data: { gscVerificationStatus: 'VERIFIED' }
+        });
+      } catch (e) {
+        this.logger.warn(`GSC Verification failed for new domain ${newDomainName}: ${getErrorMessage(e)}`);
+      }
+
+      this.logger.log(`Successfully updated analytics domain for ${projectId}`);
+    } catch (error) {
+      this.logger.error(`Analytics domain update failed: ${getErrorMessage(error)}`);
+      throw error;
+    }
   }
 }

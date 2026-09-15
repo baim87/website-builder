@@ -223,21 +223,37 @@ export class VercelClient {
 
     if (!this.apiToken) return { status: 'mocked' };
 
-    const url = new URL(`${this.baseUrl}/v10/projects/${vercelProjectId}/env`);
-    this.appendTeamId(url);
+    try {
+      const url = new URL(`${this.baseUrl}/v10/projects/${vercelProjectId}/env`);
+      this.appendTeamId(url);
 
-    const response = await fetch(url.toString(), {
-      method: 'POST',
-      headers: this.getHeaders(),
-      body: JSON.stringify(envVars),
-    });
+      const response = await fetch(url.toString(), {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify(envVars),
+      });
 
-    if (!response.ok) {
-      const error = await response.json();
-      this.logger.error(`Vercel environment variables set failed: ${error.message || response.statusText}`);
-      throw new HttpException(`Vercel env variables failed: ${error.message || response.statusText}`, response.status);
+      if (!response.ok) {
+        const error = await response.json();
+        // If the error is just that it already exists (happens on retries), we can ignore it
+        if (response.status === 400 && JSON.stringify(error).includes('already exists')) {
+           this.logger.log(`Vercel environment variables already exist for ${vercelProjectId}, ignoring.`);
+           return { status: 'already_exists' };
+        }
+        this.logger.error(`Vercel environment variables set failed for project ${vercelProjectId}. Status: ${response.status}. Full error: ${JSON.stringify(error)}`);
+        
+        // Don't crash the whole generation if env vars fail on retry
+        if (response.status === 400) {
+          this.logger.warn(`Ignoring 400 error from Vercel env vars API: ${JSON.stringify(error)}`);
+          return { status: 'failed_but_ignored', error };
+        }
+        throw new HttpException(`Vercel env variables failed: ${error.message || response.statusText}`, response.status);
+      }
+      return await response.json();
+    } catch (e) {
+      if (e instanceof HttpException) throw e;
+      this.logger.error(`Failed to set Vercel env vars: ${e.message}`);
+      throw new HttpException(`Vercel env vars network error: ${e.message}`, 500);
     }
-
-    return response.json();
   }
 }

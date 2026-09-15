@@ -8,7 +8,8 @@ import {
 import { Server, Socket } from 'socket.io';
 import { Logger } from '@nestjs/common';
 import { JwtTokenService } from '../auth/jwt/jwt.service';
-import { QueueEvents } from 'bullmq';
+import { QueueEvents, Queue } from 'bullmq';
+import { InjectQueue } from '@nestjs/bullmq';
 import { QUEUE_NAMES } from '../common/constants/queue-names.constant';
 import { ConfigService } from '@nestjs/config';
 import { JOB_STATUS } from './constants/job-status.constant';
@@ -27,6 +28,7 @@ export class GenerationGateway implements OnGatewayConnection, OnGatewayDisconne
   constructor(
     private readonly jwtTokenService: JwtTokenService,
     private readonly configService: ConfigService,
+    @InjectQueue(QUEUE_NAMES.SITE_GENERATION) private readonly siteGenerationQueue: Queue
   ) {
     this.setupQueueEvents();
   }
@@ -62,7 +64,7 @@ export class GenerationGateway implements OnGatewayConnection, OnGatewayDisconne
   }
 
   @SubscribeMessage('subscribeToJob')
-  handleSubscribeToJob(client: Socket, payload: { token: string; jobId: string }) {
+  async handleSubscribeToJob(client: Socket, payload: { token: string; jobId: string }) {
     try {
       // Validate token to ensure they are authenticated
       const decoded = this.jwtTokenService.verifyToken(payload.token);
@@ -70,6 +72,24 @@ export class GenerationGateway implements OnGatewayConnection, OnGatewayDisconne
 
       this.logger.log(`Client ${client.id} subscribed to job ${payload.jobId}`);
       client.join(`job_${payload.jobId}`);
+
+      // Try fetching current job status immediately
+      try {
+        const job = await this.siteGenerationQueue.getJob(payload.jobId);
+        if (job) {
+          const state = await job.getState();
+          if (state === 'failed') {
+             client.emit('progress', { status: JOB_STATUS.FAILED, reason: job.failedReason });
+          } else if (state === 'completed') {
+             client.emit('progress', { status: JOB_STATUS.COMPLETED });
+          } else if (job.progress) {
+             client.emit('progress', { progress: job.progress });
+          }
+        }
+      } catch (e) {
+        this.logger.error(`Error fetching initial job status for ${payload.jobId}`, e);
+      }
+
       return { event: 'subscribed', data: `job_${payload.jobId}` };
     } catch (e) {
       this.logger.warn(`Client ${client.id} failed to subscribe: Invalid token`);
