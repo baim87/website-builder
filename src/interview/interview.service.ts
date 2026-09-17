@@ -225,6 +225,26 @@ export class InterviewService {
         // Re-evaluate completeness after updates
         const finalStatus = await this.checkCompleteness(projectId, getFieldKeys(step));
 
+        if (finalStatus.complete) {
+          // Strip rogue trailing questions if step is finished
+          const strippedResponse = cleanResponse.replace(/[^.!?\n]*\?\s*$/, '').trim();
+          if (strippedResponse !== cleanResponse) {
+            cleanResponse = strippedResponse || 'Got it! Give me a second...';
+            const latestMsg = await this.prisma.chatMessage.findFirst({
+              where: { projectId, role: 'assistant' },
+              orderBy: { createdAt: 'desc' }
+            });
+            if (latestMsg) {
+              const dbContentClean = latestMsg.content.replace(/<!-- EXTRACT:.*?-->/gs, '').replace(/[^.!?\n]*\?\s*$/, '').trim() || 'Got it! Give me a second...';
+              await this.prisma.chatMessage.update({
+                where: { id: latestMsg.id },
+                data: { content: dbContentClean }
+              });
+              yield { event: 'replace-message', data: { content: dbContentClean } };
+            }
+          }
+        }
+
         if (finalStatus.missingFields.length > 0) {
           let fallbackMsg = '';
 

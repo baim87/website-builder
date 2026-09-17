@@ -60,7 +60,7 @@ export function buildCopyWriterPrompt(context: CopyWriterContext, locationMetric
     }
     sectionSpecificRules = headerRules;
   } else if (sectionType === 'HeroSection') {
-    let heroRules = `8. SECTION SPECIFIC RULES: Generate a strong, conversion-optimized hero headline. Include a primary Call to Action (CTA) using the "primaryCtaText" and "primaryCtaLink" fields. Also populate the new premium layout fields: eyebrow, trustMarks (e.g., ["Licensed & Insured", "On-Time Builds"]), reviewSnippet (e.g., {rating: 4.9, text: "rating from local homeowners"}), and floatingStat (e.g., {value: "320+", label: "Projects completed"}). For any avatars or stat images, use UNSPLASH queries.`;
+    let heroRules = `8. SECTION SPECIFIC RULES: Generate a strong, conversion-optimized hero headline. Include a primary Call to Action (CTA) using the "primaryCtaText" and "primaryCtaLink" fields. Keep the "primaryCtaText" short and compact (maximum 3 words, e.g., "Get a Quote", "Start Journey") so it fits on a single line without wrapping. Also populate the new premium layout fields: eyebrow, trustMarks (e.g., ["Licensed & Insured", "On-Time Builds"]), reviewSnippet (e.g., {rating: 4.9, text: "rating from local homeowners"}), and floatingStat (e.g., {value: "320+", label: "Projects completed"}). For any avatars or stat images, use UNSPLASH queries.`;
     if (pageSlug === 'portfolio') {
       heroRules += `\n9. IMPORTANT PORTFOLIO RULE: Mention specific services like ${businessContext.services?.join(', ')}.`;
     } else if (pageSlug === 'service-areas') {
@@ -82,7 +82,7 @@ export function buildCopyWriterPrompt(context: CopyWriterContext, locationMetric
     const validRoutesStr = validRoutes
       ? `\nVALID PAGE ROUTES (use ONLY these exact slugs for navLinks):\n${validRoutes.map((r: string) => `- /${r === 'home' ? '' : r}`).join('\n')}`
       : '';
-    sectionSpecificRules = `8. SECTION SPECIFIC RULES: This is the primary top navigation bar. Do NOT generate a large headline or hero copy. You MUST output a "navLinks" array. For sub-pages like /services/[x] or /service-areas/[x], you MUST group them under a parent link (e.g. "Services") using the "subLinks" array. Use the "ctaText" and "ctaLink" fields for the primary contact button. NEVER use SaaS terminology. You MUST include a "logoUrl" field mapped to the logoUrl from the business context, and a "logoText" field for fallback.${validRoutesStr}`;
+    sectionSpecificRules = `8. SECTION SPECIFIC RULES: This is the primary top navigation bar. Do NOT generate a large headline or hero copy. You MUST output a "navLinks" array. For sub-pages like /services/[x] or /service-areas/[x], you MUST group them under a parent link (e.g. "Services") using the "subLinks" array. Use the "ctaText" and "ctaLink" fields for the primary contact button. Keep the "ctaText" short and compact (maximum 2-3 words) so it fits on a single line. NEVER use SaaS terminology. You MUST include a "logoUrl" field mapped to the logoUrl from the business context, and a "logoText" field for fallback.${validRoutesStr}`;
   } else if (sectionType === 'FooterSection') {
     const validRoutesStr = validRoutes
       ? `\nVALID PAGE ROUTES (use ONLY these exact slugs for quickLinks and serviceLinks):\n${validRoutes.map((r: string) => `- /${r === 'home' ? '' : r}`).join('\n')}`

@@ -22,6 +22,14 @@ export class AnalyticsController {
     return this.analyticsService.getAnalyticsSummary(projectId, req.user.id, timePeriod);
   }
 
+  @Get('realtime')
+  async getRealtime(
+    @Param('projectId') projectId: string,
+    @Request() req: any,
+  ) {
+    return this.analyticsService.getRealtimeAnalytics(projectId, req.user.id);
+  }
+
   @Post('provision')
   async provision(
     @Param('projectId') projectId: string,

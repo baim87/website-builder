@@ -11,7 +11,14 @@ import { JwtTokenService } from '../auth/jwt/jwt.service';
 
 @WebSocketGateway({
   cors: {
-    origin: '*', // Allow frontend-dashboard to connect
+    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+      const allowedOrigin = process.env.FRONTEND_URL || 'http://localhost:3001';
+      if (!origin || origin === allowedOrigin || /\.vercel\.app$/.test(origin) || /\.ngrok-free\.app$/.test(origin) || /\.ngrok\.app$/.test(origin) || /\.loca\.lt$/.test(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
   },
   namespace: '/leads',
 })
@@ -51,5 +58,10 @@ export class LeadsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   notifyNewLead(userId: string, leadData: any) {
     this.logger.log(`Notifying user ${userId} of new lead`);
     this.server.to(`user_${userId}`).emit('new_lead', leadData);
+  }
+
+  notifyLeadMoved(userId: string, leadData: any) {
+    this.logger.log(`Notifying user ${userId} that lead moved`);
+    this.server.to(`user_${userId}`).emit('lead_moved', leadData);
   }
 }

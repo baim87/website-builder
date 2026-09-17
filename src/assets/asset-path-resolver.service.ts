@@ -72,4 +72,18 @@ export class AssetPathResolverService {
   ): { key: string } {
     return { key: `users/${userId}/projects/${projectId}/assets/brands/${fileName}` };
   }
+
+  /**
+   * Resolves the R2 path for Lead attachments.
+   */
+  resolveLeadAttachmentPath(
+    userId: string,
+    projectId: string,
+    leadId: string,
+    fileName: string
+  ): { key: string } {
+    const timestamp = Date.now();
+    const cleanFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+    return { key: `users/${userId}/projects/${projectId}/leads/${leadId}/attachments/${timestamp}-${cleanFileName}` };
+  }
 }

@@ -204,6 +204,36 @@ export class NextjsBuilderService {
         }
       }
 
+      // Patch /api/lead/route.ts to not destructively parse form data
+      const leadApiRoutePath = path.join(tempDir, 'src/app/api/lead/route.ts');
+      try {
+        let routeContent = await fs.readFile(leadApiRoutePath, 'utf8');
+        // Replace the destructive for-loop with a safer one
+        const newForLoop = `for (const [key, value] of formData.entries()) {
+        if (typeof value === 'string') {
+          // Keep all original keys
+          leadData[key] = value;
+          const lowerKey = key.toLowerCase();
+          
+          // Map to core fields safely without overwriting if multiple exist
+          if (lowerKey.includes('name')) {
+            leadData.name = leadData.name ? \`\${leadData.name} \${value}\` : value;
+          }
+          else if (lowerKey.includes('email') && !leadData.email) leadData.email = value;
+          else if (lowerKey.includes('phone') && !leadData.phone) leadData.phone = value;
+        }
+      }`;
+        
+        // Use a simple regex to replace the loop block safely
+        const loopRegex = /for\s*\(\s*const\s*\[\s*key\s*,\s*value\s*\]\s*of\s*formData\.entries\(\)\s*\)\s*\{[\s\S]*?(?=\s*const\s*res\s*=\s*await\s*fetch)/;
+        routeContent = routeContent.replace(loopRegex, newForLoop + '\\n\\n      ');
+        
+        await fs.writeFile(leadApiRoutePath, routeContent);
+        this.logger.log('Patched /api/lead/route.ts to preserve raw fields');
+      } catch (err) {
+        this.logger.warn(`Could not patch /api/lead/route.ts: ${err.message}`);
+      }
+
       this.logger.log(`Running build in ${tempDir} to verify generated code...`);
       
       let buildSuccess = false;
@@ -307,8 +337,13 @@ export class NextjsBuilderService {
       // 4.75. Prepare Environment Variables for Deployment
       this.logger.log(`Preparing environment variables for deployment...`);
       const envVars = [
-        { key: 'NEXT_PUBLIC_API_URL', value: process.env.API_URL || 'http://localhost:3000', target: ['production', 'preview', 'development'], type: 'plain' },
-        { key: 'NEXT_PUBLIC_PROJECT_ID', value: projectId, target: ['production', 'preview', 'development'], type: 'plain' }
+        { key: 'NEXT_PUBLIC_API_URL', value: process.env.APP_URL || 'http://localhost:3000', target: ['production', 'preview', 'development'], type: 'plain' },
+        { key: 'NEXT_PUBLIC_PROJECT_ID', value: projectId, target: ['production', 'preview', 'development'], type: 'plain' },
+        { key: 'SMTP_HOST', value: process.env.SMTP_HOST || 'smtp.gmail.com', target: ['production', 'preview', 'development'], type: 'plain' },
+        { key: 'SMTP_PORT', value: process.env.SMTP_PORT || '465', target: ['production', 'preview', 'development'], type: 'plain' },
+        { key: 'SMTP_USER', value: process.env.SMTP_USER || '', target: ['production', 'preview', 'development'], type: 'plain' },
+        { key: 'SMTP_PASS', value: process.env.SMTP_PASS || '', target: ['production', 'preview', 'development'], type: 'plain' },
+        { key: 'CONTACT_EMAIL', value: process.env.CONTACT_EMAIL || '', target: ['production', 'preview', 'development'], type: 'plain' }
       ];
 
       if (process.env.BUILDER_API_SECRET) {

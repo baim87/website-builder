@@ -106,6 +106,32 @@ export class Ga4Client {
     }
   }
 
+  async markEventsAsConversions(propertyId: string, eventNames: string[]) {
+    if (!this.gaAdminClient) throw new Error('GA4 Admin client not initialized');
+
+    this.logger.log(`Marking ${eventNames.length} events as conversions for Property ${propertyId}`);
+
+    for (const eventName of eventNames) {
+      try {
+        await this.gaAdminClient.createConversionEvent({
+          parent: `properties/${propertyId}`,
+          conversionEvent: {
+            eventName,
+          },
+        });
+        this.logger.log(`Successfully marked '${eventName}' as a conversion for Property ${propertyId}`);
+      } catch (error: any) {
+        // If it already exists, GA4 returns ALREADY_EXISTS error, which we can safely ignore
+        if (error.code === 6 || error.message?.includes('already exists')) {
+          this.logger.log(`Event '${eventName}' is already marked as a conversion.`);
+        } else {
+          this.logger.error(`Failed to mark '${eventName}' as conversion: ${error.message}`);
+          throw error;
+        }
+      }
+    }
+  }
+
   async getAnalyticsReport(propertyId: string, period: string = '30d') {
     if (!this.gaDataClient) throw new Error('GA4 Data client not initialized');
 
@@ -119,34 +145,105 @@ export class Ga4Client {
     this.logger.log(`Fetching GA4 Analytics Report for property ${propertyId} with period ${period} (${daysAgo})`);
 
     try {
-      const [response] = await this.gaDataClient.runReport({
+      const [overviewResponse] = await this.gaDataClient.runReport({
         property: `properties/${propertyId}`,
-        dateRanges: [
-          {
-            startDate: daysAgo,
-            endDate: 'today',
-          },
-        ],
+        dateRanges: [{ startDate: daysAgo, endDate: 'today' }],
         metrics: [
           { name: 'activeUsers' },
           { name: 'screenPageViews' },
           { name: 'bounceRate' },
           { name: 'sessionConversionRate' },
-          { name: 'averageSessionDuration' },
-          { name: 'conversions' }
+          { name: 'averageSessionDuration' }
         ],
         dimensions: [
           { name: 'date' },
           { name: 'sessionDefaultChannelGroup' },
           { name: 'deviceCategory' },
-          { name: 'region' },
+          { name: 'region' }
+        ],
+        metricAggregations: [1]
+      });
+
+      const [conversionsResponse] = await this.gaDataClient.runReport({
+        property: `properties/${propertyId}`,
+        dateRanges: [{ startDate: daysAgo, endDate: 'today' }],
+        metrics: [
+          { name: 'conversions' }
+        ],
+        dimensions: [
           { name: 'eventName' }
+        ],
+      });
+
+      return { overview: overviewResponse, conversions: conversionsResponse };
+    } catch (e: any) {
+      this.logger.error(`Failed to fetch GA4 report: ${e.message}`);
+      return null;
+    }
+  }
+
+  async getRealtimeRegionReport(propertyId: string) {
+    if (!this.gaDataClient) throw new Error('GA4 Data client not initialized');
+
+    this.logger.log(`Fetching GA4 Realtime Report for property ${propertyId}`);
+
+    try {
+      const [response] = await this.gaDataClient.runRealtimeReport({
+        property: `properties/${propertyId}`,
+        metrics: [
+          { name: 'activeUsers' }
+        ],
+        dimensions: [
+          { name: 'region' }
         ],
       });
 
       return response;
     } catch (e: any) {
-      this.logger.error(`Failed to fetch GA4 report: ${e.message}`);
+      this.logger.error(`Failed to fetch GA4 realtime report: ${e.message}`);
+      return null;
+    }
+  }
+
+  async getRealtimeConversionsReport(propertyId: string) {
+    if (!this.gaDataClient) throw new Error('GA4 Data client not initialized');
+
+    try {
+      const [response] = await this.gaDataClient.runRealtimeReport({
+        property: `properties/${propertyId}`,
+        metrics: [{ name: 'conversions' }],
+        dimensions: [{ name: 'eventName' }],
+      });
+      return response;
+    } catch (e: any) {
+      this.logger.error(`Failed to fetch GA4 realtime conversions: ${e.message}`);
+      return null;
+    }
+  }
+
+  async getRealtimeReport(propertyId: string) {
+    if (!this.gaDataClient) throw new Error('GA4 Data client not initialized');
+
+    this.logger.log(`Fetching GA4 full Realtime Report for property ${propertyId}`);
+
+    try {
+      const [response] = await this.gaDataClient.runRealtimeReport({
+        property: `properties/${propertyId}`,
+        metrics: [
+          { name: 'activeUsers' }
+        ],
+        dimensions: [
+          { name: 'minutesAgo' },
+          { name: 'firstUserSource' },
+          { name: 'audienceName' },
+          { name: 'unifiedScreenName' }, // usually works as page title
+          { name: 'region' }
+        ],
+      });
+
+      return response;
+    } catch (e: any) {
+      this.logger.error(`Failed to fetch GA4 full realtime report: ${e.message}`);
       return null;
     }
   }

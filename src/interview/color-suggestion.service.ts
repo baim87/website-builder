@@ -21,7 +21,17 @@ export class ColorSuggestionService {
       
       Generate 4 distinct, premium color palettes (each containing exactly 2 hex codes: a primary and a secondary color) that perfectly match this business.
       Make sure the names of the palettes are descriptive and catchy, e.g. "Ocean & Sand" or "Industrial Steel & Amber".
-      Return ONLY a valid JSON array of objects. Do not output anything else.
+      
+      You MUST return ONLY a valid JSON object in this EXACT format:
+      {
+        "palettes": [
+          {
+            "name": "Ocean & Sand",
+            "colors": ["#162231", "#D4AF37"]
+          }
+        ]
+      }
+      Do not output any markdown formatting, explanations, or extra text.
     `;
 
     try {
@@ -30,19 +40,25 @@ export class ColorSuggestionService {
         systemPrompt: 'You are a helpful assistant. Always output a clean JSON array.',
         messages: [{ role: 'user', content: prompt }],
         schema: {
-          type: 'array',
-          items: { 
-            type: 'object',
-            properties: {
-              name: { type: 'string', description: 'A catchy name for this palette, e.g. "Ocean & Sand"' },
-              colors: { 
-                type: 'array', 
-                items: { type: 'string' },
-                description: 'Exactly 2 hex codes.'
+          type: 'object',
+          properties: {
+            palettes: {
+              type: 'array',
+              items: { 
+                type: 'object',
+                properties: {
+                  name: { type: 'string', description: 'A catchy name for this palette, e.g. "Ocean & Sand"' },
+                  colors: { 
+                    type: 'array', 
+                    items: { type: 'string' },
+                    description: 'Exactly 2 hex codes.'
+                  }
+                },
+                required: ['name', 'colors']
               }
-            },
-            required: ['name', 'colors']
-          }
+            }
+          },
+          required: ['palettes']
         },
         schemaName: 'ColorPalettes'
       });
@@ -52,6 +68,11 @@ export class ColorSuggestionService {
       if (fenceMatch) raw = fenceMatch[1].trim();
       
       let parsed = JSON.parse(raw);
+      
+      // If it returned { palettes: [...] } because of our schema
+      if (parsed && typeof parsed === 'object' && Array.isArray(parsed.palettes)) {
+        parsed = parsed.palettes;
+      }
       
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
         const values = Object.values(parsed);

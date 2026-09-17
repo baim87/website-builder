@@ -54,6 +54,9 @@ export class AnalyticsService {
       if (gtmInternalId && measurementId && propertyId) {
         await this.gtmClient.configureContainer(gtmInternalId, measurementId);
         
+        // Mark events as conversions in GA4
+        await this.ga4Client.markEventsAsConversions(propertyId, ['phone_click', 'form_submit', 'email_click']);
+        
         // The user specifically requested to test with this email
         const adminEmail = 'baim@contractingempire.com';
         await this.ga4Client.grantAdminAccess(propertyId, adminEmail);
@@ -121,7 +124,6 @@ export class AnalyticsService {
 
     // Initialize default zeroes
     let totalVisitors = 0;
-    let totalPageViews = 0;
     let avgBounceRate = 0;
     let avgConvRate = 0;
     let totalDuration = 0;
@@ -136,27 +138,25 @@ export class AnalyticsService {
 
     let rowCount = 0;
 
-    if (ga4Data && ga4Data.rows) {
-      ga4Data.rows.forEach(row => {
+    if (ga4Data && ga4Data.overview) {
+      if (ga4Data.overview.totals && ga4Data.overview.totals.length > 0) {
+        const totalsRow = ga4Data.overview.totals[0];
+        totalVisitors = parseInt(totalsRow.metricValues?.[0]?.value || '0', 10);
+        avgBounceRate = parseFloat(totalsRow.metricValues?.[2]?.value || '0');
+        avgConvRate = parseFloat(totalsRow.metricValues?.[3]?.value || '0');
+        totalDuration = parseFloat(totalsRow.metricValues?.[4]?.value || '0');
+      }
+
+      if (ga4Data.overview.rows) {
+        ga4Data.overview.rows.forEach(row => {
         const date = row.dimensionValues?.[0]?.value || 'Unknown';
         const rawChannel = row.dimensionValues?.[1]?.value || 'Unknown';
         const device = row.dimensionValues?.[2]?.value || 'Unknown';
         const region = row.dimensionValues?.[3]?.value || 'Unknown';
-        const rawEventName = row.dimensionValues?.[4]?.value || 'Unknown';
 
         const activeUsers = parseInt(row.metricValues?.[0]?.value || '0', 10);
         const pageViews = parseInt(row.metricValues?.[1]?.value || '0', 10);
-        const bounceRate = parseFloat(row.metricValues?.[2]?.value || '0');
-        const convRate = parseFloat(row.metricValues?.[3]?.value || '0');
-        const avgDuration = parseFloat(row.metricValues?.[4]?.value || '0');
-        const conversions = parseInt(row.metricValues?.[5]?.value || '0', 10);
 
-        totalVisitors += activeUsers;
-        totalPageViews += pageViews;
-        avgBounceRate += bounceRate;
-        avgConvRate += convRate;
-        totalDuration += avgDuration;
-        totalConversions += conversions;
         rowCount++;
 
         // Format Date (YYYYMMDD to readable)
@@ -186,8 +186,16 @@ export class AnalyticsService {
              trafficByStateMap[regionCode] = (trafficByStateMap[regionCode] || 0) + activeUsers;
           }
         }
+      });
+      }
+    }
 
-        // Conversions
+    // Process conversions separately
+    if (ga4Data && ga4Data.conversions && ga4Data.conversions.rows) {
+      ga4Data.conversions.rows.forEach(row => {
+        const rawEventName = row.dimensionValues?.[0]?.value || 'Unknown';
+        const conversions = parseInt(row.metricValues?.[0]?.value || '0', 10);
+
         if (conversions > 0 && rawEventName !== 'Unknown' && rawEventName !== '(not set)') {
           let displayEventName = rawEventName;
           if (rawEventName === 'form_submit') displayEventName = 'Form Fill';
@@ -195,34 +203,79 @@ export class AnalyticsService {
           if (rawEventName === 'email_click') displayEventName = 'Email Click';
 
           conversionsByTypeMap[displayEventName] = (conversionsByTypeMap[displayEventName] || 0) + conversions;
+          totalConversions += conversions;
         }
       });
     }
 
-    if (rowCount > 0) {
-      avgBounceRate = avgBounceRate / rowCount;
-      avgConvRate = avgConvRate / rowCount;
-      totalDuration = totalDuration / rowCount;
+    // Merge realtime region data to populate the map immediately for new properties
+    const realtimeData = await this.ga4Client.getRealtimeRegionReport(analytics.ga4PropertyId);
+    if (realtimeData && realtimeData.rows) {
+      realtimeData.rows.forEach(row => {
+        const region = row.dimensionValues?.[0]?.value || 'Unknown';
+        const activeUsers = parseInt(row.metricValues?.[0]?.value || '0', 10);
+        
+        if (activeUsers > 0 && region && region !== '(not set)' && region !== 'Unknown') {
+          // A very rudimentary state name to code mapping for the map
+          const stateCodes: Record<string, string> = {
+            'Alabama': 'AL', 'Alaska': 'AK', 'Arizona': 'AZ', 'Arkansas': 'AR', 'California': 'CA',
+            'Colorado': 'CO', 'Connecticut': 'CT', 'Delaware': 'DE', 'Florida': 'FL', 'Georgia': 'GA',
+            'Hawaii': 'HI', 'Idaho': 'ID', 'Illinois': 'IL', 'Indiana': 'IN', 'Iowa': 'IA',
+            'Kansas': 'KS', 'Kentucky': 'KY', 'Louisiana': 'LA', 'Maine': 'ME', 'Maryland': 'MD',
+            'Massachusetts': 'MA', 'Michigan': 'MI', 'Minnesota': 'MN', 'Mississippi': 'MS', 'Missouri': 'MO',
+            'Montana': 'MT', 'Nebraska': 'NE', 'Nevada': 'NV', 'New Hampshire': 'NH', 'New Jersey': 'NJ',
+            'New Mexico': 'NM', 'New York': 'NY', 'North Carolina': 'NC', 'North Dakota': 'ND', 'Ohio': 'OH',
+            'Oklahoma': 'OK', 'Oregon': 'OR', 'Pennsylvania': 'PA', 'Rhode Island': 'RI', 'South Carolina': 'SC',
+            'South Dakota': 'SD', 'Tennessee': 'TN', 'Texas': 'TX', 'Utah': 'UT', 'Vermont': 'VT',
+            'Virginia': 'VA', 'Washington': 'WA', 'West Virginia': 'WV', 'Wisconsin': 'WI', 'Wyoming': 'WY'
+          };
+          
+          const regionCode = stateCodes[region] || region.substring(0, 2).toUpperCase();
+          trafficByStateMap[regionCode] = (trafficByStateMap[regionCode] || 0) + activeUsers;
+        }
+      });
+    }
+
+    // Merge realtime conversions
+    const realtimeConversions = await this.ga4Client.getRealtimeConversionsReport(analytics.ga4PropertyId);
+    if (realtimeConversions && realtimeConversions.rows) {
+      realtimeConversions.rows.forEach(row => {
+        const rawEventName = row.dimensionValues?.[0]?.value || 'Unknown';
+        const conversions = parseInt(row.metricValues?.[0]?.value || '0', 10);
+
+        if (conversions > 0 && rawEventName !== 'Unknown' && rawEventName !== '(not set)') {
+          let displayEventName = rawEventName;
+          if (rawEventName === 'form_submit') displayEventName = 'Form Fill';
+          if (rawEventName === 'phone_click') displayEventName = 'Phone Call';
+          if (rawEventName === 'email_click') displayEventName = 'Email Click';
+
+          conversionsByTypeMap[displayEventName] = (conversionsByTypeMap[displayEventName] || 0) + conversions;
+          // Note: we don't add to totalConversions or totalVisitors here to avoid skewing standard metric rates,
+          // we just want them to show up on the real-time conversion chart.
+        }
+      });
     }
 
     const formatDuration = (seconds: number) => {
-      if (!seconds) return '0s';
-      const m = Math.floor(seconds / 60);
+      const h = Math.floor(seconds / 3600);
+      const m = Math.floor((seconds % 3600) / 60);
       const s = Math.floor(seconds % 60);
-      return m > 0 ? `${m}m ${s}s` : `${s}s`;
+      if (h > 0) return `${h}h ${m}m ${s}s`;
+      if (m > 0) return `${m}m ${s}s`;
+      return `${s}s`;
     };
 
     return {
       status: ANALYTICS_STATUS.ACTIVE,
-      gtmContainerId: analytics.gtmContainerId,
+      projectId: analytics.projectId,
+      ga4PropertyId: analytics.ga4PropertyId,
       ga4MeasurementId: analytics.ga4MeasurementId,
-      gscStatus: analytics.gscVerificationStatus,
       overview: {
         totalVisitors,
-        visitorsTrend: 0, // Need historical query for trends
-        bounceRate: parseFloat((avgBounceRate * 100).toFixed(1)),
+        totalVisitorsTrend: 0, 
+        bounceRate: avgBounceRate.toFixed(1),
         bounceRateTrend: 0,
-        conversionRate: parseFloat((avgConvRate * 100).toFixed(1)),
+        conversionRate: avgConvRate.toFixed(1),
         conversionRateTrend: 0,
         avgSessionDuration: formatDuration(totalDuration),
       },
@@ -270,5 +323,156 @@ export class AnalyticsService {
       this.logger.error(`Analytics domain update failed: ${getErrorMessage(error)}`);
       throw error;
     }
+  }
+
+  async getRealtimeAnalytics(projectId: string, userId: string) {
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId, userId },
+    });
+
+    if (!project) throw new HttpException('Project not found', HttpStatus.NOT_FOUND);
+
+    const analytics = await this.prisma.siteAnalytics.findUnique({
+      where: { projectId },
+    });
+
+    if (!analytics || !analytics.ga4PropertyId) {
+      return { status: ANALYTICS_STATUS.NOT_PROVISIONED };
+    }
+
+    let activeUsersLast30Mins = 0;
+    const usersPerMinuteMap: Record<string, number> = {};
+    for (let i = 0; i < 30; i++) usersPerMinuteMap[i.toString()] = 0;
+
+    const audienceMap: Record<string, number> = {};
+    const pagesMap: Record<string, number> = {};
+    const regionsMap: Record<string, number> = {};
+
+    const cityToState: Record<string, string> = {
+      'New York': 'NY', 'Los Angeles': 'CA', 'Chicago': 'IL', 'Houston': 'TX', 'Phoenix': 'AZ',
+      'Philadelphia': 'PA', 'San Antonio': 'TX', 'San Diego': 'CA', 'Dallas': 'TX', 'San Jose': 'CA',
+      'Austin': 'TX', 'Jacksonville': 'FL', 'Fort Worth': 'TX', 'Columbus': 'OH', 'Charlotte': 'NC',
+      'San Francisco': 'CA', 'Indianapolis': 'IN', 'Seattle': 'WA', 'Denver': 'CO', 'Washington': 'DC',
+      'Boston': 'MA', 'El Paso': 'TX', 'Nashville': 'TN', 'Detroit': 'MI', 'Oklahoma City': 'OK',
+      'Portland': 'OR', 'Las Vegas': 'NV', 'Memphis': 'TN', 'Louisville': 'KY', 'Baltimore': 'MD',
+      'Milwaukee': 'WI', 'Albuquerque': 'NM', 'Tucson': 'AZ', 'Fresno': 'CA', 'Mesa': 'AZ',
+      'Sacramento': 'CA', 'Atlanta': 'GA', 'Kansas City': 'MO', 'Colorado Springs': 'CO', 'Miami': 'FL',
+      'Raleigh': 'NC', 'Omaha': 'NE', 'Long Beach': 'CA', 'Virginia Beach': 'VA', 'Oakland': 'CA',
+      'Minneapolis': 'MN', 'Tulsa': 'OK', 'Arlington': 'TX', 'Tampa': 'FL', 'New Orleans': 'LA',
+      'Wichita': 'KS', 'Cleveland': 'OH', 'Bakersfield': 'CA', 'Aurora': 'CO', 'Anaheim': 'CA',
+      'Honolulu': 'HI', 'Santa Ana': 'CA', 'Riverside': 'CA', 'Corpus Christi': 'TX', 'Lexington': 'KY',
+      'Stockton': 'CA', 'Henderson': 'NV', 'Saint Paul': 'MN', 'St. Louis': 'MO', 'Cincinnati': 'OH',
+      'Pittsburgh': 'PA', 'Greensboro': 'NC', 'Anchorage': 'AK', 'Plano': 'TX', 'Lincoln': 'NE',
+      'Orlando': 'FL', 'Irvine': 'CA', 'Newark': 'NJ', 'Toledo': 'OH', 'Durham': 'NC', 'Chula Vista': 'CA',
+      'Fort Wayne': 'IN', 'Jersey City': 'NJ', 'St. Petersburg': 'FL', 'Laredo': 'TX', 'Madison': 'WI',
+      'Chandler': 'AZ', 'Buffalo': 'NY', 'Lubbock': 'TX', 'Scottsdale': 'AZ', 'Reno': 'NV',
+      'Glendale': 'AZ', 'Gilbert': 'AZ', 'Winston-Salem': 'NC', 'North Las Vegas': 'NV', 'Norfolk': 'VA',
+      'Chesapeake': 'VA', 'Garland': 'TX', 'Irving': 'TX', 'Hialeah': 'FL', 'Fremont': 'CA',
+      'Boise': 'ID', 'Richmond': 'VA', 'Baton Rouge': 'LA', 'Spokane': 'WA', 'Des Moines': 'IA',
+      'Tacoma': 'WA', 'San Bernardino': 'CA', 'Modesto': 'CA', 'Fontana': 'CA', 'Santa Clarita': 'CA',
+      'Birmingham': 'AL', 'Oxnard': 'CA', 'Fayetteville': 'NC', 'Moreno Valley': 'CA', 'Rochester': 'NY',
+      'Huntington Beach': 'CA', 'Salt Lake City': 'UT', 'Grand Rapids': 'MI',
+      'Amarillo': 'TX', 'Yonkers': 'NY', 'Montgomery': 'AL', 'Akron': 'OH',
+      'Little Rock': 'AR', 'Huntsville': 'AL', 'Augusta': 'GA', 'Port St. Lucie': 'FL',
+      'Grand Prairie': 'TX', 'Tallahassee': 'FL', 'Overland Park': 'KS',
+      'Tempe': 'AZ', 'McKinney': 'TX', 'Mobile': 'AL', 'Cape Coral': 'FL', 'Shreveport': 'LA',
+      'Frisco': 'TX', 'Knoxville': 'TN', 'Worcester': 'MA', 'Brownsville': 'TX', 'Vancouver': 'WA',
+      'Fort Lauderdale': 'FL', 'Sioux Falls': 'SD', 'Ontario': 'CA', 'Chattanooga': 'TN', 'Providence': 'RI',
+      'Newport News': 'VA', 'Rancho Cucamonga': 'CA', 'Santa Rosa': 'CA', 'Peoria': 'AZ', 'Oceanside': 'CA',
+      'Elk Grove': 'CA', 'Salem': 'OR', 'Pembroke Pines': 'FL', 'Eugene': 'OR', 'Garden Grove': 'CA',
+      'Cary': 'NC', 'Fort Collins': 'CO', 'Corona': 'CA', 'Springfield': 'MO', 'Jackson': 'MS',
+      'Alexandria': 'VA', 'Hayward': 'CA', 'Clarksville': 'TN', 'Lakewood': 'CO', 'Lancaster': 'CA',
+      'Salinas': 'CA', 'Palmdale': 'CA', 'Hollywood': 'FL', 'Pasadena': 'TX', 'Macon': 'GA',
+      'Pomona': 'CA', 'Sunnyvale': 'CA', 'Escondido': 'CA', 'Paterson': 'NJ', 'Joliet': 'IL',
+      'Naperville': 'IL', 'Rockford': 'IL', 'Torrance': 'CA', 'Syracuse': 'NY', 'Bridgeport': 'CT',
+      'Mesquite': 'TX', 'Savannah': 'GA', 'Orange': 'CA',
+      'Fullerton': 'CA', 'Dayton': 'OH', 'Miramar': 'FL', 'Olathe': 'KS', 'Thornton': 'CO',
+      'Waco': 'TX', 'Carrollton': 'TX', 'West Valley City': 'UT', 'Denton': 'TX', 'Warren': 'MI',
+      'Roseville': 'CA', 'Visalia': 'CA', 'Victorville': 'CA', 'Thousand Oaks': 'CA', 'Elizabeth': 'NJ',
+      'Cedar Rapids': 'IA', 'Topeka': 'KS', 'Fargo': 'ND', 'Wausau': 'WI', 'Weston': 'WI', 'Merrill': 'WI',
+      'Stevens Point': 'WI'
+    };
+
+    try {
+      const results = await Promise.allSettled([
+        this.ga4Client['gaDataClient'].runRealtimeReport({
+          property: `properties/${analytics.ga4PropertyId}`,
+          metrics: [{ name: 'activeUsers' }],
+          dimensions: [{ name: 'minutesAgo' }],
+        }),
+        this.ga4Client['gaDataClient'].runRealtimeReport({
+          property: `properties/${analytics.ga4PropertyId}`,
+          metrics: [{ name: 'activeUsers' }],
+          dimensions: [{ name: 'unifiedScreenName' }],
+        }),
+        this.ga4Client['gaDataClient'].runRealtimeReport({
+          property: `properties/${analytics.ga4PropertyId}`,
+          metrics: [{ name: 'activeUsers' }],
+          dimensions: [{ name: 'audienceName' }],
+        }),
+        this.ga4Client['gaDataClient'].runRealtimeReport({
+          property: `properties/${analytics.ga4PropertyId}`,
+          metrics: [{ name: 'activeUsers' }],
+          dimensions: [{ name: 'city' }],
+        })
+      ]);
+
+      const [minRes, screenRes, audRes, cityRes] = results;
+
+      if (minRes.status === 'fulfilled' && minRes.value[0]?.rows) {
+        minRes.value[0].rows.forEach((row: any) => {
+          const min = row.dimensionValues?.[0]?.value || '0';
+          const val = parseInt(row.metricValues?.[0]?.value || '0', 10);
+          activeUsersLast30Mins += val;
+          if (usersPerMinuteMap[min] !== undefined) usersPerMinuteMap[min] += val;
+        });
+      }
+
+      if (screenRes.status === 'fulfilled' && screenRes.value[0]?.rows) {
+        screenRes.value[0].rows.forEach((row: any) => {
+          const page = row.dimensionValues?.[0]?.value || 'Unknown';
+          const val = parseInt(row.metricValues?.[0]?.value || '0', 10);
+          if (val > 0 && page !== '(not set)' && page !== 'Unknown') pagesMap[page] = val;
+        });
+      }
+
+      if (audRes.status === 'fulfilled' && audRes.value[0]?.rows) {
+        audRes.value[0].rows.forEach((row: any) => {
+          const aud = row.dimensionValues?.[0]?.value || 'All Users';
+          const val = parseInt(row.metricValues?.[0]?.value || '0', 10);
+          if (val > 0 && aud !== '(not set)') audienceMap[aud] = val;
+        });
+      }
+
+      if (cityRes.status === 'fulfilled' && cityRes.value[0]?.rows) {
+        cityRes.value[0].rows.forEach((row: any) => {
+          const city = row.dimensionValues?.[0]?.value || 'Unknown';
+          const val = parseInt(row.metricValues?.[0]?.value || '0', 10);
+          if (val > 0 && city !== '(not set)' && city !== 'Unknown') {
+            const state = cityToState[city] || city;
+            regionsMap[state] = (regionsMap[state] || 0) + val;
+          }
+        });
+      }
+    } catch (e) {
+      this.logger.error('Error fetching realtime parallel reports', e);
+    }
+
+    if (!audienceMap['All Users']) {
+       audienceMap['All Users'] = activeUsersLast30Mins;
+    }
+
+    return {
+      status: ANALYTICS_STATUS.ACTIVE,
+      activeUsersLast30Mins,
+      usersPerMinute: Object.entries(usersPerMinuteMap).map(([minute, count]) => ({
+        minute: `-${minute} min`,
+        count
+      })).reverse(),
+      usersBySource: [], // Deprecated in realtime due to GA4 limitations
+      usersByAudience: Object.entries(audienceMap).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value),
+      usersByPageTitle: Object.entries(pagesMap).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value),
+      usersByRegion: Object.entries(regionsMap).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value),
+    };
   }
 }

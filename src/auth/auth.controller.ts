@@ -36,10 +36,12 @@ export class AuthController {
       httpOnly: true,
       secure: this.configService.get('NODE_ENV') === 'production',
       sameSite: 'lax',
+      path: '/api/auth',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
     const frontendUrl = this.configService.get('FRONTEND_URL');
-    return res.redirect(`${frontendUrl}/login?token=${accessToken}`);
+    return res.redirect(`${frontendUrl}/login#token=${accessToken}`);
   }
 
   @Public()
@@ -52,6 +54,10 @@ export class AuthController {
 
     try {
       const payload = this.jwtTokenService.verifyToken(refreshToken);
+      if (payload.type !== 'refresh') {
+        return res.status(401).json({ message: 'Not a refresh token' });
+      }
+      
       const user = await this.authService.findUserById(payload.sub);
       
       if (!user) {
@@ -64,6 +70,8 @@ export class AuthController {
         httpOnly: true,
         secure: this.configService.get('NODE_ENV') === 'production',
         sameSite: 'lax',
+        path: '/api/auth',
+        maxAge: 7 * 24 * 60 * 60 * 1000,
       });
 
       return res.json({ accessToken: newAccessToken });
@@ -79,6 +87,7 @@ export class AuthController {
       httpOnly: true,
       secure: this.configService.get('NODE_ENV') === 'production',
       sameSite: 'lax',
+      path: '/api/auth',
     });
     return res.json({ success: true });
   }

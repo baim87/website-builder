@@ -1,10 +1,10 @@
 import { Controller, Get, Param, Headers, UnauthorizedException, ForbiddenException } from '@nestjs/common';
-import { PublicProjectsService } from './public-projects.service';
+import { SiteContentService } from '../generation/site-content.service';
 import { Public } from '../common/decorators/public.decorator';
 
 @Controller('public/projects')
 export class PublicProjectsController {
-  constructor(private readonly publicProjectsService: PublicProjectsService) {}
+  constructor(private readonly siteContentService: SiteContentService) {}
 
   @Public()
   @Get(':id/content')
@@ -24,6 +24,6 @@ export class PublicProjectsController {
       }
     }
 
-    return this.publicProjectsService.getSiteContent(projectId);
+    return this.siteContentService.getSiteContent(projectId);
   }
 }

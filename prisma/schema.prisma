@@ -41,6 +41,8 @@ model Project {
   siteAnalytics          SiteAnalytics?
   skillInvocations       SkillInvocation[]
   websiteData            WebsiteData?
+  leadStages             LeadStage[]
+  webhookIntegrations    WebhookIntegration[]
 }
 
 model BusinessContext {
@@ -242,14 +244,48 @@ model StripeEvent {
 }
 
 model Lead {
-  id        String   @id @default(uuid())
+  id        String      @id @default(uuid())
   projectId String
+  stageId   String?
   name      String?
   email     String?
   phone     String?
   message   String?
   source    String?
+  status    String      @default("new")
+  isRead    Boolean     @default(false)
+  position  Int         @default(0)
   metadata  Json?
+  attachments Json?
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  project   Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  stage     LeadStage?  @relation(fields: [stageId], references: [id], onDelete: SetNull)
+}
+
+model LeadStage {
+  id        String   @id @default(uuid())
+  projectId String
+  name      String
+  color     String   @default("#3B82F6")
+  position  Int
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  leads     Lead[]
+
+  @@unique([projectId, position])
+}
+
+model WebhookIntegration {
+  id        String   @id @default(uuid())
+  projectId String
+  name      String
+  url       String
+  secret    String?
+  isActive  Boolean  @default(true)
+  headers   Json?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)

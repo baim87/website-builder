@@ -1,13 +1,15 @@
 import { Module } from '@nestjs/common';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { ClsModule, ClsService } from 'nestjs-cls';
 import { LoggerModule } from 'nestjs-pino';
 import * as crypto from 'crypto';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ConfigModule } from './config/config.module';
+import { ConfigService } from '@nestjs/config';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
-import { APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_INTERCEPTOR, APP_GUARD } from '@nestjs/core';
 import { TenantInterceptor } from './common/interceptors/tenant.interceptor';
 import { AIGatewayModule } from './ai-gateway/ai-gateway.module';
 import { QueueModule } from './queue/queue.module';
@@ -71,7 +73,15 @@ import { EditorModule } from './editor/editor.module';
         };
       },
     }),
-    ConfigModule, PrismaModule, AuthModule, ProjectsModule, ChatModule, InterviewModule, GbpModule, GuardrailsModule, SeoModule, GenerationModule, AssetsModule, AIGatewayModule, QueueModule, StorageModule, KeywordsModule, SkillsModule, BillingModule, HealthModule, AnalyticsModule, StripeModule, VercelModule, DeploymentModule, DomainModule, LeadsModule, RedisModule, QualityControlModule, AutoRepairModule, EditorModule, EventEmitterModule.forRoot()],
+    ConfigModule, PrismaModule, AuthModule, ProjectsModule, ChatModule, InterviewModule, GbpModule, GuardrailsModule, SeoModule, GenerationModule, AssetsModule, AIGatewayModule, QueueModule, StorageModule, KeywordsModule, SkillsModule, BillingModule, HealthModule, AnalyticsModule, StripeModule, VercelModule, DeploymentModule, DomainModule, LeadsModule, RedisModule, QualityControlModule, AutoRepairModule, EditorModule, EventEmitterModule.forRoot(),
+    ThrottlerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => [{
+        ttl: configService.get<number>('THROTTLE_TTL') || 60000,
+        limit: configService.get<number>('THROTTLE_LIMIT') || 100,
+      }],
+    })],
 
   controllers: [AppController],
   providers: [
@@ -79,6 +89,10 @@ import { EditorModule } from './editor/editor.module';
     {
       provide: APP_INTERCEPTOR,
       useClass: TenantInterceptor,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
     },
   ],
 })

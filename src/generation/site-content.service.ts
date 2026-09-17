@@ -144,6 +144,7 @@ export class SiteContentService {
         description: seoData.description || `Expert ${businessContext.trade} services.`,
         jsonLd: websiteData.jsonLdSchemas || null,
         gtmId: siteAnalytics?.gtmContainerId || process.env.GOOGLE_TAG_MANAGER_CONTAINER_ID || null,
+        gaId: siteAnalytics?.ga4MeasurementId || null,
       },
       theme: {
         primary: tokens.colors?.primary || "#2563eb",

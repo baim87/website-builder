@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { ConfigService } from '@nestjs/config';
 import { QUEUE_NAMES } from '../common/constants/queue-names.constant';
@@ -24,8 +24,6 @@ import { QualityControlModule } from '../quality-control/quality-control.module'
 import { DeploymentModule } from '../deployment/deployment.module';
 import { SkillsModule } from '../skills/skills.module';
 import { AIGatewayModule } from '../ai-gateway/ai-gateway.module';
-import { forwardRef } from '@nestjs/common';
-
 import { ImageGenerationProducer } from './producers/image-generation.producer';
 import { ImageGenerationConsumer } from './consumers/image-generation.consumer';
 

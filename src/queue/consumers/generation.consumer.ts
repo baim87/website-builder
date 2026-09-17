@@ -5,7 +5,10 @@ import { SiteGenerationJobData } from '../interfaces/job-data.interface';
 import { QUEUE_NAMES } from '../../common/constants/queue-names.constant';
 import { GenerationService } from '../../generation/generation.service';
 
-@Processor(QUEUE_NAMES.SITE_GENERATION)
+@Processor(QUEUE_NAMES.SITE_GENERATION, {
+  lockDuration: 300000, // 5 minutes to prevent lock expiration during heavy AI generation
+  concurrency: 1
+})
 export class GenerationConsumer extends BaseConsumer<SiteGenerationJobData> {
   constructor(private readonly generationService: GenerationService) {
     super();

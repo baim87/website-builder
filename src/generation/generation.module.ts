@@ -13,6 +13,7 @@ import { QueueModule } from '../queue/queue.module';
 import { AssetsModule } from '../assets/assets.module';
 import { GenerationGateway } from './generation.gateway';
 import { AuthModule } from '../auth/auth.module';
+import { ConfigModule } from '@nestjs/config';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { AuthModule } from '../auth/auth.module';
     forwardRef(() => QueueModule), 
     AssetsModule, 
     AuthModule,
+    ConfigModule,
     BullModule.registerQueue({ name: QUEUE_NAMES.SITE_GENERATION })
   ],
   controllers: [PublicSiteController],

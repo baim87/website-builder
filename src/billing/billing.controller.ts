@@ -4,13 +4,7 @@ import { BillingService } from './billing.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { Request } from 'express';
 
-// Ensure the Request type has user property attached by JwtAuthGuard
-interface AuthenticatedRequest extends Request {
-  user: {
-    userId: string;
-    email: string;
-  };
-}
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 
 @Controller('billing')
 export class BillingController {
@@ -18,26 +12,26 @@ export class BillingController {
 
   @UseGuards(JwtAuthGuard)
   @Post('checkout')
-  async createCheckoutSession(@Req() req: AuthenticatedRequest, @Body('planId') planId: string) {
-    return this.billingService.createCheckoutSession(req.user.userId, planId);
+  async createCheckoutSession(@CurrentUser('id') userId: string, @Body('planId') planId: string) {
+    return this.billingService.createCheckoutSession(userId, planId);
   }
 
   @UseGuards(JwtAuthGuard)
   @Get('subscription')
-  async getSubscription(@Req() req: AuthenticatedRequest) {
-    return this.billingService.getSubscription(req.user.userId);
+  async getSubscription(@CurrentUser('id') userId: string) {
+    return this.billingService.getSubscription(userId);
   }
 
   @UseGuards(JwtAuthGuard)
   @Post('cancel')
-  async cancelSubscription(@Req() req: AuthenticatedRequest) {
-    return this.billingService.cancelSubscription(req.user.userId);
+  async cancelSubscription(@CurrentUser('id') userId: string) {
+    return this.billingService.cancelSubscription(userId);
   }
 
   @UseGuards(JwtAuthGuard)
   @Get('payments')
-  async getPayments(@Req() req: AuthenticatedRequest) {
-    return this.billingService.getPayments(req.user.userId);
+  async getPayments(@CurrentUser('id') userId: string) {
+    return this.billingService.getPayments(userId);
   }
 
   // Webhooks are not authenticated by JWT, but by Stripe signature

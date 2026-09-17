@@ -13,9 +13,10 @@ import { QueueModule } from '../queue/queue.module';
 import { SeoModule } from '../seo/seo.module';
 import { StorageModule } from '../storage/storage.module';
 import { BrandModule } from '../brand/brand.module';
+import { GenerationModule } from '../generation/generation.module';
 
 @Module({
-  imports: [PrismaModule, forwardRef(() => QueueModule), SeoModule, StorageModule, BrandModule],
+  imports: [PrismaModule, forwardRef(() => QueueModule), SeoModule, StorageModule, BrandModule, forwardRef(() => GenerationModule)],
   controllers: [ProjectsController, PublicProjectsController],
   providers: [ProjectsService, BusinessContextService, WebsiteDataService, PageService, GooglePlacesService, PublicProjectsService, RevalidationService],
   exports: [ProjectsService, BusinessContextService, WebsiteDataService, PageService, GooglePlacesService, PublicProjectsService, RevalidationService],

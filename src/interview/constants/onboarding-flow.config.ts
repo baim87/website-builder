@@ -273,11 +273,12 @@ Rules:
       {
         id: 'colorPreferences',
         fieldKey: 'colorPreferences',
-        question: 'Any colors you want or don\'t want?',
+        question: 'Choose a color palette for your brand, or tell me your specific preferences.',
         type: 'multi-select',
         placeholder: 'e.g., I love navy blue, please no red.',
         options: [],
         optional: true,
+        conditionalOn: { field: 'brandStrategySelection', value: 'has-logo', negate: true },
       },
       {
         id: 'existingLogoFeedback',

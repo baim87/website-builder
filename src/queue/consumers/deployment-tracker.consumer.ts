@@ -56,8 +56,8 @@ export class DeploymentTrackerConsumer extends WorkerHost {
             data: { status: PROJECT_STATUS.PUBLISHED },
           });
 
-          // Extract host without protocol just in case
-          const cleanDomain = latestDeploy.url.replace(/^https?:\/\//, '');
+          // Extract the canonical Vercel project domain (the globe one) instead of the commit-specific deployment URL
+          const cleanDomain = `${vercelProjectName}.vercel.app`;
 
           await this.prisma.domain.upsert({
             where: { projectId },

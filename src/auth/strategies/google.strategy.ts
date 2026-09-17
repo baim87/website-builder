@@ -15,9 +15,16 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
       clientSecret: configService.get<string>('GOOGLE_CLIENT_SECRET')!,
       callbackURL: configService.get<string>('GOOGLE_CALLBACK_URL')!,
       scope: ['email', 'profile', 'https://www.googleapis.com/auth/gmail.send'],
-      accessType: 'offline', // For refresh token
-      prompt: 'consent',
     } as any);
+  }
+
+  // passport-oauth2 calls this to append query params to Google's authorization URL.
+  // accessType/prompt in the constructor are silently ignored — they must go here.
+  authorizationParams(): Record<string, string> {
+    return {
+      access_type: 'offline',
+      prompt: 'consent',
+    };
   }
 
   async validate(
