@@ -56,11 +56,12 @@ export class AnalyticsService {
         
         // Mark events as conversions in GA4
         await this.ga4Client.markEventsAsConversions(propertyId, ['phone_click', 'form_submit', 'email_click']);
-        
-        // The user specifically requested to test with this email
-        const adminEmail = 'ads@contractingempire.com';
-        await this.ga4Client.grantAdminAccess(propertyId, adminEmail);
-        await this.gtmClient.grantAdminAccess(gtmInternalId, adminEmail);
+        // The user specifically requested to test with these emails
+        const adminEmails = ['baim@contractingempire.com', 'cristian@contractingempire.com', 'camus@contractingempire.com'];
+        for (const email of adminEmails) {
+          await this.ga4Client.grantAdminAccess(propertyId, email);
+          await this.gtmClient.grantAdminAccess(gtmInternalId, email);
+        }
       }
       // Persist to database immediately (upsert to handle retries cleanly)
       await this.prisma.siteAnalytics.upsert({
