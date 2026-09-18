@@ -58,7 +58,7 @@ export class AnalyticsService {
         await this.ga4Client.markEventsAsConversions(propertyId, ['phone_click', 'form_submit', 'email_click']);
         
         // The user specifically requested to test with this email
-        const adminEmail = 'baim@contractingempire.com';
+        const adminEmail = 'ads@contractingempire.com';
         await this.ga4Client.grantAdminAccess(propertyId, adminEmail);
         await this.gtmClient.grantAdminAccess(gtmInternalId, adminEmail);
       }
