@@ -59,6 +59,12 @@ export class LeadsService {
   async forwardLead(projectId: string, leadData: any, files?: Array<Express.Multer.File>) {
     this.logger.log(`Received new lead for project ${projectId}`);
 
+    // Honeypot Check (Anti-Spam / Hacker)
+    if (leadData.website_url) {
+      this.logger.warn(`[SPAM BLOCKED] Honeypot field filled for project ${projectId}. Dropping lead.`);
+      throw new HttpException('Dude, that\'s not nice :). You need more than 50 years in hacking experience!', HttpStatus.BAD_REQUEST);
+    }
+
     // 1. Find the project and the owner's email & refresh token
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
@@ -77,6 +83,13 @@ export class LeadsService {
     const contractorEmail = contractorUser.email;
     const businessName = project.businessContext?.businessName || 'Your Local Contractor';
     const { name, email, phone, service, message, source, ...rest } = leadData;
+
+    let finalMessage = message;
+    // Fallback if the AI incorrectly used projectdescription
+    if (!finalMessage && rest.projectdescription) {
+      finalMessage = rest.projectdescription;
+      delete rest.projectdescription;
+    }
 
     // 2. Assign default stage or lowest position stage
     let defaultStage = await this.prisma.leadStage.findFirst({
@@ -98,7 +111,7 @@ export class LeadsService {
         name,
         email,
         phone,
-        message,
+        message: finalMessage,
         source: source || 'website',
         metadata: rest,
       },

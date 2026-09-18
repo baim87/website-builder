@@ -29,6 +29,28 @@ export class UIDesignerSkill implements Skill {
     // We simply wrap it in an AST node so the UI can render it.
     
     const id = `${sectionType.toLowerCase()}-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+    const actualData = copyData.data || copyData;
+    
+    // Recursively generate a shadow blockIds map
+    const generateBlockIds = (obj: any): any => {
+      if (Array.isArray(obj)) {
+        return obj.map(item => generateBlockIds(item));
+      } else if (obj !== null && typeof obj === 'object') {
+        const result: any = {};
+        for (const [key, value] of Object.entries(obj)) {
+          // Don't generate IDs for internal/metadata keys if any exist in the future
+          if (Array.isArray(value) || typeof value === 'object') {
+            result[key] = generateBlockIds(value);
+          } else {
+             result[key] = crypto.randomUUID();
+          }
+        }
+        return result;
+      }
+      return crypto.randomUUID();
+    };
+
+    const _blockIds = generateBlockIds(actualData);
     
     const astNode = {
       id,
@@ -36,7 +58,10 @@ export class UIDesignerSkill implements Skill {
       ast: {
         type: sectionType,
         props: {
-          data: copyData.data || copyData, // copyData is { data: {...}, hash: ... } from CopyWriterSkill
+          data: {
+             ...actualData,
+             _blockIds
+          }
         },
         children: []
       }

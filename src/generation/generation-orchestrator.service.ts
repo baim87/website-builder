@@ -85,11 +85,12 @@ export class GenerationOrchestratorService {
     projectId: string, 
     businessContext: any, 
     onPageGenerated?: (page: any) => Promise<void>,
-    job?: Job
+    job?: Job,
+    targetPages?: string[]
   ) {
     this.logger.log(`Starting 6-phase generation pipeline for project ${projectId}`);
 
-    const ctx = await this.initializeContext(projectId, businessContext);
+    const ctx = await this.initializeContext(projectId, businessContext, targetPages);
     
     if (job) await job.updateProgress({ phase: 'Analyzing Market Data', status: JOB_STATUS.IN_PROGRESS });
     await this.executePhase0Intelligence(ctx);
@@ -115,8 +116,12 @@ export class GenerationOrchestratorService {
     };
   }
 
-  private async initializeContext(projectId: string, businessContext: any): Promise<GenerationContext> {
-    const pagesToGenerate = ['home', 'about-us', 'services', 'service-areas', 'portfolio', 'contact', 'privacy-policy', 'terms-of-service', 'layout'];
+  private async initializeContext(projectId: string, businessContext: any, targetPages?: string[]): Promise<GenerationContext> {
+    let pagesToGenerate = ['home', 'about-us', 'services', 'service-areas', 'portfolio', 'contact', 'privacy-policy', 'terms-of-service', 'layout'];
+    
+    if (targetPages && targetPages.length > 0) {
+      pagesToGenerate = targetPages;
+    }
     const serviceSlugs: string[] = [];
     const isLocationServicePageMap = new Set<string>();
 
