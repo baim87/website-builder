@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Skill, SkillInput, SkillOutput } from '../interfaces/skill.interface';
 import { AIGatewayService } from '../../ai-gateway/ai-gateway.service';
 import { OutputValidatorService } from '../../guardrails/output-validator.service';
-import { ASTNodeSchema } from '../schemas/skill-outputs.schema';
+import { ComponentEditResponseSchema } from '../schemas/skill-outputs.schema';
 import * as crypto from 'crypto';
 import { AIModel } from '../../common/constants/ai-models.constant';
 import { AISkill } from '../../common/constants/ai-skills.constant';
@@ -19,12 +19,12 @@ export class ComponentEditorSkill implements Skill {
   ) { }
 
   async execute(input: SkillInput): Promise<SkillOutput> {
-    const { targetNode, instruction } = input.context;
+    const { targetNode, componentCode, instruction, brandContext } = input.context;
 
-    const prompt = buildComponentEditorPrompt(targetNode, instruction);
+    const prompt = buildComponentEditorPrompt(targetNode, componentCode, instruction, brandContext);
 
-    const result = await this.aiGateway.generateText(AIModel.CLAUDE_SONNET_3_5, {
-      systemPrompt: 'You are an AI website component editor. Return ONLY valid JSON representing the updated ASTNode.',
+    const result = await this.aiGateway.generateText(AIModel.CLAUDE_FABLE_5, {
+      systemPrompt: 'You are an expert React component editor. Return ONLY valid JSON representing the updated ComponentEditResponse.',
       messages: [{ role: 'user', content: prompt }],
       maxTokens: 4096,
       temperature: 0.2,
@@ -34,11 +34,11 @@ export class ComponentEditorSkill implements Skill {
     const parsed = parseJsonFromLlm(result.text);
 
     // Validate the LLM output against our schema to ensure structural integrity
-    const validatedData = this.validator.validate(parsed, ASTNodeSchema);
+    const validatedData = this.validator.validate(parsed, ComponentEditResponseSchema);
 
     // Safety check: preserve the original root ID if the LLM hallucinated a new one
-    if (validatedData.id && targetNode.id && validatedData.id !== targetNode.id) {
-      validatedData.id = targetNode.id;
+    if (validatedData.astNode.id && targetNode.id && validatedData.astNode.id !== targetNode.id) {
+      validatedData.astNode.id = targetNode.id;
     }
 
     const hash = crypto.createHash('sha256').update(JSON.stringify(validatedData)).digest('hex');
@@ -46,7 +46,8 @@ export class ComponentEditorSkill implements Skill {
     return {
       data: validatedData,
       hash,
-      model: AIModel.CLAUDE_SONNET_3_5,
+      model: AIModel.CLAUDE_FABLE_5,
+      usage: result.usage,
     };
   }
 }

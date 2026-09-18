@@ -409,14 +409,22 @@ export class LeadsService {
     });
     if (!project) throw new HttpException('Project not found', HttpStatus.NOT_FOUND);
 
-    const updates = stageIds.map((id, index) => 
-      this.prisma.leadStage.update({
+    // Bypassing unique constraint on [projectId, position] by using temporary negative positions
+    const tempUpdates = stageIds.map((id, index) => 
+      this.prisma.leadStage.updateMany({
+        where: { id, projectId },
+        data: { position: -(index + 1) }
+      })
+    );
+
+    const finalUpdates = stageIds.map((id, index) => 
+      this.prisma.leadStage.updateMany({
         where: { id, projectId },
         data: { position: index }
       })
     );
 
-    await this.prisma.$transaction(updates);
+    await this.prisma.$transaction([...tempUpdates, ...finalUpdates]);
     
     return this.prisma.leadStage.findMany({
       where: { projectId },

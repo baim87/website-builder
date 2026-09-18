@@ -26,12 +26,12 @@ export class EditIntentService {
     private readonly validator: OutputValidatorService,
   ) {}
 
-  async detectAndApplyEdit(projectId: string, userId: string, userMessage: string, currentWebsiteData: any): Promise<boolean> {
-    const prompt = `You are a strict JSON-only intent detector for a website builder.
+  async detectAndApplyEdit(projectId: string, userId: string, userMessage: string, currentWebsiteData: any): Promise<{isEdit: boolean, intent?: any}> {
+const prompt = `You are a strict JSON-only intent detector for a website builder.
 The user sent this message: "${userMessage}"
 Current website data snippet: ${JSON.stringify(currentWebsiteData).substring(0, 1000)}...
 
-If the user is asking to change the website (e.g. change color, update text, add a section), return JSON:
+If the user is asking to change GLOBAL website settings (e.g. change color, update SEO, update designTokens), return JSON:
 {
   "isEdit": true,
   "changes": [
@@ -43,7 +43,9 @@ If the user is asking to change the website (e.g. change color, update text, add
   "triggerRegeneration": true
 }
 
-If it's just a general question or unrelated, return {"isEdit": false}
+CRITICAL: Do NOT return changes for specific page content or sections (e.g. hero, about, subtitle). This service ONLY handles global settings.
+
+If the user is asking to change page content, or if it's just a general question or unrelated, return {"isEdit": false}
 
 Output ONLY valid JSON matching the schema.`;
 
@@ -62,12 +64,12 @@ Output ONLY valid JSON matching the schema.`;
         
         await this.editExecutor.applyEdits(projectId, userId, intent, currentWebsiteData);
         
-        return true;
+        return { isEdit: true, intent };
       }
     } catch (e: any) {
       this.logger.error(`Failed to detect edit intent for project ${projectId}`, e.stack);
     }
     
-    return false;
+    return { isEdit: false };
   }
 }

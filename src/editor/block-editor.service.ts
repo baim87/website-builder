@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ComponentEditorSkill } from '../skills/impl/component-editor.skill';
 import { findNodeById, replaceNodeById } from '../utils/ast-utils';
 import { DeploymentService } from '../deployment/deployment.service';
+import { GenerationProducer } from '../queue/producers/generation.producer';
 
 export interface DraftEdit {
   pageId: string; // The page slug actually (e.g. '/' or 'about-us')
@@ -19,6 +20,7 @@ export class BlockEditorService {
     private readonly prisma: PrismaService,
     private readonly componentEditorSkill: ComponentEditorSkill,
     private readonly deploymentService: DeploymentService,
+    private readonly generationProducer: GenerationProducer,
   ) {}
 
   /**
@@ -29,7 +31,15 @@ export class BlockEditorService {
     this.logger.log(`Applying edit to block ${blockId} on page ${pageSlug} for project ${projectId}`);
 
     const page = await this.prisma.page.findUnique({
-      where: { projectId_slug: { projectId, slug: pageSlug } }
+      where: { projectId_slug: { projectId, slug: pageSlug } },
+      include: {
+        project: {
+          include: {
+            businessContext: true,
+            websiteData: true
+          }
+        }
+      }
     });
 
     if (!page) {
@@ -41,8 +51,15 @@ export class BlockEditorService {
     // Traverse the sections array to find the node
     if (page.content && Array.isArray(page.content)) {
       for (const section of page.content) {
-        if ((section as any).ast) {
-          const found = findNodeById((section as any).ast, blockId);
+        const sec = section as any;
+        if (sec && sec.id === blockId) {
+          targetNode = sec.ast;
+          // Inject the ID into the AST node so the AI sees it and validation preserves it
+          targetNode.id = sec.id;
+          break;
+        }
+        if (sec && sec.ast) {
+          const found = findNodeById(sec.ast, blockId);
           if (found) {
             targetNode = found;
             break;
@@ -55,19 +72,69 @@ export class BlockEditorService {
       throw new NotFoundException(`Block with ID ${blockId} not found in the AST.`);
     }
 
-    // Pass the node and instruction to the AI
+    const componentCode = (page.project.websiteData?.customComponents as Record<string, string>)?.[targetNode.type] || undefined;
+
+    // Pass the node, instruction, and brand context to the AI
     const result = await this.componentEditorSkill.execute({
       projectId,
-      context: { targetNode, instruction },
+      context: { 
+        targetNode, 
+        componentCode,
+        instruction,
+        brandContext: {
+          businessContext: page.project.businessContext,
+          designTokens: page.project.websiteData?.designTokens
+        }
+      },
       metadata: { phase: 'editor' }
     });
+
+    let rebuildTriggered = false;
+    const { astNode, tsxCode, requiresCodeUpdate } = result.data as any;
+
+    if (requiresCodeUpdate && tsxCode) {
+      this.logger.log(`AI modified TSX code for ${targetNode.type}. Updating DB and triggering rebuild...`);
+      const customComponents = (page.project.websiteData?.customComponents || {}) as any;
+      customComponents[targetNode.type] = tsxCode;
+      
+      await this.prisma.websiteData.update({
+        where: { id: page.project.websiteData!.id },
+        data: { customComponents }
+      });
+
+      await this.generationProducer.generateSite(projectId, 'ai');
+      rebuildTriggered = true;
+    }
+
+    // Update the DB immediately so the iframe reload fetches the fresh AST
+    let currentContent = page.content;
+    if (currentContent && Array.isArray(currentContent)) {
+      currentContent = currentContent.map((section: any) => {
+        if (section.id === blockId) {
+          section.ast = astNode;
+        } else if (section.ast) {
+          section.ast = replaceNodeById(section.ast, blockId, astNode);
+        }
+        return section;
+      });
+
+      await this.prisma.page.update({
+        where: { id: page.id },
+        data: {
+          content: currentContent as any,
+          // @ts-ignore
+          contentVersion: { increment: 1 },
+        }
+      });
+    }
 
     return {
       success: true,
       blockId,
-      newNode: result.data,
+      newNode: astNode,
       // @ts-ignore - Prisma might be cached
-      baseVersion: page.contentVersion || 1,
+      baseVersion: (page.contentVersion || 1) + 1,
+      rebuildTriggered,
     };
   }
 
@@ -119,7 +186,9 @@ export class BlockEditorService {
 
             if (currentContent && Array.isArray(currentContent)) {
               currentContent = currentContent.map((section: any) => {
-                if (section.ast) {
+                if (section.id === edit.blockId) {
+                  section.ast = edit.content;
+                } else if (section.ast) {
                   section.ast = replaceNodeById(section.ast, edit.blockId, edit.content);
                 }
                 return section;

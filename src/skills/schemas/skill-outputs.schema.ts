@@ -141,6 +141,13 @@ export type Section = z.infer<typeof SectionSchema>;
 export type PageContent = z.infer<typeof PageContentSchema>;
 export type CopyData = z.infer<typeof CopyDataSchema>;
 
+export const ComponentEditResponseSchema = z.object({
+  astNode: ASTNodeSchema,
+  tsxCode: z.string().optional().describe('The updated TSX code, ONLY if styling/layout changes were required.'),
+  requiresCodeUpdate: z.boolean().describe('True if you modified the TSX code to fulfill the styling/layout request.'),
+});
+export type ComponentEditResponse = z.infer<typeof ComponentEditResponseSchema>;
+
 
 export function buildBrandStorySchema(hasFounderStory: boolean) {
   const schemaShape: Record<string, z.ZodTypeAny> = {

@@ -9,6 +9,7 @@ import { UpdateBusinessContextSchema } from './dto/update-business-context.dto';
 import type { UpdateBusinessContextDto } from './dto/update-business-context.dto';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { BrandKnowledgeService } from '../brand/brand-knowledge.service';
+import { PageService } from './page.service';
 
 import { GenerationProducer } from '../queue/producers/generation.producer';
 
@@ -20,6 +21,7 @@ export class ProjectsController {
     private readonly businessContextService: BusinessContextService,
     private readonly generationProducer: GenerationProducer,
     private readonly brandKnowledgeService: BrandKnowledgeService,
+    private readonly pageService: PageService,
   ) {}
 
   @Post()
@@ -56,6 +58,11 @@ export class ProjectsController {
   @Get(':id/business-context')
   getBusinessContext(@Param('id') id: string, @CurrentUser('id') userId: string) {
     return this.businessContextService.findByProjectId(id, userId);
+  }
+
+  @Get(':id/pages')
+  getPages(@Param('id') id: string, @CurrentUser('id') userId: string) {
+    return this.pageService.getPagesByProjectId(id, userId);
   }
 
   @Patch(':id/business-context')

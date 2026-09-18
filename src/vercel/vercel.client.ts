@@ -150,10 +150,12 @@ export class VercelClient {
     // Using Next.js On-Demand ISR usually hits an API route on the *deployed Next.js app* directly,
     // NOT the Vercel API. E.g. https://domain.com/api/revalidate?path=/&secret=xyz
     // But for this client, we'll expose the interface. We need the frontend URL to hit.
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || `https://${domain}`;
+    // We must hit the deployed Next.js app to revalidate its cache.
+    // We cannot use FRONTEND_URL because that points to the Builder Dashboard (Vite).
+    const targetUrl = `https://${domain}`;
     
     try {
-      const response = await fetch(`${frontendUrl}/api/revalidate?path=${encodeURIComponent(path)}`, {
+      const response = await fetch(`${targetUrl}/api/revalidate?path=${encodeURIComponent(path)}`, {
         method: 'POST',
         // Pass a secret header if your Next.js app requires one
         headers: { 'x-revalidate-secret': this.configService.get<string>('JWT_SECRET') || '' },

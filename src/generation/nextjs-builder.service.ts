@@ -114,9 +114,9 @@ export class NextjsBuilderService {
   --surface-dark: ${hexToHsl(designTokens.colors.surfaceDark || '#1a202c')};
   --surface-dark-foreground: ${hexToHsl(computeContrastColor(designTokens.colors.surfaceDark || '#1a202c'))};
   --header-bg: ${hexToHsl(designTokens.colors.headerBg || designTokens.colors.background || '#ffffff')};
-  --header-foreground: ${hexToHsl(computeContrastColor(designTokens.colors.headerBg || designTokens.colors.background || '#ffffff'))};
+  --header-foreground: ${hexToHsl(designTokens.colors.headerText || designTokens.colors.headerForeground || computeContrastColor(designTokens.colors.headerBg || designTokens.colors.background || '#ffffff'))};
   --footer-bg: ${hexToHsl(designTokens.colors.footerBg || designTokens.colors.surfaceDark || '#1a202c')};
-  --footer-foreground: ${hexToHsl(computeContrastColor(designTokens.colors.footerBg || designTokens.colors.surfaceDark || '#1a202c'))};
+  --footer-foreground: ${hexToHsl(designTokens.colors.footerText || designTokens.colors.footerForeground || computeContrastColor(designTokens.colors.footerBg || designTokens.colors.surfaceDark || '#1a202c'))};
   --font-heading: "${designTokens.typography.headingFont || 'Inter'}";
   --font-body: "${designTokens.typography.bodyFont || 'Inter'}";
 }
@@ -167,72 +167,7 @@ export class NextjsBuilderService {
       }
       await fs.writeFile(path.join(generatedDir, 'index.ts'), indexTsContent);
 
-      // 4.1. Inject AnnouncementBarSection into layout.tsx
-      if (customComponents['AnnouncementBarSection']) {
-        const layoutTsxPath = path.join(tempDir, 'src/app/layout.tsx');
-        try {
-          let layoutTsxContent = await fs.readFile(layoutTsxPath, 'utf-8');
-          
-          if (!layoutTsxContent.includes('AnnouncementBarSection')) {
-            const lastImportIndex = layoutTsxContent.lastIndexOf('import ');
-            const nextLineIndex = layoutTsxContent.indexOf('\n', lastImportIndex);
-            
-            const importStmt = `\nimport { AnnouncementBarSection } from '@/components/generated';`;
-            if (nextLineIndex !== -1) {
-              layoutTsxContent = layoutTsxContent.slice(0, nextLineIndex) + importStmt + layoutTsxContent.slice(nextLineIndex);
-            } else {
-              layoutTsxContent = importStmt + '\n' + layoutTsxContent;
-            }
-
-            if (layoutTsxContent.includes('<HeaderSection')) {
-              layoutTsxContent = layoutTsxContent.replace(
-                /<HeaderSection/g, 
-                `{content?.layout?.announcementBar && <AnnouncementBarSection data={content.layout.announcementBar} />}\n        <HeaderSection`
-              );
-            } else if (layoutTsxContent.includes('<main')) {
-              layoutTsxContent = layoutTsxContent.replace(
-                /<main/g, 
-                `{content?.layout?.announcementBar && <AnnouncementBarSection data={content.layout.announcementBar} />}\n        <main`
-              );
-            }
-
-            await fs.writeFile(layoutTsxPath, layoutTsxContent);
-            this.logger.log('Injected AnnouncementBarSection into layout.tsx');
-          }
-        } catch (err) {
-          this.logger.warn(`Could not inject AnnouncementBarSection into layout.tsx: ${err.message}`);
-        }
-      }
-
-      // Patch /api/lead/route.ts to not destructively parse form data
-      const leadApiRoutePath = path.join(tempDir, 'src/app/api/lead/route.ts');
-      try {
-        let routeContent = await fs.readFile(leadApiRoutePath, 'utf8');
-        // Replace the destructive for-loop with a safer one
-        const newForLoop = `for (const [key, value] of formData.entries()) {
-        if (typeof value === 'string') {
-          // Keep all original keys
-          leadData[key] = value;
-          const lowerKey = key.toLowerCase();
-          
-          // Map to core fields safely without overwriting if multiple exist
-          if (lowerKey.includes('name')) {
-            leadData.name = leadData.name ? \`\${leadData.name} \${value}\` : value;
-          }
-          else if (lowerKey.includes('email') && !leadData.email) leadData.email = value;
-          else if (lowerKey.includes('phone') && !leadData.phone) leadData.phone = value;
-        }
-      }`;
-        
-        // Use a simple regex to replace the loop block safely
-        const loopRegex = /for\s*\(\s*const\s*\[\s*key\s*,\s*value\s*\]\s*of\s*formData\.entries\(\)\s*\)\s*\{[\s\S]*?(?=\s*const\s*res\s*=\s*await\s*fetch)/;
-        routeContent = routeContent.replace(loopRegex, newForLoop + '\\n\\n      ');
-        
-        await fs.writeFile(leadApiRoutePath, routeContent);
-        this.logger.log('Patched /api/lead/route.ts to preserve raw fields');
-      } catch (err) {
-        this.logger.warn(`Could not patch /api/lead/route.ts: ${err.message}`);
-      }
+      // Legacy patches for layout.tsx and route.ts have been removed to prevent build errors
 
       this.logger.log(`Running build in ${tempDir} to verify generated code...`);
       
@@ -378,4 +313,3 @@ export class NextjsBuilderService {
     }
   }
 }
-

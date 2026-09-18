@@ -14,6 +14,7 @@ import { EditIntentService } from './edit-intent.service';
 import { ProjectsService } from '../projects/projects.service';
 
 import { ChatFlowEngine } from './chat-flow.engine';
+import { BlockEditorService } from '../editor/block-editor.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('chat')
@@ -24,6 +25,7 @@ export class ChatController {
     private readonly editIntentService: EditIntentService,
     private readonly projectsService: ProjectsService,
     private readonly chatFlowEngine: ChatFlowEngine,
+    private readonly blockEditorService: BlockEditorService,
   ) {}
 
   @Post(':projectId/message')
@@ -41,20 +43,40 @@ export class ChatController {
           
           if (project.status === 'PUBLISHED' && project.websiteData) {
             // Edit Flow
-            subscriber.next({ type: 'token', data: JSON.stringify({ token: "Let me take a look at that and apply the changes..." }) } as MessageEvent);
             
-            // Add contextual message if targetBlock is present
-            let contextMessage = dto.content;
-            if (dto.targetBlock) {
-               contextMessage = `User is specifically pointing at block: ${dto.targetBlock}. Message: ${dto.content}`;
-            }
-
-            const isEdit = await this.editIntentService.detectAndApplyEdit(projectId, req.user.id, contextMessage, project.websiteData);
-            
-            if (isEdit) {
-                subscriber.next({ type: 'token', data: JSON.stringify({ token: "\n\nChanges have been made and the site is regenerating. Please wait a moment for the preview to update." }) } as MessageEvent);
+            if (dto.targetBlock && dto.targetBlock !== 'root') {
+              // AST Block Surgical Edit
+              try {
+                const pageSlug = dto.pageSlug || 'home'; 
+                const result = await this.blockEditorService.applyEdit(projectId, pageSlug, dto.targetBlock, dto.content);
+                
+                if (result.success) {
+                  subscriber.next({ 
+                    type: 'block-update', 
+                    data: JSON.stringify({ 
+                      blockId: result.blockId, 
+                      newNode: result.newNode, 
+                      baseVersion: result.baseVersion,
+                      pageSlug 
+                    }) 
+                  } as MessageEvent);
+                  const rebuildMsg = result.rebuildTriggered 
+                    ? ` I also detected a layout/styling change, so I updated the component's underlying code. A full site rebuild is now running to apply these changes (~15-20s).`
+                    : ``;
+                  subscriber.next({ type: 'token', data: JSON.stringify({ token: `\n\nI've updated the section for you!${rebuildMsg} You can preview it now and click 'Publish Changes' when you are ready!` }) } as MessageEvent);
+                }
+              } catch (e: any) {
+                subscriber.next({ type: 'token', data: JSON.stringify({ token: `\n\nFailed to apply edit: ${e.message}` }) } as MessageEvent);
+              }
             } else {
-                subscriber.next({ type: 'token', data: JSON.stringify({ token: "\n\nI couldn't detect a specific website edit from your message. Could you be more specific?" }) } as MessageEvent);
+              // Website Data Global Edit
+              const result = await this.editIntentService.detectAndApplyEdit(projectId, req.user.id, dto.content, project.websiteData);
+              
+              if (result.isEdit) {
+                  subscriber.next({ type: 'token', data: JSON.stringify({ token: `\n\nGlobal changes have been applied! The site is now regenerating to reflect your new design choices. Please wait a moment (~15-20s) for the preview to update.` }) } as MessageEvent);
+              } else {
+                  subscriber.next({ type: 'token', data: JSON.stringify({ token: "\n\nI couldn't detect a specific website edit from your message. Could you be more specific?" }) } as MessageEvent);
+              }
             }
             subscriber.next({ type: 'done', data: {} } as MessageEvent);
           } else {

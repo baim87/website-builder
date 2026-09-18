@@ -16,7 +16,6 @@ export class ModelRegistry {
     this.registry.set(AIModel.SEEDREAM_4_5, this.claudeAdapter);
     this.registry.set(AIModel.SEEDREAM_5_0_PRO, this.claudeAdapter);
     this.registry.set(AIModel.CLAUDE_HAIKU_4_5, this.claudeAdapter);
-    this.registry.set(AIModel.CLAUDE_SONNET_3_5, this.claudeAdapter);
     // this.registry.set('kimi-k2.6:cloud', this.ollamaAdapter);
   }
 

@@ -6,7 +6,7 @@ async function bootstrap() {
   const app = await NestFactory.createApplicationContext(AppModule);
   const nextjsBuilderService = app.get(NextjsBuilderService);
 
-  const projectId = 'f2062e3f-682e-4329-9fb2-3f058b41fc46';
+  const projectId = '23698e47-6b42-4701-8379-f039dad9dabd';
   console.log(`Triggering rebuild and deploy for project: ${projectId}`);
   
   try {

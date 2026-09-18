@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseGuards, Req } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Req, Param } from '@nestjs/common';
 import { BlockEditorService } from './block-editor.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import type { Request } from 'express';
@@ -8,20 +8,22 @@ import type { Request } from 'express';
 export class EditorController {
   constructor(private readonly blockEditorService: BlockEditorService) {}
 
-  @Post('apply-edit')
+  @Post(':projectId/apply-edit')
   async applyEdit(
-    @Body() body: { projectId: string, pageSlug: string, blockId: string, instruction: string }
+    @Param('projectId') projectId: string,
+    @Body() body: { pageSlug: string, blockId: string, instruction: string }
   ) {
-    const { projectId, pageSlug, blockId, instruction } = body;
+    const { pageSlug, blockId, instruction } = body;
     return await this.blockEditorService.applyEdit(projectId, pageSlug, blockId, instruction);
   }
 
-  @Post('publish')
+  @Post(':projectId/publish')
   async publishEdits(
+    @Param('projectId') projectId: string,
     @Req() req: Request,
-    @Body() body: { projectId: string; edits: { pageId: string; blockId: string; content: any; baseVersion: number }[] }
+    @Body() body: { edits: { pageId: string; blockId: string; content: any; baseVersion: number }[] }
   ) {
-    const { projectId, edits } = body;
+    const { edits } = body;
     // @ts-ignore - req.user is set by AuthGuard
     const userId = req.user?.id || req.user?.userId;
     if (!userId) {
