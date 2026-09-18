@@ -8,34 +8,41 @@ datasource db {
 }
 
 model User {
-  id                String        @id @default(uuid())
-  email             String        @unique
+  id                String            @id @default(uuid())
+  email             String            @unique
   name              String?
-  googleId          String?       @unique
+  googleId          String?           @unique
   gmailRefreshToken String?
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
   payments          Payment[]
   projects          Project[]
+  skillInvocations  SkillInvocation[]
   subscription      Subscription?
 }
 
 model Project {
-  id               String            @id @default(uuid())
-  userId           String
-  name             String
-  status           String            @default("draft")
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  assets           Asset[]
-  businessContext  BusinessContext?
-  chatMessages     ChatMessage[]
-  domain           Domain?
-  pages            Page[]
-  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  siteAnalytics    SiteAnalytics?
-  skillInvocations SkillInvocation[]
-  websiteData      WebsiteData?
+  id                     String                   @id @default(uuid())
+  userId                 String
+  name                   String
+  status                 String                   @default("draft")
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
+  assets                 Asset[]
+  businessContext        BusinessContext?
+  chatMessages           ChatMessage[]
+  domain                 Domain?
+  leads                  Lead[]
+  locationKeywordMetrics LocationKeywordMetrics[]
+  pages                  Page[]
+  user                   User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectAssets          ProjectAsset[]
+  serviceKeywordMetrics  ServiceKeywordMetrics[]
+  siteAnalytics          SiteAnalytics?
+  skillInvocations       SkillInvocation[]
+  websiteData            WebsiteData?
+  leadStages             LeadStage[]
+  webhookIntegrations    WebhookIntegration[]
 }
 
 model BusinessContext {
@@ -61,27 +68,29 @@ model BusinessContext {
   interviewMetadata    Json?
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
+  radius               Int?
   project              Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }
 
 model WebsiteData {
   id               String    @id @default(uuid())
   projectId        String    @unique
-  colorPalette     Json?
-  typography       Json?
-  style            String?
-  sitemap          Json?
   designTokens     Json?
   seoMetadata      Json?
   sitemapXml       String?
   robotsTxt        String?
   jsonLdSchemas    Json?
-  ogTags           Json?
   internalLinkMap  Json?
   generationStatus String    @default("pending")
   lastGeneratedAt  DateTime?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
+  customComponents Json?
+  generationJobId  String?
+  qcReport         Json?
+  qcStatus         String?   @default("standby")
+  seasonalConfig   Json?
+  serviceRanking   Json?
   project          Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }
 
@@ -113,7 +122,24 @@ model Asset {
   section      String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  fallbackUrl  String?
   project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model ProjectAsset {
+  id               String   @id @default(uuid())
+  projectId        String
+  type             String
+  prompt           String?
+  originalUrl      String?
+  webpUrl          String?
+  status           String   @default("pending")
+  cost             Float?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  referenceAssetId String?
+  metadata         Json?
+  project          Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }
 
 model ChatMessage {
@@ -125,23 +151,36 @@ model ChatMessage {
   skillInvocationRef String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
+  metadata           Json?
   project            Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }
 
 model SkillInvocation {
-  id         String   @id @default(uuid())
-  projectId  String
-  skillType  String
-  inputHash  String
-  model      String
-  tokens     Int?
-  latencyMs  Int?
-  outputHash String?
-  status     String
-  error      String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  id               String   @id @default(uuid())
+  projectId        String
+  skillType        String
+  inputHash        String
+  model            String
+  tokens           Int?
+  latencyMs        Int?
+  outputHash       String?
+  status           String
+  error            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  completionTokens Int?
+  cost             Float?
+  metadata         Json?
+  outputData       Json?
+  promptTokens     Int?
+  traceId          String?
+  userId           String?
+  project          Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user             User?    @relation(fields: [userId], references: [id])
+
+  @@index([traceId])
+  @@index([userId])
+  @@index([projectId])
 }
 
 model Subscription {
@@ -181,13 +220,19 @@ model Domain {
 }
 
 model Page {
-  id        String   @id @default(uuid())
-  projectId String
-  slug      String
-  content   Json
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  id             String   @id @default(uuid())
+  projectId      String
+  slug           String
+  content        Json
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  componentCode  Json?
+  contentVersion Int      @default(1)
+  customCSS      String?
+  keywordTarget  Json?
+  seoMeta        Json?
+  status         String   @default("pending")
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, slug])
 }
@@ -196,4 +241,109 @@ model StripeEvent {
   id        String   @id
   type      String
   createdAt DateTime @default(now())
+}
+
+model Lead {
+  id        String      @id @default(uuid())
+  projectId String
+  stageId   String?
+  name      String?
+  email     String?
+  phone     String?
+  message   String?
+  source    String?
+  status    String      @default("new")
+  isRead    Boolean     @default(false)
+  position  Int         @default(0)
+  metadata  Json?
+  attachments Json?
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  project   Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  stage     LeadStage?  @relation(fields: [stageId], references: [id], onDelete: SetNull)
+}
+
+model LeadStage {
+  id        String   @id @default(uuid())
+  projectId String
+  name      String
+  color     String   @default("#3B82F6")
+  position  Int
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  leads     Lead[]
+
+  @@unique([projectId, position])
+}
+
+model WebhookIntegration {
+  id        String   @id @default(uuid())
+  projectId String
+  name      String
+  url       String
+  secret    String?
+  isActive  Boolean  @default(true)
+  headers   Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model LocationKeywordMetrics {
+  id           String   @id @default(uuid())
+  projectId    String
+  city         String
+  state        String?
+  service      String
+  keyword      String
+  searchVolume Int
+  difficulty   Float?
+  cpc          Float?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, city, service])
+}
+
+model GlobalKeywordCache {
+  id             String   @id @default(uuid())
+  city           String
+  state          String?
+  trade          String?
+  service        String
+  keyword        String
+  searchVolume   Int
+  monthlyVolumes Json?
+  competition    String?
+  cpc            Float?
+  geoScope       String   @default("national_proxy")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([city, service])
+}
+
+model ServiceKeywordMetrics {
+  id               String   @id @default(uuid())
+  projectId        String
+  city             String
+  service          String
+  keyword          String
+  searchVolume     Int
+  monthlyVolumes   Json?
+  competition      String?
+  cpc              Float?
+  rank             Int
+  geoScope         String   @default("city")
+  avgTicketPrice   Float?
+  revenuePotential Float?
+  userOverrideRank Int?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  project          Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, city, service])
 }

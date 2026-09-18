@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { Redis } from 'ioredis';
+import { RedisService } from '../common/redis/redis.service';
 import { KeywordResult } from './interfaces/keyword-data.interface';
 
 @Injectable()
@@ -9,8 +9,8 @@ export class KeywordsCache {
   private readonly logger = new Logger(KeywordsCache.name);
   private readonly TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days
 
-  constructor(private readonly configService: ConfigService) {
-    this.redis = new Redis(this.configService.get<string>('REDIS_URL')!);
+  constructor(private readonly redisService: RedisService) {
+    this.redis = this.redisService.getClient();
   }
 
   private getKey(trade: string, location: string): string {

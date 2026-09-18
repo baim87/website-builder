@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { AIModel } from '../common/constants/ai-models.constant';
 
 export const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -12,6 +13,7 @@ export const envSchema = z.object({
   GOOGLE_CLIENT_ID: z.string().min(1),
   GOOGLE_CLIENT_SECRET: z.string().min(1),
   GOOGLE_CALLBACK_URL: z.string().url(),
+  ALLOWED_AUTH_DOMAINS: z.string().optional(),
   GOOGLE_SERVICE_ACCOUNT_EMAIL: z.string().email().optional(),
   GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: z.string().optional(),
 
@@ -37,8 +39,8 @@ export const envSchema = z.object({
   SERPAPI_API_KEY: z.string().optional(),
 
 
-  ANTHROPIC_API_KEY: z.string().min(1),
-  ANTHROPIC_MODEL: z.string().default('claude-fable-20260801'),
+  OPENROUTER_API_KEY: z.string().min(1),
+  OPENROUTER_MODEL: z.string().default(AIModel.CLAUDE_FABLE_5),
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_REALTIME_MODEL: z.string().optional(),
   GEMINI_API_KEY: z.string().optional(),
@@ -62,11 +64,15 @@ export const envSchema = z.object({
   VERCEL_PROJECT_ID: z.string().optional(),
 
   JWT_SECRET: z.string().min(10),
-  JWT_EXPIRY: z.string().default('15m'),
+  JWT_EXPIRY: z.string().default('7d'),
   REFRESH_TOKEN_EXPIRY: z.string().default('7d'),
 
-  THROTTLE_TTL: z.coerce.number().default(60),
+  THROTTLE_TTL: z.coerce.number().default(60000),
   THROTTLE_LIMIT: z.coerce.number().default(100),
+
+  BRANDFETCH_API_KEY: z.string().optional(),
+  LOGODEV_SECRET_KEY: z.string().optional(),
+  BROWSERLESS_WS_ENDPOINT: z.string().optional(),
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;

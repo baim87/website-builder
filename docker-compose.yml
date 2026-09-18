@@ -20,6 +20,8 @@ services:
     image: redis:7-alpine
     ports:
       - '6379:6379'
+    volumes:
+      - redisdata:/data
     healthcheck:
       test: [ "CMD", "redis-cli", "ping" ]
       interval: 5s
@@ -27,22 +29,15 @@ services:
       retries: 10
     restart: unless-stopped
 
-  minio:
-    image: minio/minio
-    command: server /data --console-address ":9001"
+
+  browserless:
+    image: browserless/chrome:latest
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      - MAX_CONCURRENT_SESSIONS=10
+      - MAX_QUEUE_LENGTH=20
+      - CONNECTION_TIMEOUT=60000
     ports:
-      - '9000:9000'
-      - '9001:9001'
-    volumes:
-      - miniodata:/data
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
-      interval: 5s
-      timeout: 5s
-      retries: 10
+      - '3001:3000'
     restart: unless-stopped
 
   migrate:
@@ -51,6 +46,7 @@ services:
     environment: &app-env
       DATABASE_URL: postgresql://${POSTGRES_USER:-dev}:${POSTGRES_PASSWORD:-dev}@postgres:5432/${POSTGRES_DB:-contractor_website_builder}?schema=public
       REDIS_URL: redis://redis:6379
+      NODE_OPTIONS: "--dns-result-order=ipv4first"
     env_file:
       - .env
     depends_on:
@@ -72,8 +68,6 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
-      minio:
-        condition: service_healthy
     restart: unless-stopped
 
   worker:
@@ -89,10 +83,8 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
-      minio:
-        condition: service_healthy
     restart: unless-stopped
 
 volumes:
   pgdata:
-  miniodata:
+  redisdata:

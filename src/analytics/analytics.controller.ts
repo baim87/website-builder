@@ -1,7 +1,8 @@
-import { Controller, Get, Post, Param, UseGuards, Request, Body, HttpStatus, HttpException } from '@nestjs/common';
+import { Controller, Get, Post, Param, UseGuards, Request, Body, HttpStatus, HttpException, Query } from '@nestjs/common';
 import { AnalyticsService } from './analytics.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { AnalyticsProvisioningProducer } from '../queue/producers/analytics-provisioning.producer';
+import { ANALYTICS_STATUS } from './constants/analytics-status.constant';
 
 @UseGuards(JwtAuthGuard)
 @Controller('projects/:projectId/analytics')
@@ -14,23 +15,34 @@ export class AnalyticsController {
   @Get('summary')
   async getSummary(
     @Param('projectId') projectId: string,
+    @Query('period') period: string,
     @Request() req: any,
   ) {
-    return this.analyticsService.getAnalyticsSummary(projectId, req.user.id);
+    const timePeriod = period || '30d';
+    return this.analyticsService.getAnalyticsSummary(projectId, req.user.id, timePeriod);
+  }
+
+  @Get('realtime')
+  async getRealtime(
+    @Param('projectId') projectId: string,
+    @Request() req: any,
+  ) {
+    return this.analyticsService.getRealtimeAnalytics(projectId, req.user.id);
   }
 
   @Post('provision')
   async provision(
     @Param('projectId') projectId: string,
     @Body('domainName') domainName: string,
+    @Request() req: any,
   ) {
     if (!domainName) {
       throw new HttpException('Domain name is required to provision analytics', HttpStatus.BAD_REQUEST);
     }
     
     // Add job to BullMQ via the producer
-    await this.analyticsProducer.provisionAnalytics(projectId, domainName);
+    await this.analyticsProducer.provisionAnalytics(projectId, domainName, req.user.id);
     
-    return { status: 'ACCEPTED', message: 'Analytics provisioning has been queued and will complete in the background.' };
+    return { status: ANALYTICS_STATUS.ACCEPTED, message: 'Analytics provisioning has been queued and will complete in the background.' };
   }
 }

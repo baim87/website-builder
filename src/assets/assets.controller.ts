@@ -1,12 +1,66 @@
-import { Controller, Post, Get, Delete, Patch, Param, UseGuards, UseInterceptors, UploadedFile, Body } from '@nestjs/common';
+import { Controller, Post, Get, Delete, Patch, Param, UseGuards, UseInterceptors, UploadedFile, Body, Request } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { AssetsService } from './assets.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { BrandAssetIngestionService } from './brand-asset-ingestion.service';
+import { BrandExportService } from './brand-export.service';
+import { ASSET_PURPOSE } from './constants/asset-purpose.constant';
 
 @UseGuards(JwtAuthGuard)
 @Controller('projects/:projectId/assets')
 export class AssetsController {
-  constructor(private readonly assetsService: AssetsService) {}
+  constructor(
+    private readonly assetsService: AssetsService,
+    private readonly brandAssetIngestionService: BrandAssetIngestionService,
+    private readonly brandExportService: BrandExportService,
+  ) {}
+
+  @Post('brand-kit/generate')
+  async generateBrandKit(
+    @Param('projectId') projectId: string,
+    @Request() req: any,
+  ) {
+    const url = await this.brandExportService.generateBrandKit(projectId, req.user.id);
+    return { url };
+  }
+
+  @Post('logo/upload')
+  @UseInterceptors(FileInterceptor('file'))
+  uploadLogoAsset(
+    @Param('projectId') projectId: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Request() req: any,
+  ) {
+    return this.brandAssetIngestionService.processAsset(projectId, req.user.id, ASSET_PURPOSE.LOGO, file.buffer, file.mimetype);
+  }
+
+  @Post('favicon/upload')
+  @UseInterceptors(FileInterceptor('file'))
+  uploadFaviconAsset(
+    @Param('projectId') projectId: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Request() req: any,
+  ) {
+    return this.brandAssetIngestionService.processAsset(projectId, req.user.id, ASSET_PURPOSE.FAVICON, file.buffer, file.mimetype);
+  }
+
+  @Post('logo/url')
+  uploadLogoAssetUrl(
+    @Param('projectId') projectId: string,
+    @Body('url') url: string,
+    @Request() req: any,
+  ) {
+    return this.brandAssetIngestionService.processAsset(projectId, req.user.id, ASSET_PURPOSE.LOGO, url);
+  }
+
+  @Post('favicon/url')
+  uploadFaviconAssetUrl(
+    @Param('projectId') projectId: string,
+    @Body('url') url: string,
+    @Request() req: any,
+  ) {
+    return this.brandAssetIngestionService.processAsset(projectId, req.user.id, ASSET_PURPOSE.FAVICON, url);
+  }
 
   @Post()
   @UseInterceptors(FileInterceptor('file'))
@@ -14,9 +68,10 @@ export class AssetsController {
     @Param('projectId') projectId: string,
     @UploadedFile() file: Express.Multer.File,
     @Body('purpose') purpose: string,
-    @Body('section') section?: string,
+    @Body('section') section: string | undefined,
+    @Request() req: any,
   ) {
-    return this.assetsService.uploadAsset(projectId, file, purpose, section);
+    return this.assetsService.uploadAsset(projectId, req.user.id, file, purpose, section);
   }
 
   @Get()

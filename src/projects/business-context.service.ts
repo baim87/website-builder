@@ -1,20 +1,29 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateBusinessContextDto } from './dto/update-business-context.dto';
+import { LocationMetricsService } from '../seo/location-metrics.service';
+import { parseRadiusToMiles } from '../utils/parse-radius.util';
+import { RevalidationService } from './revalidation.service';
 
 @Injectable()
 export class BusinessContextService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(BusinessContextService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly locationMetrics: LocationMetricsService,
+    private readonly revalidationService: RevalidationService
+  ) {}
 
   async findByProjectId(projectId: string, userId?: string) {
     if (userId) {
       const project = await this.prisma.project.findUnique({
         where: { id: projectId, userId },
       });
-      if (!project) throw new NotFoundException(`Project ${projectId} not found or access denied`);
+      if (!project) throw new ForbiddenException(`Project ${projectId} not found or access denied`);
     }
 
-    const context = await this.prisma.businessContext.findUnique({
+    let context = await this.prisma.businessContext.findUnique({
       where: { projectId },
     });
     
@@ -28,47 +37,73 @@ export class BusinessContextService {
       ...context,
       primaryColor: brandInputs.primaryColor,
       secondaryColor: brandInputs.secondaryColor,
-      fontStyle: brandInputs.fontStyle,
+      themePreference: brandInputs.themePreference,
     };
   }
 
   async upsert(projectId: string, data: UpdateBusinessContextDto, userId?: string) {
-    if (userId) {
-      const project = await this.prisma.project.findUnique({
-        where: { id: projectId, userId },
-      });
-      if (!project) throw new NotFoundException(`Project ${projectId} not found or access denied`);
-    }
-    
     // Extract brand fields
-    const { primaryColor, secondaryColor, fontStyle, ...rest } = data;
-    const hasNewBrand = primaryColor !== undefined || secondaryColor !== undefined || fontStyle !== undefined;
+    const { primaryColor, secondaryColor, themePreference, ...rest } = data;
+    const hasNewBrand = primaryColor !== undefined || secondaryColor !== undefined || themePreference !== undefined;
     
-    let newBrandIdentityInputs: any = undefined;
-    
-    if (hasNewBrand) {
-      const existing = await this.prisma.businessContext.findUnique({ where: { projectId } });
-      const existingBrand = existing?.brandIdentityInputs as any || {};
-      
-      newBrandIdentityInputs = {
-        ...existingBrand,
-        ...(primaryColor !== undefined && { primaryColor }),
-        ...(secondaryColor !== undefined && { secondaryColor }),
-        ...(fontStyle !== undefined && { fontStyle }),
-      };
+    if (rest.radius !== undefined) {
+      rest.radius = parseRadiusToMiles(rest.radius);
     }
 
-    return this.prisma.businessContext.upsert({
-      where: { projectId },
-      update: {
-        ...rest,
-        ...(hasNewBrand && { brandIdentityInputs: newBrandIdentityInputs }),
-      },
-      create: {
-        projectId,
-        ...rest,
-        ...(hasNewBrand && { brandIdentityInputs: newBrandIdentityInputs }),
-      },
+    const finalContext = await this.prisma.$transaction(async (tx) => {
+      if (userId) {
+        const project = await tx.project.findUnique({
+          where: { id: projectId, userId },
+        });
+        if (!project) throw new NotFoundException(`Project ${projectId} not found or access denied`);
+      }
+
+      let newBrandIdentityInputs: any = undefined;
+      
+      if (hasNewBrand) {
+        const existing = await tx.businessContext.findUnique({ where: { projectId } });
+        const existingBrand = existing?.brandIdentityInputs as any || {};
+        
+        newBrandIdentityInputs = {
+          ...existingBrand,
+          ...(primaryColor !== undefined && { primaryColor }),
+          ...(secondaryColor !== undefined && { secondaryColor }),
+          ...(themePreference !== undefined && { themePreference }),
+        };
+      }
+
+      return tx.businessContext.upsert({
+        where: { projectId },
+        update: {
+          ...(rest as any),
+          ...(hasNewBrand && { brandIdentityInputs: newBrandIdentityInputs }),
+        },
+        create: {
+          projectId,
+          ...(rest as any),
+          ...(hasNewBrand && { brandIdentityInputs: newBrandIdentityInputs }),
+        },
+      });
     });
+
+    if (finalContext.serviceAreas && finalContext.services) {
+      const servicesArray = Array.isArray(finalContext.services) ? finalContext.services : [];
+      const citiesArray = Array.isArray(finalContext.serviceAreas) ? finalContext.serviceAreas : [];
+      if (servicesArray.length > 0 && citiesArray.length > 0) {
+        // Fire and forget
+        this.locationMetrics.processProjectMetrics(
+          projectId, 
+          citiesArray as string[], 
+          servicesArray as string[]
+        ).catch(e => {
+          this.logger.error(`Failed to process background location metrics for project ${projectId}`, e.stack);
+        });
+      }
+    }
+
+    // Trigger on-demand ISR revalidation
+    this.revalidationService.triggerRevalidation(projectId).catch(() => {});
+
+    return finalContext;
   }
 }

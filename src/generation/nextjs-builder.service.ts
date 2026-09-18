@@ -1,118 +1,315 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { Page } from '@prisma/client';
 import { BusinessContextService } from '../projects/business-context.service';
 import { WebsiteDataService } from '../projects/website-data.service';
-import { PageService } from '../projects/page.service';
-import { exec } from 'child_process';
+import { GithubService } from '../deployment/github.service';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as crypto from 'crypto';
+import { CodeRepairSkill } from '../skills/impl/code-repair.skill';
+import { SkillExecutorService } from '../skills/skill-executor.service';
+import { PrismaService } from '../prisma/prisma.service';
+import { generateRepoName } from '../common/utils/repo.util';
+import { SiteContentService } from './site-content.service';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 @Injectable()
 export class NextjsBuilderService {
   private readonly logger = new Logger(NextjsBuilderService.name);
 
   constructor(
-    private readonly configService: ConfigService,
     private readonly businessContextService: BusinessContextService,
     private readonly websiteDataService: WebsiteDataService,
-    private readonly pageService: PageService,
+    private readonly githubService: GithubService,
+    private readonly codeRepair: CodeRepairSkill,
+    private readonly skillExecutor: SkillExecutorService,
+    private readonly prisma: PrismaService,
+    private readonly siteContentService: SiteContentService,
   ) {}
 
-  async buildAndDeploy(projectId: string, userId?: string): Promise<string> {
+  async buildAndDeploy(
+    projectId: string, 
+    userId?: string, 
+    beforePushCallback?: (repoOwner: string, repoName: string, envVars?: any[]) => Promise<void>
+  ): Promise<any> {
     this.logger.log(`Starting Next.js build and deploy for project ${projectId}`);
     
-    // 1. Fetch data (just to get businessContext for the project slug)
     const businessContext = await this.businessContextService.findByProjectId(projectId, userId);
-    
-    // 2. Prepare workspace
     const tempId = crypto.randomUUID();
     const tempDir = path.join('/tmp', `builder-${tempId}`);
     
-    // Locate site-template (relative to backend execution context)
-    // Locally it's at ../site-template from backend root. In Docker it might be at /app/site-template
-    const isDocker = process.env.NODE_ENV === 'production';
-    const templateDir = isDocker 
-      ? path.join(process.cwd(), '../site-template') // Ensure Dockerfile copies it here
-      : path.join(process.cwd(), '../site-template');
+    const templateRepoUrl = process.env.TEMPLATE_REPO_URL;
     
     try {
-      this.logger.log(`Cloning template from ${templateDir} to ${tempDir}`);
-      await fs.mkdir(tempDir, { recursive: true });
-      
-      // We only copy necessary files, avoiding node_modules and .next
-      await execAsync(`rsync -a --exclude 'node_modules' --exclude '.next' --exclude '.git' --exclude 'dist' ${templateDir}/ ${tempDir}/`);
-
-      // 3. Inject static data as fallback since Vercel cannot reach localhost during build
-      const websiteData = await this.websiteDataService.findByProjectId(projectId);
-      const pages = await this.pageService.getPagesByProjectId(projectId);
-      
-      const siteContent = {
-        designTokens: websiteData?.designTokens || {},
-        seoMetadata: websiteData?.seoMetadata || {},
-        business: {
-          name: businessContext.businessName || '',
-          phone: businessContext.phone || '',
-          email: businessContext.email || '',
-          address: businessContext.businessAddress || '',
-          tagline: '',
-        },
-        pages: pages.map((p: Page) => ({ slug: p.slug, sections: p.content }))
-      };
-      
-      const contentJsonPath = path.join(tempDir, 'src/data/content.json');
-      await fs.writeFile(contentJsonPath, JSON.stringify(siteContent, null, 2));
-
-      // 4. Execute Vercel CLI
-      const vercelToken = this.configService.get<string>('VERCEL_API_TOKEN');
-      if (!vercelToken) {
-        throw new Error('VERCEL_API_TOKEN is not configured');
+      if (!templateRepoUrl) {
+         throw new Error('TEMPLATE_REPO_URL environment variable is not set. Please set it to your site-template Git repository URL.');
       }
+      
+      this.logger.log(`Cloning template from ${templateRepoUrl} to ${tempDir}`);
+      await execFileAsync('git', ['clone', templateRepoUrl, tempDir]);
+      
+      // Remove the .git folder from the cloned template so it's fresh for the new project
+      await execFileAsync('rm', ['-rf', `${tempDir}/.git`]);
 
-      // Format project name (lowercase, alphanumeric, hyphens)
-      const projectNameSlug = businessContext.businessName 
-        ? businessContext.businessName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '')
-        : `project-${projectId.substring(0, 8)}`;
+      this.logger.log(`Installing dependencies in ${tempDir}...`);
+      await execFileAsync('npm', ['install', '--no-audit', '--no-fund'], { cwd: tempDir });
+
+      // 1. Backup original hardcoded components for fallback
+      const componentsDir = path.join(tempDir, 'src/components');
+      const backupDir = path.join(tempDir, 'src/components_backup');
+      await execFileAsync('cp', ['-R', componentsDir, backupDir]);
+
+      const websiteData = await this.websiteDataService.findByProjectId(projectId, userId);
+
+      // 2. Inject CSS Variables into globals.css
+      const designTokens = websiteData?.designTokens as any;
+      if (designTokens?.colors && designTokens?.typography) {
+        this.logger.log('Injecting CSS variables into globals.css');
         
-      const finalProjectName = `${projectNameSlug}-${projectId.substring(0, 4)}`;
+        const hexToHsl = (hex: string) => {
+          if (!hex) return '0 0% 0%';
+          hex = hex.replace(/^#/, '');
+          if (hex.length === 3) hex = hex.split('').map(x => x + x).join('');
+          const r = parseInt(hex.substring(0, 2), 16) / 255;
+          const g = parseInt(hex.substring(2, 4), 16) / 255;
+          const b = parseInt(hex.substring(4, 6), 16) / 255;
+          const max = Math.max(r, g, b), min = Math.min(r, g, b);
+          let h = 0, s = 0, l = (max + min) / 2;
+          if (max !== min) {
+            const d = max - min;
+            s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+            switch (max) {
+              case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+              case g: h = (b - r) / d + 2; break;
+              case b: h = (r - g) / d + 4; break;
+            }
+            h /= 6;
+          }
+          return `${Math.round(h * 360)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`;
+        };
 
-      this.logger.log(`Deploying to Vercel project: ${finalProjectName}`);
-      
-      const apiUrl = this.configService.get<string>('API_URL') || 'http://localhost:3000';
+        const computeContrastColor = (hex: string) => {
+          if (!hex) return '#ffffff';
+          hex = hex.replace(/^#/, '');
+          if (hex.length === 3) hex = hex.split('').map(x => x + x).join('');
+          const r = parseInt(hex.substring(0, 2), 16);
+          const g = parseInt(hex.substring(2, 4), 16);
+          const b = parseInt(hex.substring(4, 6), 16);
+          const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+          return luminance > 0.5 ? '#000000' : '#ffffff';
+        };
 
-      // Run deployment
-      // --prod deploys to production, --yes skips prompts, --token authenticates
-      // We pass the API URL and Project ID as build env variables so Next.js can fetch data
-      const deployCommand = `npx --yes vercel deploy --prod --yes --token ${vercelToken} --name ${finalProjectName} --build-env NEXT_PUBLIC_API_URL=${apiUrl} --build-env NEXT_PUBLIC_PROJECT_ID=${projectId}`;
-      
-      const { stdout, stderr } = await execAsync(deployCommand, { cwd: tempDir });
-      
-      if (stderr && !stderr.includes('Inspect')) {
-        this.logger.warn(`Vercel CLI output (stderr): ${stderr}`);
+        const cssVars = `
+:root {
+  --background: ${hexToHsl(designTokens.colors.background || '#ffffff')};
+  --foreground: ${hexToHsl(designTokens.colors.foreground || designTokens.colors.text || '#000000')};
+  --primary: ${hexToHsl(designTokens.colors.primary || '#18181b')};
+  --primary-foreground: ${hexToHsl(designTokens.colors.primaryForeground || computeContrastColor(designTokens.colors.primary || '#18181b'))};
+  --secondary: ${hexToHsl(designTokens.colors.secondary || '#f4f4f5')};
+  --secondary-foreground: ${hexToHsl(designTokens.colors.secondaryForeground || computeContrastColor(designTokens.colors.secondary || '#f4f4f5'))};
+  --accent: ${hexToHsl(designTokens.colors.accent || '#f4f4f5')};
+  --accent-foreground: ${hexToHsl(designTokens.colors.accentForeground || computeContrastColor(designTokens.colors.accent || '#f4f4f5'))};
+  --surface-dark: ${hexToHsl(designTokens.colors.surfaceDark || '#1a202c')};
+  --surface-dark-foreground: ${hexToHsl(computeContrastColor(designTokens.colors.surfaceDark || '#1a202c'))};
+  --header-bg: ${hexToHsl(designTokens.colors.headerBg || designTokens.colors.background || '#ffffff')};
+  --header-foreground: ${hexToHsl(designTokens.colors.headerText || designTokens.colors.headerForeground || computeContrastColor(designTokens.colors.headerBg || designTokens.colors.background || '#ffffff'))};
+  --footer-bg: ${hexToHsl(designTokens.colors.footerBg || designTokens.colors.surfaceDark || '#1a202c')};
+  --footer-foreground: ${hexToHsl(designTokens.colors.footerText || designTokens.colors.footerForeground || computeContrastColor(designTokens.colors.footerBg || designTokens.colors.surfaceDark || '#1a202c'))};
+  --font-heading: "${designTokens.typography.headingFont || 'Inter'}";
+  --font-body: "${designTokens.typography.bodyFont || 'Inter'}";
+}
+`;
+        const globalsPath = path.join(tempDir, 'src/app/globals.css');
+        let existingCss = '';
+        try {
+          existingCss = await fs.readFile(globalsPath, 'utf-8');
+        } catch (e) {
+          this.logger.warn('No globals.css found in template, creating a new one.');
+        }
+        // Replace the fallback :root block instead of prepending, to avoid CSS cascade override
+        const rootBlockRegex = /:root\s*\{[^}]*\/\*\s*Fallback values[^}]*\}/s;
+        if (rootBlockRegex.test(existingCss)) {
+          existingCss = existingCss.replace(rootBlockRegex, cssVars.trim());
+        } else {
+          // No fallback block found — prepend the dynamic :root before @import
+          const importIndex = existingCss.indexOf('@import');
+          if (importIndex >= 0) {
+            existingCss = existingCss.slice(0, importIndex) + cssVars + '\n' + existingCss.slice(importIndex);
+          } else {
+            existingCss = cssVars + '\n' + existingCss;
+          }
+        }
+        await fs.writeFile(globalsPath, existingCss);
       }
       
-      // Parse the output URL
-      // Vercel CLI outputs the URL directly on success (e.g. https://project-name.vercel.app)
-      const urlMatch = stdout.match(/https:\/\/[a-zA-Z0-9-]+\.vercel\.app/);
-      const liveUrl = urlMatch ? urlMatch[0] : stdout.trim();
+      const siteContent = await this.siteContentService.getSiteContent(projectId, userId, true);
+      await fs.writeFile(path.join(tempDir, 'src/data/content.json'), JSON.stringify(siteContent, null, 2));
+
+      // 3. Write seasonality.json to public directory
+      const publicDir = path.join(tempDir, 'public');
+      await fs.mkdir(publicDir, { recursive: true });
+      if (websiteData?.seasonalConfig) {
+        await fs.writeFile(path.join(publicDir, 'seasonality.json'), JSON.stringify(websiteData.seasonalConfig, null, 2));
+        this.logger.log(`Wrote seasonality.json to ${publicDir}`);
+      }
+
+      // 4. Write Generated Components and Self-Healing Build Loop
+      const customComponents = (websiteData?.customComponents as Record<string, string>) || {};
+      const generatedDir = path.join(tempDir, 'src/components/generated');
+      await fs.mkdir(generatedDir, { recursive: true });
       
-      this.logger.log(`Deployment successful! Live URL: ${liveUrl}`);
+      let indexTsContent = '';
+      for (const [compName, compCode] of Object.entries(customComponents)) {
+        await fs.writeFile(path.join(generatedDir, `${compName}.tsx`), compCode);
+        indexTsContent += `export { default as ${compName} } from './${compName}';\n`;
+      }
+      await fs.writeFile(path.join(generatedDir, 'index.ts'), indexTsContent);
+
+      // Legacy patches for layout.tsx and route.ts have been removed to prevent build errors
+
+      this.logger.log(`Running build in ${tempDir} to verify generated code...`);
       
-      return liveUrl;
+      let buildSuccess = false;
+      let retries = 0;
+      const MAX_RETRIES = 3;
+
+      while (!buildSuccess && retries <= MAX_RETRIES) {
+        try {
+          await execFileAsync('npm', ['run', 'build'], { 
+            cwd: tempDir, 
+            env: { ...process.env, NODE_ENV: 'production' } 
+          });
+          buildSuccess = true;
+          this.logger.log(`Build successful on attempt ${retries + 1}`);
+        } catch (error: any) {
+          if (retries === MAX_RETRIES) {
+            throw new Error(`Next.js build failed after ${MAX_RETRIES} repair attempts: ${error.message}`);
+          }
+          this.logger.warn(`Build failed (Attempt ${retries + 1}). Engaging Self-Healing loop...`);
+          
+          const errorLog = error.stdout + '\n' + error.stderr;
+          
+          // Try to extract the file name from the error
+          // Pattern 1: Direct file reference (TypeScript errors)
+          let match = errorLog.match(/src\/components\/generated\/([a-zA-Z0-9_]+)\.tsx/);
+          
+          // Pattern 2: Prerender error referencing a page route (runtime errors)
+          // e.g. 'Error occurred prerendering page "/contact"'
+          if (!match) {
+            const prerenderMatch = errorLog.match(/Error occurred prerendering page "\/([^"]+)"/);
+            if (prerenderMatch) {
+              const failedRoute = prerenderMatch[1];
+              this.logger.warn(`Prerender error detected on route: /${failedRoute}. Scanning components...`);
+              
+              // Look up the page's sections from DB to find which component to repair
+              const failedPage = await this.prisma.page.findUnique({
+                where: { projectId_slug: { projectId, slug: failedRoute } }
+              }).catch(() => null);
+              if (failedPage && Array.isArray(failedPage.content)) {
+                for (const section of failedPage.content as any[]) {
+                  const compName = section?.type;
+                  if (compName && customComponents[compName]) {
+                    match = [compName, compName] as any;
+                    this.logger.warn(`Mapping prerender error to component: ${compName}`);
+                    break;
+                  }
+                }
+              }
+            }
+          }
+          
+          if (match && match[1]) {
+            const brokenCompName = match[1];
+            this.logger.warn(`Broken component detected: ${brokenCompName}. Running CodeRepairSkill...`);
+            
+            const brokenCode = await fs.readFile(path.join(generatedDir, `${brokenCompName}.tsx`), 'utf-8');
+            
+            const repairResult = await this.skillExecutor.executeSkill(this.codeRepair, {
+              projectId,
+              context: { brokenCode, errorLog, componentName: brokenCompName },
+              metadata: { phase: 'repair', componentName: brokenCompName }
+            });
+            
+            const fixedCode = repairResult.code;
+            
+            // Overwrite in temp file system
+            await fs.writeFile(path.join(generatedDir, `${brokenCompName}.tsx`), fixedCode);
+            
+            // Save permanently back to database
+            customComponents[brokenCompName] = fixedCode;
+            await this.websiteDataService.upsert(projectId, {
+              customComponents
+            }, userId!);
+            
+            this.logger.log(`Applied fix to ${brokenCompName}. Retrying build...`);
+          } else {
+            this.logger.warn(`Could not identify the broken component from error log. Proceeding with build failure.`);
+            throw error; // If we can't figure out which file broke, we can't heal it.
+          }
+          retries++;
+        }
+      }
+
+      // 4.5. Write brand-kit.md if available
+      if (businessContext?.brandIdentityInputs) {
+        const docsDir = path.join(tempDir, 'docs');
+        await fs.mkdir(docsDir, { recursive: true });
+        
+        let mdContent = `# Brand Kit\n\n`;
+        const inputs = businessContext.brandIdentityInputs as any;
+        for (const [key, value] of Object.entries(inputs)) {
+          if (typeof value === 'object') {
+            mdContent += `## ${key}\n\`\`\`json\n${JSON.stringify(value, null, 2)}\n\`\`\`\n\n`;
+          } else {
+            mdContent += `## ${key}\n${value}\n\n`;
+          }
+        }
+        await fs.writeFile(path.join(docsDir, 'brand-kit.md'), mdContent);
+      }
+
+      // 4.75. Prepare Environment Variables for Deployment
+      this.logger.log(`Preparing environment variables for deployment...`);
+      const envVars = [
+        { key: 'NEXT_PUBLIC_API_URL', value: process.env.APP_URL || 'http://localhost:3000', target: ['production', 'preview', 'development'], type: 'plain' },
+        { key: 'NEXT_PUBLIC_PROJECT_ID', value: projectId, target: ['production', 'preview', 'development'], type: 'plain' },
+        { key: 'SMTP_HOST', value: process.env.SMTP_HOST || 'smtp.gmail.com', target: ['production', 'preview', 'development'], type: 'plain' },
+        { key: 'SMTP_PORT', value: process.env.SMTP_PORT || '465', target: ['production', 'preview', 'development'], type: 'plain' },
+        { key: 'SMTP_USER', value: process.env.SMTP_USER || '', target: ['production', 'preview', 'development'], type: 'plain' },
+        { key: 'SMTP_PASS', value: process.env.SMTP_PASS || '', target: ['production', 'preview', 'development'], type: 'plain' },
+        { key: 'CONTACT_EMAIL', value: process.env.CONTACT_EMAIL || '', target: ['production', 'preview', 'development'], type: 'plain' }
+      ];
+
+      if (process.env.BUILDER_API_SECRET) {
+        envVars.push({ key: 'BUILDER_API_SECRET', value: process.env.BUILDER_API_SECRET, target: ['production', 'preview', 'development'], type: 'plain' });
+      }
+
+      // 5. Create GitHub Repository and Push
+      const repoName = generateRepoName(businessContext.businessName, projectId);
+
+      this.logger.log(`Ensuring GitHub repository exists: ${repoName}`);
+      const repo = await this.githubService.ensureRepository(repoName);
+
+      if (beforePushCallback) {
+        this.logger.log(`Executing before-push callback for Vercel linking...`);
+        await beforePushCallback(repo.owner, repo.name, envVars);
+      }
+
+      this.logger.log(`Committing and pushing code to GitHub repo: ${repoName}`);
+      await this.githubService.commitAndPush(repoName, tempDir, projectId, userId, false);
+
+      this.logger.log(`Successfully pushed codebase to GitHub: ${repo.clone_url}`);
+
+      return { repoOwner: repo.owner, repoName, cloneUrl: repo.clone_url };
 
     } catch (error: any) {
-      this.logger.error(`Failed to build and deploy project ${projectId}`, error.stack);
-      throw error;
-    } finally {
-      // 5. Cleanup
+      this.logger.error(`Failed to build and push project ${projectId}`, error.stack);
       this.logger.log(`Cleaning up temporary directory ${tempDir}`);
       await fs.rm(tempDir, { recursive: true, force: true }).catch(err => 
         this.logger.warn(`Failed to cleanup temp dir: ${err.message}`)
       );
+      throw error;
     }
   }
 }

@@ -11,7 +11,7 @@ export class EditExecutorService {
     private readonly generationProducer: GenerationProducer,
   ) {}
 
-  async applyEdits(projectId: string, intent: any, currentWebsiteData: any): Promise<void> {
+  async applyEdits(projectId: string, userId: string, intent: any, currentWebsiteData: any): Promise<void> {
     if (!intent.changes || intent.changes.length === 0) {
       return;
     }
@@ -37,12 +37,12 @@ export class EditExecutorService {
 
     if (Object.keys(topLevelUpdates).length > 0) {
       this.logger.log(`Persisting edit changes for project ${projectId}`);
-      await this.websiteDataService.upsert(projectId, topLevelUpdates);
+      await this.websiteDataService.upsert(projectId, topLevelUpdates, userId);
     }
 
     if (intent.triggerRegeneration) {
       this.logger.log(`Queuing site regeneration for project ${projectId}`);
-      await this.generationProducer.generateSite(projectId);
+      await this.generationProducer.generateSite(projectId, userId);
     }
   }
 }

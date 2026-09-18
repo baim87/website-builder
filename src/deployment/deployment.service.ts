@@ -1,6 +1,9 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { VercelClient } from '../vercel/vercel.client';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
+import { QUEUE_NAMES } from '../common/constants/queue-names.constant';
 
 @Injectable()
 export class DeploymentService {
@@ -9,6 +12,7 @@ export class DeploymentService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly vercelClient: VercelClient,
+    @InjectQueue(QUEUE_NAMES.DEPLOYMENT_TRACKER) private readonly deploymentTrackerQueue: Queue
   ) {}
 
   async deployProject(projectId: string, userId: string) {
@@ -46,6 +50,71 @@ export class DeploymentService {
       deploymentId: 'live-multi-tenant',
       status: 'READY',
       url: `https://${primaryDomain}`,
+      project: updatedProject,
+    };
+  }
+
+  async deployProjectFromGithub(projectId: string, userId: string, githubRepoOwner: string, githubRepoName: string) {
+    this.logger.log(`Deploying project ${projectId} for user ${userId} from GitHub repo ${githubRepoOwner}/${githubRepoName}`);
+    await this.linkProjectToGithub(projectId, userId, githubRepoOwner, githubRepoName);
+    return this.waitForDeployment(projectId, userId, githubRepoName);
+  }
+
+  async linkProjectToGithub(projectId: string, userId: string, githubRepoOwner: string, githubRepoName: string) {
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId, userId },
+      include: { domain: true },
+    });
+
+    if (!project) {
+      throw new NotFoundException('Project not found');
+    }
+    
+    // Create Vercel project linked to GitHub
+    const vercelProjectName = `${githubRepoName}`;
+    const result = await this.vercelClient.createProjectFromGithub(vercelProjectName, githubRepoOwner, githubRepoName);
+    return result;
+  }
+
+  async setEnvironmentVariables(vercelProjectName: string, envVars: any[]) {
+    return this.vercelClient.setEnvironmentVariables(vercelProjectName, envVars);
+  }
+
+  async waitForDeployment(projectId: string, userId: string, vercelProjectName: string) {
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId, userId },
+      include: { domain: true },
+    });
+
+    if (!project) {
+      throw new NotFoundException('Project not found');
+    }
+
+    // Set initial status to Deploying
+    const updatedProject = await this.prisma.project.update({
+      where: { id: projectId },
+      data: { status: 'DEPLOYING' }, // Or whatever intermediate status you use
+    });
+
+    this.logger.log(`Queueing deployment tracker job for ${vercelProjectName}...`);
+    
+    await this.deploymentTrackerQueue.add('track', {
+      projectId,
+      userId,
+      vercelProjectName,
+      attempts: 0
+    }, {
+      delay: 3000 // Initial delay to give Vercel time to start the build
+    });
+
+    // If custom domain is set, use it. Otherwise, we'll give the default format.
+    let liveUrl = project.domain?.domainName ? `https://${project.domain.domainName}` : `https://${vercelProjectName}.vercel.app`;
+
+    return {
+      success: true,
+      deploymentId: 'linked',
+      status: 'DEPLOYING',
+      url: liveUrl,
       project: updatedProject,
     };
   }

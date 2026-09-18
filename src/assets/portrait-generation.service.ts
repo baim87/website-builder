@@ -1,0 +1,304 @@
+import { Injectable, Logger } from '@nestjs/common';
+import { StorageService } from '../storage/storage.service';
+import { PrismaService } from '../prisma/prisma.service';
+import { AssetPathResolverService } from './asset-path-resolver.service';
+import axios from 'axios';
+import * as crypto from 'crypto';
+import * as fs from 'fs';
+import { ImageProcessorService } from './image-processor.service';
+import { SkillLoggerService } from '../skills/skill-logger.service';
+import { AIModel } from '../common/constants/ai-models.constant';
+import { AISkill } from '../common/constants/ai-skills.constant';
+import { SKILL_STATUS } from '../skills/constants/skill-status.constant';
+@Injectable()
+export class PortraitGenerationService {
+  private readonly logger = new Logger(PortraitGenerationService.name);
+
+  constructor(
+    private readonly storageService: StorageService,
+    private readonly prisma: PrismaService,
+    private readonly imageProcessor: ImageProcessorService,
+    private readonly pathResolver: AssetPathResolverService,
+    private readonly skillLogger: SkillLoggerService,
+  ) {}
+
+  async generatePortrait(projectId: string, trade: string, localImagePath?: string, brandHints?: string) {
+    let imageBuffer: Buffer | null = null;
+    let mimeType = 'image/jpeg';
+    
+    if (localImagePath && localImagePath !== 'skip') {
+      if (localImagePath.startsWith('http://') || localImagePath.startsWith('https://')) {
+        this.logger.log(`Fetching remote reference image from ${localImagePath}`);
+        const res = await axios.get(localImagePath, { 
+          responseType: 'arraybuffer',
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' }
+        });
+        imageBuffer = Buffer.from(res.data);
+        mimeType = (res.headers['content-type'] as string) || mimeType;
+      } else {
+        if (!fs.existsSync(localImagePath)) {
+          throw new Error(`File not found at ${localImagePath}`);
+        }
+        imageBuffer = fs.readFileSync(localImagePath);
+        if (localImagePath.endsWith('.png')) mimeType = 'image/png';
+        else if (localImagePath.endsWith('.webp')) mimeType = 'image/webp';
+      }
+    }
+
+    const base64Image = imageBuffer ? `data:${mimeType};base64,${imageBuffer.toString('base64')}` : null;
+
+    const basePrompt = base64Image 
+      ? `Create a world-class professional commercial portrait of a US home-service contractor, using the provided reference photo as the primary identity and appearance reference.
+
+SUBJECT:
+A confident, approachable American home contractor specializing in ${trade}.
+
+Preserve the person's recognizable facial structure, approximate age, hairstyle, skin tone, facial hair, and overall appearance from the reference image. The person should look like the same real individual, not a generic model.`
+      : `Create a world-class professional commercial portrait of a US home-service contractor.
+
+SUBJECT:
+A confident, approachable American home contractor specializing in ${trade}. Create a realistic, diverse, authentic individual who looks like they have years of hands-on experience. They should not look like a generic model.`;
+
+    const prompt = `${basePrompt}
+
+The expression should communicate:
+- trustworthy
+- experienced
+- confident
+- approachable
+- hardworking
+- professional
+
+Use a subtle natural smile with genuine warmth. Relaxed facial muscles, natural eyes, authentic expression. Avoid an exaggerated smile or artificial "stock photo" expression.
+
+WARDROBE:
+Dress the contractor in premium, realistic professional workwear appropriate for a successful US home-services company.
+
+A clean, well-fitted canvas work shirt or premium polo. Ensure the clothing looks naturally worn and realistic, with authentic fabric texture, stitching, folds, and subtle imperfections. No logos or branding should be visible on the shirt. 
+
+The color of the shirt MUST match or complement the primary brand colors provided below.
+
+${brandHints ? `\nBRAND GUIDELINES TO INCORPORATE STRICTLY:\n${brandHints}\n` : ''}
+Do not make the clothing look like a fashion model's outfit.
+
+POSE:
+Three-quarter portrait, standing naturally with relaxed shoulders and confident posture.
+
+Body turned slightly away from camera while the face remains directed toward the camera.
+
+Natural head position, subtle asymmetry, relaxed arms and shoulders.
+
+Frame from approximately mid-chest upward.
+
+The composition should feel intentional and premium while still looking natural and approachable.
+
+CAMERA:
+Photographed with a high-end full-frame professional mirrorless or DSLR camera.
+
+50mm prime lens.
+Aperture: f/2.0.
+Shutter speed approximately 1/200 sec.
+ISO kept low for clean professional image quality.
+
+Natural perspective with realistic facial proportions.
+
+Professional portrait photography with precise focus on the eyes.
+
+Eyes must be critically sharp while the ears, shoulders, and background gradually fall out of focus.
+
+Natural optical depth of field rather than artificial computational blur.
+
+LIGHTING:
+Professional commercial portrait studio lighting.
+
+Use a large soft key light positioned approximately 45 degrees from the subject, creating soft, flattering directional illumination across the face.
+
+Add subtle fill light from the opposite side to preserve natural facial detail without eliminating dimensionality.
+
+Use a gentle rim/separation light behind the subject to create subtle separation from the background.
+
+Lighting should create realistic skin highlights, soft shadows beneath the chin and around the nose, natural cheek definition, and subtle catchlights in the eyes.
+
+Skin should retain authentic texture and pores.
+
+No beauty-filter appearance.
+No excessive skin smoothing.
+No plastic skin.
+
+BACKGROUND:
+Clean premium professional studio environment inspired by a high-end US home-services brand.
+
+Use an architectural background with subtle visual references to residential construction, such as softly blurred wood, natural materials, workshop textures, or a modern residential interior. 
+The background colors and lighting MUST incorporate or subtly reflect the brand's secondary/accent colors provided in the guidelines above.
+
+The background should remain understated and secondary to the subject.
+
+Use realistic shallow depth of field with smooth natural bokeh.
+
+The background should look like a real physical location photographed with a 50mm lens, not a digitally generated background.
+
+COLOR:
+Premium commercial photography color grading.
+
+Natural skin tones.
+Neutral-to-warm white balance.
+Balanced contrast.
+Soft highlight roll-off.
+Natural shadow detail.
+Subtle professional color correction.
+
+Avoid excessive orange skin, teal-and-orange grading, HDR effects, oversaturation, or cinematic color effects.
+
+REALISM:
+Maximum photographic realism.
+
+Include subtle characteristics of a real professional photograph:
+- natural skin pores
+- fine facial hair
+- individual hair strands
+- subtle skin imperfections
+- realistic eye moisture and catchlights
+- natural teeth
+- realistic fabric texture
+- tiny clothing wrinkles
+- realistic shadows
+- subtle ambient light bounce
+- physically accurate reflections
+- realistic depth of field
+- natural lens characteristics
+- extremely subtle photographic grain
+
+The subject must look like a real contractor photographed by an experienced commercial photographer.
+
+COMPOSITION:
+Premium American corporate portrait photography.
+
+Clean, confident, approachable, trustworthy.
+
+Leave a small amount of natural headroom.
+
+Subject positioned slightly off-center rather than perfectly centered.
+
+Eye line close to the upper third of the frame.
+
+Natural perspective and proportions.
+
+The final result should look suitable for a high-end US remodeling or home-services company's website, marketing materials, advertisements, truck graphics, proposals, and professional company profile.
+
+QUALITY:
+Photorealistic professional commercial photography.
+High dynamic range without HDR appearance.
+Extremely detailed but natural.
+Accurate anatomy.
+Accurate facial proportions.
+Natural skin texture.
+Professional studio-quality lighting.
+Realistic optics.
+No artificial-looking details.
+No uncanny facial features.
+No excessive symmetry.
+No generic stock-photo appearance.
+No AI-looking artifacts.`;
+    
+    this.logger.log(`Calling OpenRouter for portrait generation using ${AIModel.SEEDREAM_4_5}...`);
+    
+    const contentBlocks: any[] = [
+      { type: "text", text: prompt }
+    ];
+    if (base64Image) {
+      contentBlocks.push({ type: "image_url", image_url: { url: base64Image } });
+    }
+
+    const messages = [
+      {
+        role: "user",
+        content: contentBlocks
+      }
+    ];
+
+    const openRouterResponse = await axios.post(
+      'https://openrouter.ai/api/v1/chat/completions',
+      {
+        model: AIModel.SEEDREAM_4_5,
+        messages
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          'HTTP-Referer': 'http://localhost:3000',
+          'X-Title': 'Contractor Website Builder',
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    
+    const message = openRouterResponse.data.choices[0].message;
+    const content = message.content || "";
+    const cost = openRouterResponse.data.usage?.cost || 0;
+    
+    let imageUrl = '';
+    if (message.images && message.images.length > 0) {
+      imageUrl = message.images[0].image_url.url;
+    } else {
+      const urlMatch = content.match(/!\[.*?\]\((https?:\/\/.*?)\)/);
+      if (urlMatch && urlMatch[1]) {
+        imageUrl = urlMatch[1];
+      } else if (content.startsWith("http")) {
+        imageUrl = content.trim();
+      }
+    }
+    
+    if (!imageUrl) {
+      throw new Error("Could not parse image URL from AI response.");
+    }
+    
+    this.logger.log(`Downloading generated portrait from ${imageUrl}`);
+    const imgRes = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+    const generatedBuffer = Buffer.from(imgRes.data);
+    
+    const project = await this.prisma.project.findUnique({ where: { id: projectId } });
+    const userId = project ? project.userId : 'unknown-user';
+
+    // Use AssetPathResolverService as SSOT for path structure
+    const imgHash = crypto.createHash('md5').update(generatedBuffer).digest('hex');
+    const { originalKey, webpKey } = this.pathResolver.resolveStoragePath(
+      userId, projectId, 'portrait', 'owner', imgHash
+    );
+    await this.storageService.upload(originalKey, generatedBuffer, 'image/jpeg');
+
+    // Optimize to WebP and upload
+    const webpBuffer = await this.imageProcessor.convertToWebp(generatedBuffer);
+    const uploadedWebpUrl = await this.storageService.upload(webpKey, webpBuffer, 'image/webp');
+    
+    // Removed Prisma asset creation here to avoid saving unselected variants.
+    // The asset will be saved in chat-flow.engine.ts when the user finalizes their choice.
+    
+    if (cost > 0) {
+      await this.skillLogger.logInvocation({
+        projectId,
+        skillType: AISkill.PORTRAIT_GENERATION,
+        model: AIModel.SEEDREAM_4_5,
+        inputHash: 'portrait-gen',
+        status: SKILL_STATUS.SUCCESS,
+        cost: cost,
+        metadata: { phase: 'generation', componentName: 'Portrait' }
+      });
+    }
+
+    this.logger.log(`Portrait variant generated and uploaded to storage: ${uploadedWebpUrl}, Cost: $${cost}`);
+
+    return uploadedWebpUrl;
+  }
+
+  async generatePortraitVariants(projectId: string, trade: string, localImagePath?: string, brandHints?: string): Promise<string[]> {
+    this.logger.log(`Generating 3 portrait variants for project ${projectId}...`);
+    // Run 3 generations in parallel to give the user 3 distinct options
+    const variants = await Promise.all([
+      this.generatePortrait(projectId, trade, localImagePath, brandHints),
+      this.generatePortrait(projectId, trade, localImagePath, brandHints),
+      this.generatePortrait(projectId, trade, localImagePath, brandHints)
+    ]);
+    return variants;
+  }
+}
+

@@ -56,4 +56,43 @@ export class VideoProcessorService {
       await fs.unlink(outputPath).catch(() => {});
     }
   }
+
+  async convertToMp4(buffer: Buffer): Promise<Buffer> {
+    const tempId = uuidv4();
+    const inputPath = path.join(os.tmpdir(), `${tempId}-input.tmp`);
+    const outputPath = path.join(os.tmpdir(), `${tempId}-output.mp4`);
+
+    try {
+      await fs.writeFile(inputPath, buffer);
+
+      await new Promise<void>((resolve, reject) => {
+        ffmpeg(inputPath)
+          .output(outputPath)
+          .videoCodec('libx264')
+          .audioCodec('aac')
+          .outputOptions([
+            '-preset veryfast', 
+            '-crf 28'
+          ])
+          .on('end', () => {
+            this.logger.log(`Successfully converted video to MP4: ${outputPath}`);
+            resolve();
+          })
+          .on('error', (err: any) => {
+            this.logger.error(`Error converting video to MP4`, err);
+            reject(err);
+          })
+          .run();
+      });
+
+      const mp4Buffer = await fs.readFile(outputPath);
+      return mp4Buffer;
+    } catch (e: any) {
+      this.logger.error('Failed to process video to MP4', e.stack);
+      throw e;
+    } finally {
+      await fs.unlink(inputPath).catch(() => {});
+      await fs.unlink(outputPath).catch(() => {});
+    }
+  }
 }

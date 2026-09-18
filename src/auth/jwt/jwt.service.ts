@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 export interface JwtPayload {
   sub: string; // userId
   email: string;
+  type?: 'access' | 'refresh';
 }
 
 @Injectable()
@@ -15,7 +16,7 @@ export class JwtTokenService {
   ) {}
 
   signAccessToken(userId: string, email: string): string {
-    const payload: JwtPayload = { sub: userId, email };
+    const payload: JwtPayload = { sub: userId, email, type: 'access' };
     return this.jwtService.sign(payload, {
       secret: this.configService.get<string>('JWT_SECRET'),
       expiresIn: this.configService.get<string>('JWT_EXPIRY') as any,
@@ -23,7 +24,7 @@ export class JwtTokenService {
   }
 
   signRefreshToken(userId: string, email: string): string {
-    const payload: JwtPayload = { sub: userId, email };
+    const payload: JwtPayload = { sub: userId, email, type: 'refresh' };
     return this.jwtService.sign(payload, {
       secret: this.configService.get<string>('JWT_SECRET'),
       expiresIn: this.configService.get<string>('REFRESH_TOKEN_EXPIRY') as any,

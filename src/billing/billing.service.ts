@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { getErrorMessage } from '../common/utils/error.util';
 
 import { STRIPE_CLIENT } from '../stripe/stripe.module';
+import { BILLING_STATUS } from './constants/billing-status.constant';
 
 @Injectable()
 export class BillingService {
@@ -47,7 +48,7 @@ export class BillingService {
     try {
       // Find all subscriptions that are currently active in our DB
       const subscriptions = await this.prisma.subscription.findMany({
-        where: { status: 'active' },
+        where: { status: BILLING_STATUS.ACTIVE },
       });
 
       this.logger.log(`Found ${subscriptions.length} active subscriptions to reconcile.`);
@@ -114,7 +115,7 @@ export class BillingService {
   async getSubscription(userId: string) {
     const subscription = await this.prisma.subscription.findUnique({ where: { userId } });
     if (!subscription) {
-      return { status: 'none' };
+      return { status: BILLING_STATUS.NONE };
     }
     return subscription;
   }
@@ -236,14 +237,14 @@ export class BillingService {
             await this.prisma.payment.upsert({
               where: { stripePaymentId: (invoice as any).payment_intent as string },
               update: {
-                status: 'succeeded',
+                status: BILLING_STATUS.SUCCEEDED,
               },
               create: {
                 userId: subRecord.userId,
                 stripePaymentId: (invoice as any).payment_intent as string,
                 amount: invoice.amount_paid,
                 currency: invoice.currency,
-                status: 'succeeded',
+                status: BILLING_STATUS.SUCCEEDED,
               },
             });
           }

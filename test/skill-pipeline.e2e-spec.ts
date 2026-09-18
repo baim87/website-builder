@@ -1,14 +1,14 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import { AppModule } from '../src/app.module';
-import { OrchestratorService } from '../src/skills/orchestrator.service';
+import { GenerationOrchestratorService } from '../src/generation/generation-orchestrator.service';
 import { AIGatewayService } from '../src/ai-gateway/ai-gateway.service';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { clearDatabase } from './test-utils';
 
 describe('Skill Pipeline (e2e)', () => {
   let app: INestApplication;
-  let orchestrator: OrchestratorService;
+  let orchestrator: GenerationOrchestratorService;
   let aiGateway: AIGatewayService;
 
   beforeAll(async () => {
@@ -19,7 +19,7 @@ describe('Skill Pipeline (e2e)', () => {
     app = moduleFixture.createNestApplication();
     await app.init();
 
-    orchestrator = app.get<OrchestratorService>(OrchestratorService);
+    orchestrator = app.get<GenerationOrchestratorService>(GenerationOrchestratorService);
     aiGateway = app.get<AIGatewayService>(AIGatewayService);
   });
 
@@ -39,7 +39,7 @@ describe('Skill Pipeline (e2e)', () => {
   });
 
   it('executes the full 3-phase generation pipeline successfully', async () => {
-    const aiSpy = jest.spyOn(aiGateway, 'generateText').mockImplementation(async (model, params) => {
+    const aiSpy = jest.spyOn(aiGateway, 'generateText').mockImplementation(async (_model, params) => {
       const system = params.systemPrompt?.toLowerCase() || '';
       
       let mockResponse = {};
@@ -87,7 +87,7 @@ describe('Skill Pipeline (e2e)', () => {
     expect(aiSpy).toHaveBeenCalled();
     expect(result.brandVoice).toBeDefined();
     expect(result.designTokens).toBeDefined();
-    expect(result.seoMetadata).toBeDefined();
+    expect(result.keywordStrategy).toBeDefined();
     expect(result.pages.length).toBe(3); // home, about-us, services
     
     // Verify parallel page generation was successful
@@ -98,7 +98,7 @@ describe('Skill Pipeline (e2e)', () => {
   
   it('handles partial failures during page generation without crashing the pipeline', async () => {
     let callCount = 0;
-    const aiSpy = jest.spyOn(aiGateway, 'generateText').mockImplementation(async (model, params) => {
+    const aiSpy = jest.spyOn(aiGateway, 'generateText').mockImplementation(async (_model, params) => {
       const system = params.systemPrompt?.toLowerCase() || '';
       
       let mockResponse = {};

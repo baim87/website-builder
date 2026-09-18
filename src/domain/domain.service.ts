@@ -1,6 +1,8 @@
 import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { VercelClient } from '../vercel/vercel.client';
+import { DOMAIN_STATUS } from './constants/domain-status.constant';
+import { AnalyticsUpdateProducer } from '../queue/producers/analytics-update.producer';
 
 @Injectable()
 export class DomainService {
@@ -9,6 +11,7 @@ export class DomainService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly vercelClient: VercelClient,
+    private readonly analyticsUpdateProducer: AnalyticsUpdateProducer,
   ) {}
 
   async searchDomain(query: string) {
@@ -64,9 +67,17 @@ export class DomainService {
         projectId,
         domainName,
         provider: 'VERCEL',
-        status: 'ACTIVE',
+        status: DOMAIN_STATUS.ACTIVE,
       },
     });
+
+    // 6. Trigger background update for Analytics to point to new domain
+    try {
+      this.logger.log(`Triggering analytics update for new domain ${domainName}`);
+      await this.analyticsUpdateProducer.updateAnalyticsDomain(projectId, domainName, userId);
+    } catch (e) {
+      this.logger.warn(`Failed to queue analytics update for new domain: ${e.message}`);
+    }
 
     return {
       success: true,

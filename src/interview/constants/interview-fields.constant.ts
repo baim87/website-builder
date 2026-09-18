@@ -6,7 +6,8 @@ export const BUSINESS_FIELDS = [
   'email',
   'trade',
   'services',
-  'serviceAreas',
+  'location',
+  'radius',
   'hours',
 ] as const;
 
@@ -14,7 +15,6 @@ export const BRAND_FIELDS = [
   'brandVoicePreference',
   'primaryColor',
   'secondaryColor',
-  'fontStyle',
 ] as const;
 
 export const REQUIRED_FIELDS = [...BUSINESS_FIELDS, ...BRAND_FIELDS] as const;

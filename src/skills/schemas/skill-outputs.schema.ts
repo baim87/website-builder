@@ -1,21 +1,59 @@
 import { z } from 'zod';
 
+/**
+ * @deprecated Replaced by BrandKnowledgeService and brand-voice.md
+ */
 export const BrandVoiceSchema = z.object({
   tone: z.string(),
   vocabulary: z.array(z.string()),
   rules: z.array(z.string()),
 });
 
-export const BrandIdentitySchema = z.object({
+/**
+ * @deprecated Replaced by BrandStrategySynthesisSkill and brand knowledge files
+ */
+export const BrandKitSchema = z.object({
+  brandName: z.string().describe('Short, premium, original brand name'),
+  slogan: z.string().describe('Short slogan focused on the trade'),
+  positioning: z.string().describe('Explain what this product/service is and how it should be positioned in the market'),
+  targetAudience: z.string().describe('Define the ideal audience'),
+  personality: z.string().describe('Describe the brand personality'),
   colors: z.object({
-    primary: z.string(),
-    secondary: z.string(),
-    accent: z.string(),
+    primary: z.string().describe('Primary color in HEX format'),
+    secondary: z.string().describe('Secondary color in HEX format'),
+    accent: z.string().describe('Accent color in HEX format'),
   }),
   typography: z.object({
-    headingFont: z.string(),
-    bodyFont: z.string(),
+    headingFont: z.string().describe('Suggested Google Font for headings'),
+    bodyFont: z.string().describe('Suggested Google Font for body text'),
   }),
+  logoDirection: z.string().describe('Describe a simple logo concept'),
+  serviceDescription: z.string().describe('Detailed service overview'),
+  keyBenefits: z.array(z.string()).describe('List of main benefits/features'),
+  visualMood: z.string().describe('Describe the visual direction for the website: lighting, atmosphere, etc.'),
+  websiteGoal: z.string().describe('Define the goal of the landing page'),
+  suggestedSections: z.array(z.string()).describe('Suggest a clear section structure for the landing page'),
+});
+
+export const BrandVisualOutputSchema = z.object({
+  markdown: z.string().describe('Full markdown for brand-visual.md'),
+  recommendedTheme: z.enum([
+    'editorial-luxury', 'modern-minimalist', 'soft-organic', 'dark-bento',
+    'awesomic', 'mercury', 'hyer-aviation', 'superpower', '11x-editorial'
+  ]).describe('Best matching theme ID from THEME_DEFINITIONS'),
+});
+
+export const BrandKnowledgeSchema = z.object({
+  strategy: z.string().describe('Full markdown for brand-strategy.md'),
+  positioning: z.string().describe('Full markdown for brand-positioning.md'),
+  voice: z.string().describe('Full markdown for brand-voice.md'),
+  visual: z.string().describe('Full markdown for brand-visual.md'),
+  messaging: z.string().describe('Full markdown for brand-messaging.md'),
+  story: z.string().describe('Full markdown for brand-story.md'),
+  recommendedTheme: z.enum([
+    'editorial-luxury', 'modern-minimalist', 'soft-organic', 'dark-bento',
+    'awesomic', 'mercury', 'hyer-aviation', 'superpower', '11x-editorial'
+  ]).describe('Best matching theme ID from THEME_DEFINITIONS'),
 });
 
 export const DesignSystemSchema = z.object({
@@ -25,6 +63,9 @@ export const DesignSystemSchema = z.object({
     accent: z.string(),
     background: z.string(),
     text: z.string(),
+    surfaceDark: z.string(),
+    headerBg: z.string().optional(),
+    footerBg: z.string().optional(),
   }),
   typography: z.object({
     headingFont: z.string(),
@@ -40,166 +81,90 @@ export const SeoMetadataSchema = z.object({
   ogImagePlaceholder: z.string(),
 });
 
-const HeroSectionSchema = z.object({
-  id: z.string(),
-  type: z.literal('HeroSection'),
-  content: z.object({
-    headline: z.string(),
-    subheadline: z.string(),
-    ctaText: z.string(),
-    backgroundImage: z.string()
-  })
-});
-
-const BrandsSectionSchema = z.object({
-  id: z.string(),
-  type: z.literal('BrandsSection'),
-  content: z.array(z.object({
-    name: z.string(),
-    icon: z.string()
+export const KeywordStrategySchema = z.object({
+  pages: z.array(z.object({
+    slug: z.string(),
+    primaryKeyword: z.object({
+      keyword: z.string(),
+      volume: z.number(),
+    }),
+    secondaryKeywords: z.array(z.object({
+      keyword: z.string(),
+      volume: z.number(),
+    })),
+    searchIntent: z.enum(['commercial', 'informational', 'local']),
   }))
 });
 
-const ServicesSectionSchema = z.object({
-  id: z.string(),
-  type: z.literal('ServicesSection'),
-  content: z.object({
-    items: z.array(z.object({
-      slug: z.string(),
-      name: z.string(),
-      description: z.string(),
-      icon: z.string(),
-      image: z.string()
-    })).optional()
-  })
+export const PageSeoSchema = z.object({
+  slug: z.string(),
+  title: z.string().describe('SEO Title. Try to keep around 60 chars.'),
+  description: z.string().describe('Meta description. Try to keep around 160 chars.'),
+  h1: z.string(),
+  keywords: z.array(z.string()),
+  ogTitle: z.string(),
+  ogDescription: z.string(),
+  canonicalPath: z.string(),
+  image: z.string().optional().describe('URL to the primary image for the page (og:image / JSON-LD)'),
 });
 
-const AboutSectionSchema = z.object({
-  id: z.string(),
-  type: z.literal('AboutSection'),
-  content: z.object({
-    story: z.string(),
-    mission: z.string(),
-    values: z.array(z.object({ title: z.string(), description: z.string() })),
-    team: z.array(z.object({ name: z.string(), role: z.string(), photo: z.string() }))
-  })
-});
+const PrimitiveTypeSchema = z.string();
 
-const WhyUsSectionSchema = z.object({
-  id: z.string(),
-  type: z.literal('WhyUsSection'),
-  content: z.array(z.object({
-    title: z.string(),
-    description: z.string(),
-    icon: z.string()
-  }))
-});
+export const CopyDataSchema = z.record(z.string(), z.any());
 
-const BeforeAfterSectionSchema = z.object({
-  id: z.string(),
-  type: z.literal('BeforeAfterSection'),
-  content: z.array(z.object({
-    title: z.string(),
-    beforeImage: z.string(),
-    afterImage: z.string(),
-    description: z.string()
-  }))
-});
+export const ASTNodeSchema: z.ZodType<any> = z.lazy(() => z.object({
+  id: z.string().optional(),
+  type: PrimitiveTypeSchema,
+  props: z.record(z.string(), z.any()).optional(),
+  children: z.array(z.union([ASTNodeSchema, z.string()])).optional(),
+}));
 
-const TimelineSectionSchema = z.object({
+export const SectionSchema = z.object({
   id: z.string(),
-  type: z.literal('TimelineSection'),
-  content: z.array(z.object({
-    step: z.number(),
-    title: z.string(),
-    description: z.string()
-  }))
+  type: z.string(),
+  ast: ASTNodeSchema
 });
-
-const TestimonialsSectionSchema = z.object({
-  id: z.string(),
-  type: z.literal('TestimonialsSection'),
-  content: z.array(z.object({
-    name: z.string(),
-    text: z.string(),
-    rating: z.number(),
-    avatar: z.string().optional(),
-    role: z.string().optional(),
-    projectImage: z.string().optional()
-  }))
-});
-
-const LocationsSectionSchema = z.object({
-  id: z.string(),
-  type: z.literal('LocationsSection'),
-  content: z.object({
-    items: z.array(z.object({
-      slug: z.string(),
-      name: z.string(),
-      description: z.string(),
-      image: z.string()
-    })).optional()
-  })
-});
-
-const PageHeaderSectionSchema = z.object({
-  id: z.string(),
-  type: z.literal('PageHeaderSection'),
-  content: z.object({
-    title: z.string(),
-    description: z.string().optional(),
-    badge: z.string().optional(),
-    backgroundImage: z.string()
-  })
-});
-
-const ServiceDetailsSectionSchema = z.object({
-  id: z.string(),
-  type: z.literal('ServiceDetailsSection'),
-  content: z.object({
-    overview: z.string(),
-    whyChooseUs: z.array(z.string()),
-    process: z.array(z.string()),
-    cta: z.object({
-      heading: z.string(),
-      subheading: z.string(),
-      buttonText: z.string()
-    })
-  })
-});
-
-const CallToActionSectionSchema = z.object({
-  id: z.string(),
-  type: z.literal('CallToActionSection'),
-  content: z.object({
-    heading: z.string(),
-    subheading: z.string(),
-    buttonText: z.string(),
-    backgroundImage: z.string().optional()
-  })
-});
-
-export const SectionSchema = z.discriminatedUnion("type", [
-  HeroSectionSchema,
-  BrandsSectionSchema,
-  ServicesSectionSchema,
-  AboutSectionSchema,
-  WhyUsSectionSchema,
-  BeforeAfterSectionSchema,
-  TimelineSectionSchema,
-  TestimonialsSectionSchema,
-  LocationsSectionSchema,
-  PageHeaderSectionSchema,
-  ServiceDetailsSectionSchema,
-  CallToActionSectionSchema
-]);
 
 export const PageStructureSchema = z.object({
   sections: z.array(z.string())
 });
 
-// Used for backwards compatibility if we ever validate an entire page at once
 export const PageContentSchema = z.object({
   slug: z.string(),
   sections: z.array(SectionSchema)
 });
+
+// TypeScript Types (Single Source of Truth)
+export type DesignSystem = z.infer<typeof DesignSystemSchema> & { globalCss?: string };
+export type ASTNode = z.infer<typeof ASTNodeSchema>;
+export type Section = z.infer<typeof SectionSchema>;
+export type PageContent = z.infer<typeof PageContentSchema>;
+export type CopyData = z.infer<typeof CopyDataSchema>;
+
+export const ComponentEditResponseSchema = z.object({
+  astNode: ASTNodeSchema,
+  tsxCode: z.string().optional().describe('The updated TSX code, ONLY if styling/layout changes were required.'),
+  requiresCodeUpdate: z.boolean().describe('True if you modified the TSX code to fulfill the styling/layout request.'),
+});
+export type ComponentEditResponse = z.infer<typeof ComponentEditResponseSchema>;
+
+
+export function buildBrandStorySchema(hasFounderStory: boolean) {
+  const schemaShape: Record<string, z.ZodTypeAny> = {
+    whyWeExist: z.string().describe('Why this company exists — the underlying mission and purpose.'),
+    whatWeBelieve: z.string().describe('Core beliefs and values that drive the company.'),
+    customerProblemAndTransformation: z.string().describe('The customer\'s problem before finding this company, and the positive transformation after.'),
+    brandNarrative: z.string().describe('A compelling, cohesive brand narrative (2-3 paragraphs).'),
+    storyThemes: z.array(z.string()).describe('3-5 recurring story themes to reinforce consistently.'),
+    aboutUsDirection: z.string().describe('Strategic direction for writing the About Us page.'),
+    storytellingPrinciples: z.array(z.string()).describe('4-6 guiding principles for brand storytelling.'),
+  };
+
+  if (hasFounderStory) {
+    schemaShape.originAndFounderStory = z.string().describe(
+      'The origin and founder story based on the provided user input. Do NOT embellish or add facts not present in the user input.'
+    );
+  }
+
+  return z.object(schemaShape);
+}

@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Param, Body, Sse, UseGuards, UsePipes, Query } from '@nestjs/common';
+import { Controller, Post, Get, Param, Body, Sse, UseGuards, UsePipes, Query, Request } from '@nestjs/common';
 
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { ChatService } from './chat.service';
@@ -9,14 +9,23 @@ import type { ChatHistoryDto } from './dto/chat-history.dto';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { Observable } from 'rxjs';
 import { MessageEvent } from '@nestjs/common';
-import { InterviewService } from '../interview/interview.service';
+
+import { EditIntentService } from './edit-intent.service';
+import { ProjectsService } from '../projects/projects.service';
+
+import { ChatFlowEngine } from './chat-flow.engine';
+import { BlockEditorService } from '../editor/block-editor.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('chat')
 export class ChatController {
   constructor(
     private readonly chatService: ChatService,
-    private readonly interviewService: InterviewService,
+
+    private readonly editIntentService: EditIntentService,
+    private readonly projectsService: ProjectsService,
+    private readonly chatFlowEngine: ChatFlowEngine,
+    private readonly blockEditorService: BlockEditorService,
   ) {}
 
   @Post(':projectId/message')
@@ -25,19 +34,67 @@ export class ChatController {
   sendMessage(
     @Param('projectId') projectId: string,
     @Body() dto: SendMessageDto,
+    @Request() req: any,
   ): Observable<MessageEvent> {
-    // We convert the AsyncIterable to an Observable
     return new Observable<MessageEvent>((subscriber) => {
       (async () => {
         try {
-          const status = await this.interviewService.checkCompleteness(projectId);
-          const stream = this.interviewService.processMessage(projectId, dto.content, status.missingFields);
-          for await (const event of stream) {
-            if (event.event === 'internal-done') {
-              subscriber.next({ type: 'done', data: {} } as MessageEvent);
-              break;
+          const project = await this.projectsService.findOne(projectId, req.user.id);
+          
+          if (project.status === 'PUBLISHED' && project.websiteData) {
+            // Edit Flow
+            
+            if (dto.targetBlock && dto.targetBlock !== 'root') {
+              // AST Block Surgical Edit
+              try {
+                const pageSlug = dto.pageSlug || 'home'; 
+                const result = await this.blockEditorService.applyEdit(projectId, pageSlug, dto.targetBlock, dto.content);
+                
+                if (result.success) {
+                  subscriber.next({ 
+                    type: 'block-update', 
+                    data: JSON.stringify({ 
+                      blockId: result.blockId, 
+                      newNode: result.newNode, 
+                      baseVersion: result.baseVersion,
+                      pageSlug 
+                    }) 
+                  } as MessageEvent);
+                  const rebuildMsg = result.rebuildTriggered 
+                    ? ` I also detected a layout/styling change, so I updated the component's underlying code. A full site rebuild is now running to apply these changes (~15-20s).`
+                    : ``;
+                  subscriber.next({ type: 'token', data: JSON.stringify({ token: `\n\nI've updated the section for you!${rebuildMsg} You can preview it now and click 'Publish Changes' when you are ready!` }) } as MessageEvent);
+                }
+              } catch (e: any) {
+                subscriber.next({ type: 'token', data: JSON.stringify({ token: `\n\nFailed to apply edit: ${e.message}` }) } as MessageEvent);
+              }
             } else {
-              subscriber.next({ type: event.event, data: event.data } as MessageEvent);
+              // Website Data Global Edit
+              const result = await this.editIntentService.detectAndApplyEdit(projectId, req.user.id, dto.content, project.websiteData);
+              
+              if (result.isEdit) {
+                if (result.intent?.action === 'STORE_GALLERY') {
+                  subscriber.next({ type: 'token', data: JSON.stringify({ token: `\n\nI have saved your file to the gallery! You can now use it anywhere on your site.` }) } as MessageEvent);
+                } else if (result.intent?.action === 'REPLACE_IMAGE_CLARIFY') {
+                  subscriber.next({ type: 'token', data: JSON.stringify({ token: `\n\n${result.intent?.clarificationMessage || 'Which image would you like to replace? Please click on it first.'}` }) } as MessageEvent);
+                } else {
+                  subscriber.next({ type: 'token', data: JSON.stringify({ token: `\n\nGlobal changes have been applied! The site is now regenerating to reflect your new design choices. Please wait a moment (~15-20s) for the preview to update.` }) } as MessageEvent);
+                }
+              } else {
+                  subscriber.next({ type: 'token', data: JSON.stringify({ token: "\n\nI couldn't detect a specific website edit from your message. Could you be more specific?" }) } as MessageEvent);
+              }
+            }
+            subscriber.next({ type: 'done', data: {} } as MessageEvent);
+          } else {
+            // Onboarding Flow
+            const stream = this.chatFlowEngine.processMessage(projectId, dto.content, dto.displayText);
+            for await (const event of stream) {
+              if (event.event === 'internal-done') {
+                subscriber.next({ type: 'done', data: {} } as MessageEvent);
+                break;
+              } else {
+                subscriber.next({ type: event.event, data: event.data } as MessageEvent);
+              }
             }
           }
           subscriber.complete();

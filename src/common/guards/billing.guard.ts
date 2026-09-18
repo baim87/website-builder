@@ -12,7 +12,7 @@ export class BillingGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const bypassBilling = this.configService.get<boolean>('BYPASS_BILLING');
-    if (bypassBilling) {
+    if (bypassBilling && process.env.NODE_ENV !== 'production') {
       return true;
     }
 

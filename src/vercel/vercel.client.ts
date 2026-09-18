@@ -37,7 +37,7 @@ export class VercelClient {
     this.logger.log(`Adding domain ${domain} to Vercel project ${this.projectId}`);
     
     // Stub implementation if not configured
-    if (!this.apiToken) return { status: 'mocked', domain };
+    if (!this.apiToken || !this.projectId) return { status: 'mocked', domain };
 
     const url = new URL(`${this.baseUrl}/v10/projects/${this.projectId}/domains`);
     this.appendTeamId(url);
@@ -64,6 +64,62 @@ export class VercelClient {
     // In a multi-tenant setup with a single project, we typically don't trigger a full deployment.
     // We just ensure the domain exists. The actual "deployment" might just be a no-op or returning the current prod deployment.
     return { status: 'READY', url: `https://${domain}` };
+  }
+
+  async createProjectFromGithub(projectName: string, githubRepoOwner: string, githubRepoName: string): Promise<any> {
+    this.logger.log(`Creating Vercel Project ${projectName} linked to GitHub repo ${githubRepoOwner}/${githubRepoName}`);
+    
+    if (!this.apiToken) return { status: 'mocked', id: 'mock-vercel-id' };
+
+    const url = new URL(`${this.baseUrl}/v9/projects`);
+    this.appendTeamId(url);
+
+    const response = await fetch(url.toString(), {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify({
+        name: projectName,
+        framework: 'nextjs',
+        gitRepository: {
+          type: 'github',
+          repo: `${githubRepoOwner}/${githubRepoName}`,
+        },
+        ssoProtection: null,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      if (error.error?.code === 'project_already_exists') {
+         this.logger.log(`Vercel project ${projectName} already exists`);
+         return { status: 'exists' };
+      }
+      this.logger.warn(`Vercel API linking failed: ${error.error?.message || response.statusText}. Proceeding without auto-Vercel link.`);
+      return { status: 'mocked', id: 'mock-vercel-id' };
+    }
+
+    return response.json();
+  }
+
+  async getProjectDeployments(vercelProjectId: string): Promise<any> {
+    this.logger.log(`Fetching Vercel deployments for project ${vercelProjectId}`);
+    
+    if (!this.apiToken) return { deployments: [] };
+
+    const url = new URL(`${this.baseUrl}/v6/deployments`);
+    url.searchParams.append('projectId', vercelProjectId);
+    this.appendTeamId(url);
+
+    const response = await fetch(url.toString(), {
+      headers: this.getHeaders(),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new HttpException(`Vercel get deployments failed: ${error.message || response.statusText}`, response.status);
+    }
+
+    return response.json();
   }
 
   async getDeploymentStatus(deploymentId: string): Promise<any> {
@@ -94,10 +150,12 @@ export class VercelClient {
     // Using Next.js On-Demand ISR usually hits an API route on the *deployed Next.js app* directly,
     // NOT the Vercel API. E.g. https://domain.com/api/revalidate?path=/&secret=xyz
     // But for this client, we'll expose the interface. We need the frontend URL to hit.
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || `https://${domain}`;
+    // We must hit the deployed Next.js app to revalidate its cache.
+    // We cannot use FRONTEND_URL because that points to the Builder Dashboard (Vite).
+    const targetUrl = `https://${domain}`;
     
     try {
-      const response = await fetch(`${frontendUrl}/api/revalidate?path=${encodeURIComponent(path)}`, {
+      const response = await fetch(`${targetUrl}/api/revalidate?path=${encodeURIComponent(path)}`, {
         method: 'POST',
         // Pass a secret header if your Next.js app requires one
         headers: { 'x-revalidate-secret': this.configService.get<string>('JWT_SECRET') || '' },
@@ -160,5 +218,44 @@ export class VercelClient {
     }
 
     return response.json();
+  }
+
+  async setEnvironmentVariables(vercelProjectId: string, envVars: Array<{ key: string, value: string, target: string[], type: string }>): Promise<any> {
+    this.logger.log(`Setting environment variables for Vercel project ${vercelProjectId}`);
+
+    if (!this.apiToken) return { status: 'mocked' };
+
+    try {
+      const url = new URL(`${this.baseUrl}/v10/projects/${vercelProjectId}/env`);
+      this.appendTeamId(url);
+
+      const response = await fetch(url.toString(), {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify(envVars),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        // If the error is just that it already exists (happens on retries), we can ignore it
+        if (response.status === 400 && JSON.stringify(error).includes('already exists')) {
+           this.logger.log(`Vercel environment variables already exist for ${vercelProjectId}, ignoring.`);
+           return { status: 'already_exists' };
+        }
+        this.logger.error(`Vercel environment variables set failed for project ${vercelProjectId}. Status: ${response.status}. Full error: ${JSON.stringify(error)}`);
+        
+        // Don't crash the whole generation if env vars fail on retry
+        if (response.status === 400) {
+          this.logger.warn(`Ignoring 400 error from Vercel env vars API: ${JSON.stringify(error)}`);
+          return { status: 'failed_but_ignored', error };
+        }
+        throw new HttpException(`Vercel env variables failed: ${error.message || response.statusText}`, response.status);
+      }
+      return await response.json();
+    } catch (e) {
+      if (e instanceof HttpException) throw e;
+      this.logger.error(`Failed to set Vercel env vars: ${e.message}`);
+      throw new HttpException(`Vercel env vars network error: ${e.message}`, 500);
+    }
   }
 }
