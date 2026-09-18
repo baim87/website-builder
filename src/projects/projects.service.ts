@@ -28,10 +28,23 @@ export class ProjectsService {
   }
 
   async findAll(userId: string) {
-    return this.prisma.project.findMany({
+    const projects = await this.prisma.project.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
+      include: {
+        assets: {
+          where: {
+            purpose: { in: ['favicon', 'logo'] }
+          }
+        }
+      }
     });
+
+    return projects.map(p => ({
+      ...p,
+      faviconUrl: p.assets.find(a => a.purpose === 'favicon')?.url,
+      logoUrl: p.assets.find(a => a.purpose === 'logo')?.url,
+    }));
   }
 
   async findLatestStatus(userId: string) {
@@ -66,6 +79,11 @@ export class ProjectsService {
         businessContext: true,
         websiteData: true,
         domain: true,
+        assets: {
+          where: {
+            purpose: { in: ['favicon', 'logo'] }
+          }
+        }
       },
     });
 
@@ -73,7 +91,11 @@ export class ProjectsService {
       throw new NotFoundException(`Project ${id} not found`);
     }
 
-    return project;
+    return {
+      ...project,
+      faviconUrl: project.assets.find(a => a.purpose === 'favicon')?.url,
+      logoUrl: project.assets.find(a => a.purpose === 'logo')?.url,
+    };
   }
 
   async delete(id: string, userId?: string) {

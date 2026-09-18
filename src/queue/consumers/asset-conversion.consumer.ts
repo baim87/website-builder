@@ -45,12 +45,21 @@ export class AssetConversionConsumer extends BaseConsumer<AssetConversionJobData
     const baseOriginal = originalKey.substring(0, originalKey.lastIndexOf('.'));
 
     if (asset.type === 'video') {
-      convertedBuffer = await this.videoProcessor.convertToWebm(originalBuffer);
-      newMimeType = 'video/webm';
-      newExtension = '.webm';
-      const convertedKey = baseOriginal.replace('-original', '') + newExtension;
-      const convertedUrl = await this.storageService.upload(convertedKey, convertedBuffer, newMimeType);
-      updateData = { convertedUrl };
+      if (asset.mimeType === 'video/webm') {
+        convertedBuffer = await this.videoProcessor.convertToMp4(originalBuffer);
+        newMimeType = 'video/mp4';
+        newExtension = '.mp4';
+        const fallbackKey = baseOriginal.replace('-original', '-fallback') + newExtension;
+        const fallbackUrl = await this.storageService.upload(fallbackKey, convertedBuffer, newMimeType);
+        updateData = { fallbackUrl, convertedUrl: asset.url };
+      } else {
+        convertedBuffer = await this.videoProcessor.convertToWebm(originalBuffer);
+        newMimeType = 'video/webm';
+        newExtension = '.webm';
+        const convertedKey = baseOriginal.replace('-original', '') + newExtension;
+        const convertedUrl = await this.storageService.upload(convertedKey, convertedBuffer, newMimeType);
+        updateData = { convertedUrl };
+      }
     } else {
       if (asset.mimeType === 'image/webp') {
         convertedBuffer = await this.imageProcessor.convertToPng(originalBuffer);

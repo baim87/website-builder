@@ -73,7 +73,13 @@ export class ChatController {
               const result = await this.editIntentService.detectAndApplyEdit(projectId, req.user.id, dto.content, project.websiteData);
               
               if (result.isEdit) {
+                if (result.intent?.action === 'STORE_GALLERY') {
+                  subscriber.next({ type: 'token', data: JSON.stringify({ token: `\n\nI have saved your file to the gallery! You can now use it anywhere on your site.` }) } as MessageEvent);
+                } else if (result.intent?.action === 'REPLACE_IMAGE_CLARIFY') {
+                  subscriber.next({ type: 'token', data: JSON.stringify({ token: `\n\n${result.intent?.clarificationMessage || 'Which image would you like to replace? Please click on it first.'}` }) } as MessageEvent);
+                } else {
                   subscriber.next({ type: 'token', data: JSON.stringify({ token: `\n\nGlobal changes have been applied! The site is now regenerating to reflect your new design choices. Please wait a moment (~15-20s) for the preview to update.` }) } as MessageEvent);
+                }
               } else {
                   subscriber.next({ type: 'token', data: JSON.stringify({ token: "\n\nI couldn't detect a specific website edit from your message. Could you be more specific?" }) } as MessageEvent);
               }

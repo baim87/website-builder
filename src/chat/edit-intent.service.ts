@@ -7,6 +7,7 @@ import { AIModel } from '../common/constants/ai-models.constant';
 
 const EditIntentSchema = z.object({
   isEdit: z.boolean(),
+  action: z.enum(['EDIT_GLOBAL', 'STORE_GALLERY', 'REPLACE_IMAGE_CLARIFY', 'NONE']).optional(),
   changes: z.array(
     z.object({
       path: z.string(),
@@ -14,6 +15,7 @@ const EditIntentSchema = z.object({
     })
   ).optional(),
   triggerRegeneration: z.boolean().optional(),
+  clarificationMessage: z.string().optional(),
 });
 
 @Injectable()
@@ -31,9 +33,10 @@ const prompt = `You are a strict JSON-only intent detector for a website builder
 The user sent this message: "${userMessage}"
 Current website data snippet: ${JSON.stringify(currentWebsiteData).substring(0, 1000)}...
 
-If the user is asking to change GLOBAL website settings (e.g. change color, update SEO, update designTokens), return JSON:
+1. GLOBAL EDIT: If the user is asking to change GLOBAL website settings (e.g. change color, update SEO, update designTokens), return JSON:
 {
   "isEdit": true,
+  "action": "EDIT_GLOBAL",
   "changes": [
     {
       "path": "designTokens.colors.primary",
@@ -43,9 +46,21 @@ If the user is asking to change GLOBAL website settings (e.g. change color, upda
   "triggerRegeneration": true
 }
 
-CRITICAL: Do NOT return changes for specific page content or sections (e.g. hero, about, subtitle). This service ONLY handles global settings.
+2. STORE IN GALLERY: If the user attached an asset (e.g., "[Attached Asset: ...]") and explicitly asks to store it in the gallery, return:
+{
+  "isEdit": true,
+  "action": "STORE_GALLERY"
+}
 
-If the user is asking to change page content, or if it's just a general question or unrelated, return {"isEdit": false}
+3. CLARIFY REPLACE IMAGE: If the user attached an asset and asks to replace an image but did NOT select a specific target block (or if the intent is ambiguous), return:
+{
+  "isEdit": true,
+  "action": "REPLACE_IMAGE_CLARIFY",
+  "clarificationMessage": "Which image would you like to replace? Please click on the specific image in the preview first, then try again."
+}
+
+CRITICAL: Do NOT return changes for specific page content or sections (e.g. hero, about, subtitle). This service ONLY handles global settings or the specific asset intents above.
+If the user is asking to change page content without an asset, or if it's just a general question or unrelated, return {"isEdit": false, "action": "NONE"}
 
 Output ONLY valid JSON matching the schema.`;
 

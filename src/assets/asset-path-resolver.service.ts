@@ -12,7 +12,8 @@ export class AssetPathResolverService {
     projectId: string,
     assetType: string,
     serviceName: string,
-    projectAssetId: string
+    projectAssetId: string,
+    mediaFolder: 'images' | 'videos' = 'images'
   ): { folderPath: string; fileNameBase: string; originalKey: string; webpKey: string } {
     const dateStr = new Date().toISOString().split('T')[0];
     const shortId = projectAssetId.split('-')[0]; // use first chunk of uuid for uniqueness
@@ -21,13 +22,13 @@ export class AssetPathResolverService {
     let fileNameBase = '';
     
     if (assetType === 'BEFORE' || assetType === 'AFTER') {
-      folderPath = `users/${userId}/projects/${projectId}/assets/images/before-after/${serviceName}`;
+      folderPath = `users/${userId}/projects/${projectId}/assets/${mediaFolder}/before-after/${serviceName}`;
       fileNameBase = `${assetType.toLowerCase()}-${serviceName}-${dateStr}-${shortId}`;
     } else if (assetType === 'GALLERY') {
-      folderPath = `users/${userId}/projects/${projectId}/assets/images/galleries/${serviceName}`;
+      folderPath = `users/${userId}/projects/${projectId}/assets/${mediaFolder}/galleries/${serviceName}`;
       fileNameBase = `${dateStr}-${shortId}`;
     } else {
-      folderPath = `users/${userId}/projects/${projectId}/assets/images/${assetType.toLowerCase().replace('_', '-')}`;
+      folderPath = `users/${userId}/projects/${projectId}/assets/${mediaFolder}/${assetType.toLowerCase().replace('_', '-')}`;
       fileNameBase = `${dateStr}-${shortId}`;
     }
 

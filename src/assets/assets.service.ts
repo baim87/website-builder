@@ -25,7 +25,8 @@ export class AssetsService {
     const assetType = purpose ? purpose.toUpperCase() : 'GENERAL';
     const serviceName = section ? section.toLowerCase().replace(/[^a-z0-9]+/g, '-') : 'general';
 
-    const paths = this.pathResolver.resolveStoragePath(userId, projectId, assetType, serviceName, assetId);
+    const mediaFolder = isVideo ? 'videos' : 'images';
+    const paths = this.pathResolver.resolveStoragePath(userId, projectId, assetType, serviceName, assetId, mediaFolder);
     const extension = file.originalname?.split('.').pop() || mimeType.split('/')[1] || 'bin';
     const originalKey = `${paths.folderPath}/${paths.fileNameBase}-original.${extension}`;
     url = await this.storage.upload(originalKey, file.buffer, mimeType);
@@ -48,17 +49,19 @@ export class AssetsService {
     });
 
     const isRasterImageToConvert = isImage && !['image/svg+xml', 'image/gif'].includes(mimeType);
-    const isVideoToConvert = isVideo && mimeType !== 'video/webm';
+    const isVideoToConvert = isVideo; // Enqueue all videos to generate webm or mp4 fallbacks
 
     if (isRasterImageToConvert || isVideoToConvert) {
-      // Async convert to WebP/PNG or WebM
+      // Async convert to WebP/PNG or WebM/MP4
       await this.conversionProducer.convertAsset(projectId, asset.id, url, userId);
-    } else if (mimeType === 'video/webm') {
-      // If it's already a WebM, just set convertedUrl to be the same as url
-      await this.prisma.asset.update({
-        where: { id: asset.id },
-        data: { convertedUrl: url },
-      });
+      
+      if (mimeType === 'video/webm') {
+        // Pre-fill convertedUrl so it works immediately while fallback is generating
+        await this.prisma.asset.update({
+          where: { id: asset.id },
+          data: { convertedUrl: url },
+        });
+      }
     }
 
     return asset;
